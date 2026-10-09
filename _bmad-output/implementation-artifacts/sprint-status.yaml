@@ -58,12 +58,12 @@ development_status:
   2-8-switch-on-coverage-enforcement-and-audit-the-launch-library: backlog
   epic-2-retrospective: optional
 
-  epic-3: backlog
+  epic-3: in-progress
   3-1-design-tokens-fonts-and-base-action-components: backlog
   3-2-setup-and-session-schemas-and-the-setup-reducer: backlog
   3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: backlog
   3-4-session-reducer-for-commits-and-reveal-progress: backlog
-  3-5-versioned-browser-storage-with-a-memory-fallback: backlog
+  3-5-versioned-browser-storage-with-a-memory-fallback: review
   3-6-the-app-store-and-the-library-loader: backlog
   3-7-difficulty-dial-and-perform-timing: backlog
   3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: backlog
