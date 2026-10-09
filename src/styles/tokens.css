@@ -1,0 +1,401 @@
+/*
+ * Design tokens, transcribed verbatim from DESIGN.md's YAML front matter
+ * (UX-DR1). This file is the single source of truth for color, type,
+ * radius, named spacing, and shadow values — components must reference
+ * these tokens (Tailwind utilities or `var(--token)`), never a literal
+ * hex color or px length (Story 3.1 AC; enforced by
+ * scripts/check-token-usage.test.ts for src/components).
+ *
+ * No dark mode: DESIGN.md → Colors says `prefers-color-scheme` changes
+ * nothing, so none of this responds to it.
+ */
+
+@theme {
+  /* Clear Tailwind's default color palette first: components must use a
+     DESIGN.md token (e.g. `bg-ink`), never an unrelated default utility
+     like `text-red-500`. */
+  --color-*: initial;
+
+  /* Grounds */
+  --color-night: #121010;
+  --color-night-glow: #221c19;
+  --color-lilac: #c7c2db;
+  --color-lilac-deep: #b3abca;
+  --color-paper: #ece6dc;
+  --color-paper-blush: #d9d2d6;
+  --color-sun-deep: #ff7a0a;
+  --color-sun: #ffb21a;
+  --color-sun-light: #ffd84a;
+  --color-sun-orange: #ff9a14;
+
+  /* Text and ink */
+  --color-cream: #f1ebdf;
+  --color-cream-dim: #b9b0a2;
+  --color-amber: #e9a24a;
+  --color-plum: #241f2a;
+  --color-plum-muted: #463e52;
+  --color-ink: #171311;
+  --color-ink-soft: #3f3830;
+  --color-vermilion: #c9452f;
+  --color-vermilion-ink: #a8361f;
+  --color-stamp: #a92e1c;
+
+  /* Signatures */
+  --color-grape: #7a2cff;
+  --color-grape-deep: #5414c9;
+  --color-focus: #7a2cff;
+  --color-focus-on-sun: #171311;
+  --color-focus-on-lilac-deep: #5414c9;
+
+  /* Decorative only — never carry text meaning */
+  --color-bust-peach: #ffd0a6;
+  --color-bust-pink: #f056b6;
+  --color-foil-a: #d8c8ff;
+  --color-foil-b: #a9f2ff;
+  --color-foil-c: #ffe0f2;
+  --color-foil-d: #c3ffe0;
+  --color-neon-cyan: #5ff3ff;
+  --color-neon-mint: #7dffb0;
+  --color-neon-pink: #ff6fd8;
+  --color-neon-peach: #ffb37a;
+
+  /* DESIGN.md → Shapes */
+  --radius-none: 0;
+  --radius-scrap: 2px;
+  --radius-full: 9999px;
+  --radius-disc: 50%;
+
+  /* DESIGN.md → Elevation & Depth (the five shadows) */
+  --shadow-lift-soft: 0 10px 14px rgba(40, 25, 10, 0.22);
+  --shadow-lift: 0 18px 22px rgba(0, 0, 0, 0.35);
+  --shadow-poster: 0 30px 40px -24px rgba(23, 19, 17, 0.5);
+  --shadow-sun-glow: 0 10px 30px -8px rgba(255, 140, 20, 0.55);
+  --shadow-ticker: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+
+  /*
+   * DESIGN.md → Layout & Spacing, the named spacings this story's AC lists.
+   * (seam-fade-min/max and stage-brief-max-chars are out of scope here —
+   * see spec Implementation Notes.) The numeric scale (4/8/12/16/24/32/
+   * 48/56/80/120) needs no entry: Tailwind v4's default `--spacing: 0.25rem`
+   * already produces p-1..p-30 etc. at exactly those 4px multiples.
+   */
+  --spacing-safe-area-width: min(56.25vh, 640px);
+  --spacing-target-min: 52px;
+  --spacing-stage-gap: 24px;
+  --spacing-stage-gap-compact: 16px;
+  --spacing-focus-offset: 3px;
+  --spacing-gutter-phone: 20px;
+  --spacing-header-inset: 40px;
+  --spacing-content-max: 1360px;
+  --spacing-reading-max: 760px;
+
+  /* DESIGN.md → Typography: phone is ≤ 860px, so desktop starts at 861px. */
+  --breakpoint-desktop: 861px;
+}
+
+/*
+ * DESIGN.md → Typography, every role including the Stage and phone ramps.
+ * Deliberately NOT mapped into Tailwind's font, text, and font-weight theme
+ * namespaces: role names repeat across those namespaces (e.g. "button" would
+ * collide as both a font-family and a font-weight utility). Later stories
+ * consume a role via var(--typography-{role}-...) (an arbitrary-value class
+ * or a dedicated rule), the way .text-button and .text-button-sun do below
+ * for the roles this story's components need (button, button-sun, stage-meta).
+ */
+:root {
+  --typography-wordmark-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-wordmark-size: 25vw;
+  --typography-wordmark-weight: 500;
+  --typography-wordmark-leading: 0.8;
+  --typography-wordmark-tracking: -0.045em;
+
+  --typography-display-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-display-size: 112px;
+  --typography-display-weight: 400;
+  --typography-display-leading: 0.84;
+  --typography-display-tracking: -0.045em;
+
+  --typography-display-setup-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-display-setup-size: 72px;
+  --typography-display-setup-weight: 400;
+  --typography-display-setup-leading: 0.9;
+  --typography-display-setup-tracking: -0.04em;
+
+  --typography-display-phone-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-display-phone-size: 56px;
+  --typography-display-phone-weight: 400;
+  --typography-display-phone-leading: 0.9;
+  --typography-display-phone-tracking: -0.04em;
+
+  --typography-topic-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-topic-size: 56px;
+  --typography-topic-weight: 500;
+  --typography-topic-leading: 0.98;
+  --typography-topic-tracking: -0.03em;
+
+  --typography-card-title-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-card-title-size: 40px;
+  --typography-card-title-weight: 500;
+  --typography-card-title-leading: 1;
+  --typography-card-title-tracking: -0.03em;
+
+  --typography-style-italic-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-style-italic-size: 30px;
+  --typography-style-italic-weight: 500;
+  --typography-style-italic-leading: 1;
+  --typography-style-italic-tracking: -0.02em;
+
+  --typography-numeral-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-numeral-size: 26px;
+  --typography-numeral-weight: 400;
+  --typography-numeral-leading: 1;
+  --typography-numeral-tracking: 0.08em;
+
+  --typography-y2k-display-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-y2k-display-size: 92px;
+  --typography-y2k-display-weight: 800;
+  --typography-y2k-display-leading: 0.92;
+  --typography-y2k-display-tracking: -0.04em;
+
+  --typography-index-number-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-index-number-size: 54px;
+  --typography-index-number-weight: 600;
+  --typography-index-number-leading: 0.9;
+  --typography-index-number-tracking: 0.02em;
+
+  --typography-stamp-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-stamp-size: 17px;
+  --typography-stamp-weight: 700;
+  --typography-stamp-leading: 1.15;
+  --typography-stamp-tracking: 0.04em;
+
+  --typography-button-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-button-size: 12px;
+  --typography-button-weight: 500;
+  --typography-button-leading: 1.2;
+  --typography-button-tracking: 0.12em;
+
+  --typography-button-sun-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-button-sun-size: 13px;
+  --typography-button-sun-weight: 600;
+  --typography-button-sun-leading: 1.2;
+  --typography-button-sun-tracking: 0.12em;
+
+  --typography-meta-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-meta-size: 10.5px;
+  --typography-meta-weight: 500;
+  --typography-meta-leading: 15px;
+  --typography-meta-tracking: 0.14em;
+
+  --typography-brief-setup-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-brief-setup-size: 21px;
+  --typography-brief-setup-weight: 400;
+  --typography-brief-setup-leading: 33px;
+  --typography-brief-setup-tracking: normal;
+
+  --typography-lede-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-lede-size: 18px;
+  --typography-lede-weight: 400;
+  --typography-lede-leading: 28px;
+  --typography-lede-tracking: normal;
+
+  --typography-body-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-body-size: 17px;
+  --typography-body-weight: 400;
+  --typography-body-leading: 27px;
+  --typography-body-tracking: normal;
+
+  --typography-caps-intro-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-caps-intro-size: 13.5px;
+  --typography-caps-intro-weight: 400;
+  --typography-caps-intro-leading: 21px;
+  --typography-caps-intro-tracking: 0.06em;
+
+  --typography-label-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-label-size: 15px;
+  --typography-label-weight: 600;
+  --typography-label-leading: 20px;
+  --typography-label-tracking: normal;
+
+  /* Challenge Stage deltas (FR-31 filming minimums) */
+  --typography-brief-stage-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-brief-stage-size: 32px;
+  --typography-brief-stage-weight: 500;
+  --typography-brief-stage-leading: 44px;
+  --typography-brief-stage-tracking: normal;
+
+  --typography-brief-stage-phone-family: var(--font-instrument-sans), "Helvetica Neue", sans-serif;
+  --typography-brief-stage-phone-size: 24px;
+  --typography-brief-stage-phone-weight: 500;
+  --typography-brief-stage-phone-leading: 32px;
+  --typography-brief-stage-phone-tracking: normal;
+
+  --typography-topic-stage-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-topic-stage-size: 48px;
+  --typography-topic-stage-weight: 500;
+  --typography-topic-stage-leading: 1;
+  --typography-topic-stage-tracking: -0.03em;
+
+  --typography-topic-stage-long-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-topic-stage-long-size: 32px;
+  --typography-topic-stage-long-weight: 500;
+  --typography-topic-stage-long-leading: 1.05;
+  --typography-topic-stage-long-tracking: -0.02em;
+
+  --typography-style-stage-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-style-stage-size: 32px;
+  --typography-style-stage-weight: 500;
+  --typography-style-stage-leading: 1.05;
+  --typography-style-stage-tracking: -0.02em;
+
+  --typography-stamp-stage-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-stamp-stage-size: 24px;
+  --typography-stamp-stage-weight: 700;
+  --typography-stamp-stage-leading: 1.15;
+  --typography-stamp-stage-tracking: 0.04em;
+
+  --typography-tab-value-stage-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-tab-value-stage-size: 28px;
+  --typography-tab-value-stage-weight: 500;
+  --typography-tab-value-stage-leading: 1.05;
+  --typography-tab-value-stage-tracking: -0.02em;
+
+  --typography-piece-label-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-piece-label-size: 13px;
+  --typography-piece-label-weight: 600;
+  --typography-piece-label-leading: 16px;
+  --typography-piece-label-tracking: 0.14em;
+
+  --typography-stage-meta-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-stage-meta-size: 14px;
+  --typography-stage-meta-weight: 500;
+  --typography-stage-meta-leading: 18px;
+  --typography-stage-meta-tracking: 0.14em;
+
+  --typography-stage-mark-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-stage-mark-size: 22px;
+  --typography-stage-mark-weight: 500;
+  --typography-stage-mark-leading: 1;
+  --typography-stage-mark-tracking: -0.02em;
+
+  --typography-countdown-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-countdown-size: 56px;
+  --typography-countdown-weight: 600;
+  --typography-countdown-leading: 1;
+  --typography-countdown-tracking: 0.02em;
+
+  --typography-countdown-phone-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-countdown-phone-size: 40px;
+  --typography-countdown-phone-weight: 600;
+  --typography-countdown-phone-leading: 1;
+  --typography-countdown-phone-tracking: 0.02em;
+
+  --typography-topic-stage-phone-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-topic-stage-phone-size: 32px;
+  --typography-topic-stage-phone-weight: 500;
+  --typography-topic-stage-phone-leading: 1.05;
+  --typography-topic-stage-phone-tracking: -0.02em;
+
+  --typography-style-stage-phone-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-style-stage-phone-size: 24px;
+  --typography-style-stage-phone-weight: 500;
+  --typography-style-stage-phone-leading: 1.1;
+  --typography-style-stage-phone-tracking: -0.01em;
+
+  --typography-stamp-stage-phone-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-stamp-stage-phone-size: 20px;
+  --typography-stamp-stage-phone-weight: 700;
+  --typography-stamp-stage-phone-leading: 1.15;
+  --typography-stamp-stage-phone-tracking: 0.04em;
+
+  --typography-tab-value-stage-phone-family: var(--font-bodoni-moda), Didot, "Bodoni 72", serif;
+  --typography-tab-value-stage-phone-size: 22px;
+  --typography-tab-value-stage-phone-weight: 500;
+  --typography-tab-value-stage-phone-leading: 1.1;
+  --typography-tab-value-stage-phone-tracking: -0.01em;
+
+  --typography-piece-label-phone-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-piece-label-phone-size: 12px;
+  --typography-piece-label-phone-weight: 600;
+  --typography-piece-label-phone-leading: 15px;
+  --typography-piece-label-phone-tracking: 0.14em;
+
+  --typography-stage-meta-phone-family: var(--font-unbounded), "Arial Black", sans-serif;
+  --typography-stage-meta-phone-size: 12px;
+  --typography-stage-meta-phone-weight: 500;
+  --typography-stage-meta-phone-leading: 16px;
+  --typography-stage-meta-phone-tracking: 0.14em;
+}
+
+/* Ready-to-use utilities for the roles Story 3.1's Action components
+   consume. Declared with `@utility`, not a plain class: a plain class lives
+   outside Tailwind's utility layer, so it would beat every Tailwind
+   utility regardless of order and could never take a variant (e.g.
+   `hover:text-button`). */
+@utility text-stage-meta {
+  font-family: var(--typography-stage-meta-family);
+  font-size: var(--typography-stage-meta-size);
+  font-weight: var(--typography-stage-meta-weight);
+  line-height: var(--typography-stage-meta-leading);
+  letter-spacing: var(--typography-stage-meta-tracking);
+}
+
+@utility text-button {
+  font-family: var(--typography-button-family);
+  font-size: var(--typography-button-size);
+  font-weight: var(--typography-button-weight);
+  line-height: var(--typography-button-leading);
+  letter-spacing: var(--typography-button-tracking);
+}
+
+@utility text-button-sun {
+  font-family: var(--typography-button-sun-family);
+  font-size: var(--typography-button-sun-size);
+  font-weight: var(--typography-button-sun-weight);
+  line-height: var(--typography-button-sun-leading);
+  letter-spacing: var(--typography-button-sun-tracking);
+}
+
+/* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
+   voice). Added by Story 7.3 for the Privacy note, which uses display-setup /
+   display-phone for its headline (an overseer decision recorded in the 7.3
+   spec; DESIGN.md lists them as Setup styles). */
+@utility text-display-setup {
+  font-family: var(--typography-display-setup-family);
+  font-size: var(--typography-display-setup-size);
+  font-weight: var(--typography-display-setup-weight);
+  line-height: var(--typography-display-setup-leading);
+  letter-spacing: var(--typography-display-setup-tracking);
+}
+
+@utility text-display-phone {
+  font-family: var(--typography-display-phone-family);
+  font-size: var(--typography-display-phone-size);
+  font-weight: var(--typography-display-phone-weight);
+  line-height: var(--typography-display-phone-leading);
+  letter-spacing: var(--typography-display-phone-tracking);
+}
+
+@utility text-lede {
+  font-family: var(--typography-lede-family);
+  font-size: var(--typography-lede-size);
+  font-weight: var(--typography-lede-weight);
+  line-height: var(--typography-lede-leading);
+  letter-spacing: var(--typography-lede-tracking);
+}
+
+@utility text-body {
+  font-family: var(--typography-body-family);
+  font-size: var(--typography-body-size);
+  font-weight: var(--typography-body-weight);
+  line-height: var(--typography-body-leading);
+  letter-spacing: var(--typography-body-tracking);
+}
+
+@utility text-meta {
+  font-family: var(--typography-meta-family);
+  font-size: var(--typography-meta-size);
+  font-weight: var(--typography-meta-weight);
+  line-height: var(--typography-meta-leading);
+  letter-spacing: var(--typography-meta-tracking);
+}

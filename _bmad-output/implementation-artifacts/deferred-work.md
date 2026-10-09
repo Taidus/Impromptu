@@ -21,6 +21,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-transcribe-the-three-cl-5-anchors-verbatim.md`
   summary: Story 1.8 PROMPT/RUBRIC must fix a `briefText` format convention per slot (full sentence vs lowercase fragment) and keep Template-specific phrasing ("Keep people out of both.") from being reused by other Templates.
   evidence: Anchor fills mix sentence-form and fragment-form `briefText`; nothing in data or schema records which a slot expects, so mixed batches can render lowercase sentence starts or doubled periods.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-3-privacy-note-page.md`
+  summary: Confirm the erasure-request contact address (`copy.privacy.contactEmail`, working value hello@impromptu.app) with the founder in the Story 7.4 launch checklist.
+  evidence: The privacy note publishes a mailto: route (AD-20) but no domain or mailbox has been set up yet.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors.md`
   summary: Add a subprocess test that `npm run library:validate` exits non-zero on a failing library, when the first real batches land (Story 1.9).
   evidence: `process.exitCode = report.ok ? 0 : 1` is the only thing making the CI step block merges; nothing exercises the failure exit.
