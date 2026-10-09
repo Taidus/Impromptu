@@ -73,7 +73,7 @@ context:
 - [x] `.github/workflows/ci.yml` -- Node 24, `npm ci`, then lint → typecheck → check:privacy → test → build → check:static → playwright install → test:e2e.
 - [x] `.gitignore` -- already ignores Playwright output (1.1); verify, add nothing new unless needed.
 - [x] `deferred-work.md` -- mark the static-route item resolved by this spec.
-- [ ] GitHub -- after the first green run, `gh api` branch protection on `main` requiring the `ci` check.
+- [x] GitHub -- after the first green run, `gh api` branch protection on `main` requiring the `ci` check.
 
 **Acceptance Criteria:**
 - Given a file in `src/domain` importing `@/store/x` or using `Date.now()`, when `npm run lint` runs, then it fails naming the rule; removing the violation makes lint pass.
@@ -94,6 +94,7 @@ context:
 
 
 - Review pass (3 layers, 23 findings): 14 patched, 6 rejected, 3 deferred (see Triage Log and deferred-work.md). Full verification after patches: lint, typecheck, 24 unit tests, check:privacy, build (5 static routes), check:static, 12 e2e all green. Playwright now owns port 3100 so it no longer clobbers a dev server on 3000.
+- PR #2 (https://github.com/Taidus/Impromptu/pull/2): `ci` run 37975023240 passed all 12 steps in 1m15s on the first attempt; Vercel Preview built. Branch protection on `main` now requires `ci` (strict, up-to-date branch). Story marked done 2026-10-09.
 
 ## Spec Change Log
 
