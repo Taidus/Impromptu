@@ -23,6 +23,8 @@ export const initialState: StoreState = {
   session: emptySession,
   history: [],
   saveFailed: false,
+  storageAvailable: true,
+  migrationFailed: false,
 };
 
 /**
@@ -42,6 +44,8 @@ export function createStore(deps: StoreDeps): Store {
   let libraryRequested = false;
   const pendingCommands: StoreCommand[] = [];
   const listeners = new Set<() => void>();
+  const readMigrationFailed = () =>
+    repository.migrationFailed("setup") || repository.migrationFailed("session") || repository.migrationFailed("history");
 
   function getState(): StoreState {
     return state;
@@ -103,6 +107,8 @@ export function createStore(deps: StoreDeps): Store {
       setup: setupSlice.data,
       session: sessionSlice.data ?? emptySession,
       history: historySlice.data ?? [],
+      storageAvailable: repository.storageAvailable,
+      migrationFailed: readMigrationFailed(),
     });
 
     repository.subscribe("setup", rereadSetup);
@@ -116,24 +122,29 @@ export function createStore(deps: StoreDeps): Store {
     const slice = loadSlice("setup", Setup);
     setupRev = slice.rev;
     if (slice.data !== null) {
-      setState({ ...state, setup: slice.data, status: "ready" });
+      setState({ ...state, setup: slice.data, status: "ready", migrationFailed: readMigrationFailed() });
       drainPending();
       return;
     }
     // Cleared or invalid in another tab: same as a first visit.
-    setState({ ...state, setup: null, status: state.libraryStatus === "error" ? "error" : "loading" });
+    setState({
+      ...state,
+      setup: null,
+      status: state.libraryStatus === "error" ? "error" : "loading",
+      migrationFailed: readMigrationFailed(),
+    });
     if (state.libraryStatus === "ready" && library !== null) ensureSetup(library);
   }
 
   function rereadSession(): void {
     const slice = loadSlice("session", Session);
     sessionRev = slice.rev;
-    setState({ ...state, session: slice.data ?? emptySession });
+    setState({ ...state, session: slice.data ?? emptySession, migrationFailed: readMigrationFailed() });
   }
 
   function rereadHistory(): void {
     const slice = loadSlice("history", HistoryList);
-    setState({ ...state, history: slice.data ?? [] });
+    setState({ ...state, history: slice.data ?? [], migrationFailed: readMigrationFailed() });
   }
 
   function startLibraryLoad(): void {
