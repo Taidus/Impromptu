@@ -3,7 +3,7 @@ import { bodoniModa, instrumentSans, unbounded } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Impromptu",
+  title: { template: "%s · Impromptu", default: "Impromptu" },
   description: "Creative practice challenges",
 };
 

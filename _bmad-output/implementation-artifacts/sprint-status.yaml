@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:57
-last_updated: 10-09-2026 12:25
+last_updated: 10-09-2026 12:37
 project: Impromptu
 project_key: NOKEY
 tracking_system: file-system
@@ -101,10 +101,10 @@ development_status:
   6-5-clear-all-data-with-confirmation: backlog
   epic-6-retrospective: optional
 
-  epic-7: backlog
+  epic-7: in-progress
   7-1-subscribe-endpoint-with-consent-honeypot-and-resend: backlog
   7-2-email-signup-form-on-the-stage-and-in-a-reusable-footer-vari: backlog
-  7-3-privacy-note-page: backlog
+  7-3-privacy-note-page: review
   7-4-email-environments-rate-limit-and-the-launch-email-checklist: backlog
   epic-7-retrospective: optional
 
