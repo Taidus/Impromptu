@@ -58,8 +58,8 @@ development_status:
   2-8-switch-on-coverage-enforcement-and-audit-the-launch-library: backlog
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-design-tokens-fonts-and-base-action-components: backlog
+  epic-3: in-progress
+  3-1-design-tokens-fonts-and-base-action-components: review
   3-2-setup-and-session-schemas-and-the-setup-reducer: backlog
   3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: backlog
   3-4-session-reducer-for-commits-and-reveal-progress: backlog
