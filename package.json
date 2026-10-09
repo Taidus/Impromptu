@@ -11,7 +11,9 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "check:static": "node scripts/check-static.mjs",
-    "check:privacy": "node scripts/check-privacy.mjs"
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "library:new-batch": "tsx scripts/library/new-batch.ts",
+    "library:sample": "tsx scripts/library/sample.ts"
   },
   "dependencies": {
     "next": "16.4.0",
