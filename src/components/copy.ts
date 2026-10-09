@@ -52,6 +52,35 @@ export const copy = {
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
     emailSignupPitch: "Occasional emails when there's something new. Unsubscribe any time.",
   },
+  privacy: {
+    title: "privacy.",
+    lede: "What this site keeps, where it lives, and how to leave.",
+    sections: [
+      {
+        heading: "Your practice stays here",
+        body: "Challenges, attempts and reps are saved in this browser only. Nothing about your practice is sent anywhere.",
+      },
+      {
+        heading: "No tracking",
+        body: "There is no analytics and no tracking. The site loads nothing from third parties.",
+      },
+      {
+        heading: "Email, only if you ask",
+        body: "The only personal data is an email address you opt in to. It is held by Resend, our email provider, together with the time you consented and the version of the consent text you saw.",
+      },
+      {
+        heading: "What the emails are",
+        body: "Occasional updates when there is something new. Every email has an unsubscribe link.",
+      },
+      {
+        heading: "Leaving",
+        body: "Unsubscribe from any email, or ask us to erase your address and we delete the contact in Resend.",
+      },
+    ],
+    contactLead: "Erasure requests:",
+    // Working address; the founder confirms it in the Story 7.4 launch checklist (see deferred-work.md).
+    contactEmail: "hello@impromptu.app",
+  },
 } as const;
 
 export type Copy = typeof copy;

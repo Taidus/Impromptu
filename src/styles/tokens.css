@@ -87,6 +87,10 @@
   --spacing-gutter-phone: 20px;
   --spacing-header-inset: 40px;
   --spacing-content-max: 1360px;
+  --spacing-reading-max: 760px;
+
+  /* DESIGN.md → Typography: phone is ≤ 860px, so desktop starts at 861px. */
+  --breakpoint-desktop: 861px;
 }
 
 /*
@@ -350,4 +354,48 @@
   font-weight: var(--typography-button-sun-weight);
   line-height: var(--typography-button-sun-leading);
   letter-spacing: var(--typography-button-sun-tracking);
+}
+
+/* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
+   voice). Added by Story 7.3 for the Privacy note, which uses display-setup /
+   display-phone for its headline (an overseer decision recorded in the 7.3
+   spec; DESIGN.md lists them as Setup styles). */
+@utility text-display-setup {
+  font-family: var(--typography-display-setup-family);
+  font-size: var(--typography-display-setup-size);
+  font-weight: var(--typography-display-setup-weight);
+  line-height: var(--typography-display-setup-leading);
+  letter-spacing: var(--typography-display-setup-tracking);
+}
+
+@utility text-display-phone {
+  font-family: var(--typography-display-phone-family);
+  font-size: var(--typography-display-phone-size);
+  font-weight: var(--typography-display-phone-weight);
+  line-height: var(--typography-display-phone-leading);
+  letter-spacing: var(--typography-display-phone-tracking);
+}
+
+@utility text-lede {
+  font-family: var(--typography-lede-family);
+  font-size: var(--typography-lede-size);
+  font-weight: var(--typography-lede-weight);
+  line-height: var(--typography-lede-leading);
+  letter-spacing: var(--typography-lede-tracking);
+}
+
+@utility text-body {
+  font-family: var(--typography-body-family);
+  font-size: var(--typography-body-size);
+  font-weight: var(--typography-body-weight);
+  line-height: var(--typography-body-leading);
+  letter-spacing: var(--typography-body-tracking);
+}
+
+@utility text-meta {
+  font-family: var(--typography-meta-family);
+  font-size: var(--typography-meta-size);
+  font-weight: var(--typography-meta-weight);
+  line-height: var(--typography-meta-leading);
+  letter-spacing: var(--typography-meta-tracking);
 }

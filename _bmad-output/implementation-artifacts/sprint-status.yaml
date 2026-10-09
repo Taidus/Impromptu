@@ -104,7 +104,7 @@ development_status:
   epic-7: backlog
   7-1-subscribe-endpoint-with-consent-honeypot-and-resend: done
   7-2-email-signup-form-on-the-stage-and-in-a-reusable-footer-vari: backlog
-  7-3-privacy-note-page: backlog
+  7-3-privacy-note-page: done
   7-4-email-environments-rate-limit-and-the-launch-email-checklist: backlog
   epic-7-retrospective: optional
 
