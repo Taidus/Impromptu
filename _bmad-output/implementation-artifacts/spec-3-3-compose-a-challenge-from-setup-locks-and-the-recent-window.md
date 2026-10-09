@@ -2,7 +2,7 @@
 title: 'Story 3.3: Compose a Challenge from setup, Locks, and the recent window'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 baseline_commit: '635c4b68f7a70c164571565bca640ab059d0b26a'
 route: 'dispatch'
 review_loop_iteration: 0
