@@ -2,7 +2,7 @@
 title: 'Session reducer for commits and reveal progress'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '635c4b68f7a70c164571565bca640ab059d0b26a'
@@ -80,6 +80,8 @@ context:
 - Every I/O & Edge-Case Matrix row has a dedicated test; the "AD-7 event not yet implemented" row is covered by a table-driven sweep over `{None, Held} × {toggle_lock, start, pause, resume, finish, update_reflection_draft, save_rep, discard, a bogus type}`, asserting the exact same session reference is returned (18 cases).
 
 ## Spec Change Log
+
+- Review patches applied in `a695469` (triage rows 1–5). Full verification passes.
 
 ## Review Triage Log
 
