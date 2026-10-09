@@ -2,7 +2,7 @@
 title: 'Story 1.6: Library hard gate: integrity, Brief rules, Time Limits, anchors, and the CL-4 lint'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -84,6 +84,8 @@ context:
 **Review-fix round (Review Triage Log rows 1–12, patch-routed):** `load.ts` now catches malformed JSON / a non-array body instead of throwing, and treats `tags.json`/`skills.json`/`mediums.json`/`anchors/anchors.json` as required (missing → issue) and flags any unexpected `*.json` filename in a batch folder; `loadFills` is three typed `parseEach` calls, no `as never`. `validate.ts` resolves the repo root from its own file location, not `process.cwd()`. `gate.ts`: `entityIds` now covers templates+fills only (never skills/Mediums); each anchor field resolves against its own kind-specific id set (a field pointing at the wrong kind is now actually reported, not silently treated as "already reported"); an anchor resolving to a retired id fails `anchor.retired`; `manifest.edits[].id` and `review.rejectedIds` are resolved too; all by-id lookups are first-wins, matching the duplicate-id check; zero loaded anchors fails `anchor.missing`; `render()`'s `unknown_slot` now reports `brief.braces` and `no_pattern_for_medium` reports `integrity.no-pattern` (only `missing_fill`/`unused_fill` stay reachability-deferred); a Brief must end with `.`/`!`/`?`, and a decimal point (`3.5`) no longer counts as a sentence break; every `GateFailure` now carries an optional `source` (the culprit's batch/`anchors` origin) and, for a Brief-rule failure caused by one fill's own text, names that fill's id instead of the Template's; failures are de-duplicated by (rule, culprit id), merging distinct messages rather than dropping them. CL-4: the count check now only matches a standalone digit run or number word (not `1920s`, `35mm`, or a hyphenated `one-point`), and the mood lint also flags a phrase made only of mood words, intensifiers, and "and"/"or" (`very moody`, `dreamy and soft`), checked against `revealText` and `briefText` alike, and skipped for retired entities. `load.test.ts`'s real-tree assertion checks minimums, not exact counts.
 
 ## Spec Change Log
+
+- Review patches applied in `21f538c` (triage rows 1–12). Full verification passes, including `library:validate` run from outside the repo.
 
 ## Review Triage Log
 
