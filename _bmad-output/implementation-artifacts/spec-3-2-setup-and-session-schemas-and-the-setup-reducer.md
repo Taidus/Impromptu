@@ -2,7 +2,7 @@
 title: 'Setup and session schemas and the setup reducer'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
@@ -89,6 +89,8 @@ context:
 - **Session schema shape (conservative, pending Story 3.4):** AD-9 describes the `impromptu:session` key's content by prose ("the held Challenge, reveal progress, Locks, the Attempt, the Finished reflection draft, `lastRepId`, `lastComposeError`, and the recent ring") rather than an exact field list. This story's `Session` schema is the most direct, literal translation of that prose plus the AD-7 state names (`none|held|attempt|finished|saved`) and AD-18's `revealed` set — e.g. `{ state, challenge: Challenge|null, revealed: RevealedKind[], locks: Partial<Record<InputKind,string>>, attempt: Attempt|null, reflectionDraft: {worked,change}|null, lastRepId: string|null, lastComposeError: {reason,blockingLock}|null, recent: string[] }`. Story 3.4 (the session reducer) is the one that exercises this shape through real transitions; if it finds a field missing or shaped wrong, it amends this schema rather than working around it.
 - **`notice` over throwing or a separate event:** the AC says toggle_medium "returns a `last_medium` notice for the UI." Modeling the reducer's return as `{ setup, notice? }` (rather than a second dispatch, an exception, or a side channel) keeps it a single pure call the store can inspect synchronously, consistent with `render.ts`'s `{ok, ...}` pattern elsewhere in the domain.
 - **Repository binding deferred:** `Repository.load<T>`/`save<T>` stay generic in this story (`src/domain/ports.ts` is untouched). Once Story 3.5 lands its key-typed extension, `load('setup')`/`save('setup', ...)` etc. can bind to `Setup`/`Session`/`Export`-wrapped-history from this file — flagged here, not implemented here.
+
+- Review patches applied in `d545f67` (triage rows 1–7). Full verification passes.
 
 ## Review Triage Log
 
