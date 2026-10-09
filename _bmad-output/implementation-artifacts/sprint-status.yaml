@@ -1,0 +1,135 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-09-2026 10:57
+last_updated: 10-09-2026 10:57
+project: Impromptu
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-scaffold-the-app-from-the-architecture-starter: backlog
+  1-2-architecture-guardrails-config-module-ports-and-test-harness: backlog
+  1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums: backlog
+  1-4-one-compatibility-function-and-one-brief-renderer: backlog
+  1-5-transcribe-the-three-cl-5-anchors-verbatim: backlog
+  1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors: backlog
+  1-7-library-hard-gate-reachability-coverage-repeat-headroom-and: backlog
+  1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft: backlog
+  1-9-pilot-batches-through-the-full-lifecycle: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-complete-the-fill-library-topics-and-constraints: backlog
+  2-2-observation-templates-for-experiment-develop-and-perform: backlog
+  2-3-idea-generation-templates-for-all-four-levels: backlog
+  2-4-connection-templates-for-all-four-levels: backlog
+  2-5-perspective-templates-for-all-four-levels: backlog
+  2-6-expression-templates-for-all-four-levels: backlog
+  2-7-revision-templates-for-all-four-levels: backlog
+  2-8-switch-on-coverage-enforcement-and-audit-the-launch-library: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-design-tokens-fonts-and-base-action-components: backlog
+  3-2-setup-and-session-schemas-and-the-setup-reducer: backlog
+  3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: backlog
+  3-4-session-reducer-for-commits-and-reveal-progress: backlog
+  3-5-versioned-browser-storage-with-a-memory-fallback: backlog
+  3-6-the-app-store-and-the-library-loader: backlog
+  3-7-difficulty-dial-and-perform-timing: backlog
+  3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: backlog
+  3-9-the-challenge-stage-page-shell: backlog
+  3-10-challenge-composition-and-stepping-through-the-reveal: backlog
+  3-11-a-stable-challenge-across-navigation-and-reload: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-shuffle-and-landing-motion-for-each-reveal-piece: backlog
+  4-2-reduced-motion-parity-for-the-reveal: backlog
+  4-3-lock-inputs-and-reroll-the-rest: backlog
+  4-4-name-the-lock-to-release-when-nothing-fits: backlog
+  4-5-hold-the-composition-still-with-skill-info-on-request: backlog
+  4-6-optional-reveal-sounds: backlog
+  4-7-filming-contract-fit-rule-and-automated-legibility-checks: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-start-creating-and-the-untimed-creating-view: backlog
+  5-2-countdown-for-timed-challenges: backlog
+  5-3-pause-resume-and-time-s-up-without-failure: backlog
+  5-4-resume-or-discard-an-attempt-from-setup: backlog
+  5-5-finish-rep-and-the-rep-done-moment: backlog
+  5-6-optional-reflection-and-save-rep: backlog
+  5-7-next-steps-and-retry: backlog
+  5-8-try-another-version-variation: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-practice-page-with-empty-and-storage-states: backlog
+  6-2-practice-history-rep-cards: backlog
+  6-3-practice-map: backlog
+  6-4-export-practice-history-as-json: backlog
+  6-5-clear-all-data-with-confirmation: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-subscribe-endpoint-with-consent-honeypot-and-resend: backlog
+  7-2-email-signup-form-on-the-stage-and-in-a-reusable-footer-vari: backlog
+  7-3-privacy-note-page: backlog
+  7-4-email-environments-rate-limit-and-the-launch-email-checklist: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-setup-journey-sections-02-04-and-the-night-footer: backlog
+  8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets: backlog
+  8-3-motion-toggle-and-ambient-motion-control: backlog
+  8-4-decor-component-gate-and-the-3d-hero: backlog
+  8-5-the-3d-shuffle-layer-on-the-stage-and-the-freeze-rule: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-accessibility-audit-and-keyboard-end-to-end-path: backlog
+  9-2-responsive-and-browser-matrix: backlog
+  9-3-performance-budgets-and-offline-after-load: backlog
+  9-4-privacy-verification: backlog
+  9-5-design-sign-off-visual-acceptance-filming-contract-and-photo: backlog
+  9-6-moderated-test-kit-for-the-success-metrics: backlog
+  epic-9-retrospective: optional
+action_items:
+  - epic: 3
+    action: "Readiness concern: with no Locks set, compose() has no blockingLock to name (thin pre-Epic-2 library, e.g. Develop has no Templates). In Story 3.3/4.4 return blockingLock: null and show 'No challenge fits this setup yet.'"
+    owner: "dev"
+    status: open
+  - epic: 9
+    action: "Founder open questions before Story 9.5 sign-off: final UI copy, Stage ground (lilac vs night), Skill/Medium ticket-tab material, reveal sounds at launch (EXPERIENCE.md Open Questions)"
+    owner: "founder"
+    status: open
