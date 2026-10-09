@@ -2,7 +2,7 @@
 title: 'Session reducer for commits and reveal progress'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '635c4b68f7a70c164571565bca640ab059d0b26a'
@@ -82,6 +82,15 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | `challenge_committed`/`compose_failed` apply in every state; from Attempt yields held+attempt | medium | Reducer has no state guard on those cases; schema refine rejects held with attempt; spec says other pairs are no-ops. AD-7's Saved→Held belongs to Story 5.7 | patch |
+| 2 | blind, edge | Event payload types looser than stored schema (empty reason / recentKey) | low | `reason: string` vs `ComposeError.reason` trimmed min(1) | patch |
+| 3 | blind | No exhaustiveness check; `reveal_next` casts `challenge` | low | `default` swallows new variants; cast would throw on a null challenge | patch |
+| 4 | blind, edge, verif-gap | Sweep omits Attempt/Finished/Saved; outputs never schema-validated; pass-through, quick-from-None, over-window ring, brief-last untested | low | Pre-verified: wiping locks on commit passes all tests | patch |
+| 5 | blind | Challenge fixture duplicated across test files | low | Two copies to keep in sync | patch |
+| 6 | edge | `recentWindow: 0` makes `slice(-0)` keep everything | low | Config is a fixed 30; not reachable | reject |
 
 ## Design Notes
 
