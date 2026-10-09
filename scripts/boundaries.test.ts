@@ -41,6 +41,7 @@ describe("layer boundaries", () => {
 
   const allowed: [string, string, string][] = [
     ["domain -> config", "src/domain/x.ts", 'import { config } from "@/config/app"; export const w = config.generator.recentWindow;'],
+    ["domain -> domain (own submodule)", "src/domain/session/x.ts", 'import { Level } from "@/domain/library/schema"; export const l = Level;'],
     ["adapters -> domain", "src/adapters/x.ts", 'import type { Clock } from "@/domain/ports"; export const c: Clock = { now: () => 0 };'],
     ["app/api -> server", "src/app/api/x/route.ts", 'import { x } from "@/server/x"; export const y = x;'],
   ];

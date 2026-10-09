@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:57
-last_updated: 10-09-2026 12:03
+last_updated: 10-09-2026 12:25
 project: Impromptu
 project_key: NOKEY
 tracking_system: file-system
@@ -38,9 +38,9 @@ development_status:
   epic-1: in-progress
   1-1-scaffold-the-app-from-the-architecture-starter: done
   1-2-architecture-guardrails-config-module-ports-and-test-harness: done
-  1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums: backlog
-  1-4-one-compatibility-function-and-one-brief-renderer: backlog
-  1-5-transcribe-the-three-cl-5-anchors-verbatim: backlog
+  1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums: review
+  1-4-one-compatibility-function-and-one-brief-renderer: review
+  1-5-transcribe-the-three-cl-5-anchors-verbatim: review
   1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors: backlog
   1-7-library-hard-gate-reachability-coverage-repeat-headroom-and: backlog
   1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft: backlog
@@ -59,11 +59,11 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-design-tokens-fonts-and-base-action-components: backlog
-  3-2-setup-and-session-schemas-and-the-setup-reducer: backlog
+  3-1-design-tokens-fonts-and-base-action-components: done
+  3-2-setup-and-session-schemas-and-the-setup-reducer: review
   3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: backlog
   3-4-session-reducer-for-commits-and-reveal-progress: backlog
-  3-5-versioned-browser-storage-with-a-memory-fallback: review
+  3-5-versioned-browser-storage-with-a-memory-fallback: done
   3-6-the-app-store-and-the-library-loader: backlog
   3-7-difficulty-dial-and-perform-timing: backlog
   3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: backlog
@@ -125,6 +125,10 @@ development_status:
   9-6-moderated-test-kit-for-the-success-metrics: backlog
   epic-9-retrospective: optional
 action_items:
+  - epic: 1
+    action: "Founder decision 2026-10-09: Styles are named art styles (Y2K, wabi sabi, japandi, chrome, collage, ...) always rendered into the Brief sentence, plus a 'your choice' Style. Story 1.8 PROMPT.md must encode this; Story 1.9 styles-01 must include the 'your choice' Style. PRD glossary example 'minimalist' is superseded."
+    owner: "dev"
+    status: open
   - epic: 3
     action: "Readiness concern: with no Locks set, compose() has no blockingLock to name (thin pre-Epic-2 library, e.g. Develop has no Templates). In Story 3.3/4.4 return blockingLock: null and show 'No challenge fits this setup yet.'"
     owner: "dev"

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "con.unnoticed-details",
+    "revealText": "Three new details",
+    "briefText": "Include three details you have never paid attention to.",
+    "tags": ["visual"],
+    "requires": [],
+    "excludes": []
+  },
+  {
+    "id": "con.no-people",
+    "revealText": "No people",
+    "briefText": "Keep people out of both.",
+    "tags": ["exclusion"],
+    "requires": [],
+    "excludes": ["person", "people"]
+  },
+  {
+    "id": "con.nothing-bad-happens",
+    "revealText": "Nothing bad happens",
+    "briefText": "nothing bad happens",
+    "tags": ["outcome"],
+    "requires": [],
+    "excludes": []
+  }
+]
