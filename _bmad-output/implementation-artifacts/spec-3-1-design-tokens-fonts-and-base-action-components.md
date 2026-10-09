@@ -2,7 +2,7 @@
 title: 'Design tokens, fonts, and base action components'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -62,6 +62,8 @@ baseline_commit: '4518307a414e701c12864257206d9604c8495338'
 - A font fallback entry quoted with embedded `"` (e.g. `'"Bodoni 72"'`) breaks `next/font`'s generated inline-style string at build time; pass fallback names unquoted (`"Bodoni 72"`) and let the loader quote them.
 - A CSS block comment containing a literal `*/` substring inside explanatory prose (e.g. writing `--font-*/--text-*`) closes the comment early and corrupts the rest of the stylesheet; avoided by writing out namespace names instead of using `*/`-style globs in comments.
 - Verification: `npm run lint`, `npm run typecheck`, `npm test` (30/30 passing, including the new guard), and `npm run build` (all 5 routes still statically prerendered, confirmed via `npm run check:static`) all pass clean.
+
+- Review patches applied in `a7d2b0c` (triage rows 1–11); built CSS now emits `"Bodoni 72"` quoted. Full verification passes.
 
 ## Review Triage Log
 
