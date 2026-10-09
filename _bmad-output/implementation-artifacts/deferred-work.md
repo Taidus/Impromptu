@@ -21,6 +21,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-transcribe-the-three-cl-5-anchors-verbatim.md`
   summary: Story 1.8 PROMPT/RUBRIC must fix a `briefText` format convention per slot (full sentence vs lowercase fragment) and keep Template-specific phrasing ("Keep people out of both.") from being reused by other Templates.
   evidence: Anchor fills mix sentence-form and fragment-form `briefText`; nothing in data or schema records which a slot expects, so mixed batches can render lowercase sentence starts or doubled periods.
+- source_spec: `_bmad-output/implementation-artifacts/spec-7-3-privacy-note-page.md`
+  summary: Confirm the erasure-request contact address (`copy.privacy.contactEmail`, working value hello@impromptu.app) with the founder in the Story 7.4 launch checklist.
+  evidence: The privacy note publishes a mailto: route (AD-20) but no domain or mailbox has been set up yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors.md`
+  summary: Add a subprocess test that `npm run library:validate` exits non-zero on a failing library, when the first real batches land (Story 1.9).
+  evidence: `process.exitCode = report.ok ? 0 : 1` is the only thing making the CI step block merges; nothing exercises the failure exit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft.md`
+  summary: After 1.6 and 1.8 both merge, make `scripts/library/sample.ts` reuse 1.6's `load.ts` instead of its own `loadActiveLibrary` file reading.
+  evidence: The two stories were built in parallel and each wrote its own library loader.
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-3-compose-a-challenge-from-setup-locks-and-the-recent-window.md`
   summary: Measure `compose()` against the launch-size generated library (Story 2.8) and switch to lazy per-Template sampling if a click exceeds ~50 ms.
   evidence: After review fixes, candidates are still enumerated (pre-filtered by slot tags) and every compatible combo is rendered before picking; cost scales with fills per Template.

@@ -19,6 +19,7 @@ export const config = {
   },
   reflection: { maxChars: 280 },
   storage: { schemaVersions: { setup: 1, session: 1, history: 1 } },
+  // Version of copy.signup.consent (src/components/copy.ts); bump when that line changes.
   signup: { consentTextVersion: "2026-10-09" },
 } as const;
 
