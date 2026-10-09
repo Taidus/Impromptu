@@ -45,6 +45,7 @@ next-env.d.ts
 
 # generated library
 /src/generated/
+/gate-report.json
 
 # playwright
 /test-results/
