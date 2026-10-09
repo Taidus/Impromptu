@@ -27,6 +27,10 @@ if (!report.ok) {
   console.log(`${report.failures.length} failure(s):`);
   for (const f of report.failures) console.log(`  [${f.rule}] ${f.id}${f.source ? ` (${f.source})` : ""}: ${f.message}`);
 }
+if (report.warnings.length > 0) {
+  console.log(`${report.warnings.length} warning(s) (non-blocking; full list in the report):`);
+  for (const w of report.warnings.slice(0, 5)) console.log(`  [${w.rule}] ${w.id}: ${w.message}`);
+}
 console.log(`Report written to ${reportPath}`);
 
 process.exitCode = report.ok ? 0 : 1;

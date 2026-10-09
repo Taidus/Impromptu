@@ -4,6 +4,7 @@
 // Reachability, coverage, repeat headroom, and batch sizing are Story 1.7/1.8 additions.
 import { isCompatible } from "../../src/domain/library/compat";
 import { render } from "../../src/domain/library/render";
+import { Level } from "../../src/domain/library/schema";
 import type {
   Anchor,
   BatchManifest,
@@ -42,6 +43,12 @@ export interface GateFailure {
 export interface GateReport {
   ok: boolean;
   failures: GateFailure[];
+  /** Same shape as `failures`; never flips `ok` to false (coverage/headroom shortfalls
+   * below the `coverage.enforce` threshold, and Skill-focused headroom always). */
+  warnings: GateFailure[];
+  /** Every retired id (own `retired: true`, or any loaded batch's `manifest.retire[]`) —
+   * JSON-serializable so build.ts can exclude retired entries from library.json. */
+  retiredIds: string[];
   counts: {
     // Totals — includes retired entities; `retired` says how many of each bucket that is.
     skills: number;
@@ -141,6 +148,13 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
   const entityIds = new Set([...templateIds, ...topicIds, ...styleIds, ...constraintIds]);
   const resolvesAsIdOrTag = (ref: string) => entityIds.has(ref) || tagIds.has(ref);
 
+  // --- Reachability exemption (Story 1.7, deferred decision): the three CL-5 anchor
+  // Templates each admit only their own pinned fill, so they're exempt from the
+  // >=3-combinations rule below — the byte-for-byte anchor check pins them instead. Only
+  // Templates sourced from anchors/ qualify; an anchor naming a batch Template exempts nothing.
+  const anchorTemplateIds = new Set(lib.anchors.map((a) => a.templateId));
+  const isExemptAnchorTemplate = (ts: Sourced<Template>) => ts.source === "anchors" && anchorTemplateIds.has(ts.value.id);
+
   // --- Retired set: an entity's own `retired: true`, or any batch's manifest.retire[].
   // Reference checks use the full id set below, so a retired id stays resolvable. ---
   const retiredIds = new Set<string>();
@@ -237,6 +251,24 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
     return (withoutDecimalPoints.trim().match(/[^.!?]*[.!?]+/g) ?? []).length;
   };
 
+  // --- Reachability/coverage/headroom accumulators (Story 1.7), filled inside the same
+  // isCompatible()+render() pass as the Brief-rule enumeration below — no second
+  // cross-product. `pairsByCell` keys on "skill|level|medium" (Skill-focused headroom);
+  // `pairsByLevelMedium` keys on "level|medium" (Skill-random headroom).
+  const validComboCountByTemplate = new Map<string, number>();
+  const pairsByCell = new Map<string, Set<string>>();
+  const pairsByLevelMedium = new Map<string, Set<string>>();
+  const cellKey = (skill: string, level: string, medium: string) => `${skill}|${level}|${medium}`;
+  const levelMediumKey = (level: string, medium: string) => `${level}|${medium}`;
+  const addToSetMap = (map: Map<string, Set<string>>, key: string, value: string) => {
+    let set = map.get(key);
+    if (!set) {
+      set = new Set();
+      map.set(key, set);
+    }
+    set.add(value);
+  };
+
   for (const ts of activeTemplates) {
     const template = ts.value;
     const eligibleMediums = activeMediums.filter((m) => template.mediums.includes(m.id));
@@ -266,6 +298,8 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
             }
 
             const { brief } = result;
+            const failuresBefore = failures.length;
+
             const fillSources: (Sourced<Fill> | null)[] = [topicS, styleS, constraintS];
             const culprit = (check: (text: string) => boolean) =>
               fillSources.find((f): f is Sourced<Fill> => f !== null && check(f.value.briefText));
@@ -310,6 +344,15 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
                 `Brief is ${brief.length} chars (max ${config.brief.maxChars}): "${brief}"`,
                 c?.source ?? ts.source,
               );
+            }
+
+            // Only a combination that passes every Brief rule counts toward reachability/headroom.
+            if (failures.length > failuresBefore) continue;
+            validComboCountByTemplate.set(template.id, (validComboCountByTemplate.get(template.id) ?? 0) + 1);
+            if (topic) {
+              const pairId = `${template.id}|${topic.id}`;
+              addToSetMap(pairsByCell, cellKey(template.skill, template.level, medium.id), pairId);
+              addToSetMap(pairsByLevelMedium, levelMediumKey(template.level, medium.id), pairId);
             }
           }
         }
@@ -395,10 +438,106 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
     }
   }
 
+  const warnings: GateFailure[] = [];
+
+  // --- Reachability (AD-16/CL-2): at least `reachability.minCombinations` valid
+  // combinations per active Template, reusing the counts accumulated during the
+  // Brief-rule pass above. Anchor Templates are exempt (see the deferred decision note
+  // on `anchorTemplateIds` above). Always enforced — never gated by `coverage.enforce`. ---
+  for (const ts of activeTemplates) {
+    const template = ts.value;
+    if (isExemptAnchorTemplate(ts)) continue;
+    const count = validComboCountByTemplate.get(template.id) ?? 0;
+    if (count < config.reachability.minCombinations)
+      fail(
+        failures,
+        template.id,
+        "reachability.min-combinations",
+        `only ${count} valid combination(s) (want >= ${config.reachability.minCombinations})`,
+        ts.source,
+      );
+  }
+
+  // --- Coverage & repeat headroom (CL-3/FR-6). Template count per Skill x Level x Medium
+  // cell, and distinct templateId+topicId pairs for a Skill-random (Level x Medium) and a
+  // Skill-focused (Skill x Level x Medium) setup. The first two fail only when
+  // `coverage.enforce` is true (Story 2.8 switches it on); the Skill-focused one always
+  // warns, never fails — a single-Skill setup is allowed to be thin pre-launch. ---
+  const templateCountByCell = new Map<string, number>();
+  for (const ts of activeTemplates) {
+    const template = ts.value;
+    for (const medium of activeMediums) {
+      if (!template.mediums.includes(medium.id)) continue;
+      const key = cellKey(template.skill, template.level, medium.id);
+      templateCountByCell.set(key, (templateCountByCell.get(key) ?? 0) + 1);
+    }
+  }
+
+  for (const skill of lib.skills) {
+    for (const level of Level.options) {
+      for (const medium of activeMediums) {
+        const key = cellKey(skill.id, level, medium.id);
+        const templateCount = templateCountByCell.get(key) ?? 0;
+        if (templateCount < config.coverage.minTemplatesPerCell) {
+          const message = `only ${templateCount} active Template(s) (want >= ${config.coverage.minTemplatesPerCell})`;
+          fail(config.coverage.enforce ? failures : warnings, key, "coverage.templates", message);
+        }
+
+        const focusedPairs = pairsByCell.get(key)?.size ?? 0;
+        if (focusedPairs < config.coverage.minComboPerSkillFocusedCell)
+          fail(
+            warnings,
+            key,
+            "coverage.headroom-focused",
+            `only ${focusedPairs} templateId+topicId combination(s) (want >= ${config.coverage.minComboPerSkillFocusedCell})`,
+          );
+      }
+    }
+  }
+
+  for (const level of Level.options) {
+    for (const medium of activeMediums) {
+      const key = levelMediumKey(level, medium.id);
+      const pairs = pairsByLevelMedium.get(key)?.size ?? 0;
+      if (pairs < config.coverage.minComboPerLevelMedium) {
+        const message = `only ${pairs} templateId+topicId combination(s) (want >= ${config.coverage.minComboPerLevelMedium})`;
+        fail(config.coverage.enforce ? failures : warnings, key, "coverage.headroom", message);
+      }
+    }
+  }
+
+  // --- Batch sizing (AD-17): always enforced for the batches under review (draft batches),
+  // regardless of `coverage.enforce` — a Template batch must give each Medium it declares
+  // at least `batchSizing.minTemplatesPerMedium` of its own active Templates. Accepted
+  // batches are immutable (and anchors aren't a batch), so neither is re-sized. ---
+  const draftSources = new Set(lib.manifests.filter((m) => m.value.status === "draft").map((m) => m.source));
+  const templateCountByBatchMedium = new Map<string, number>(); // "<source>|<mediumId>" -> count
+  for (const { value: t, source } of lib.templates) {
+    if (!draftSources.has(source) || retiredIds.has(t.id)) continue;
+    for (const mediumId of new Set(t.mediums)) {
+      const key = `${source}|${mediumId}`;
+      templateCountByBatchMedium.set(key, (templateCountByBatchMedium.get(key) ?? 0) + 1);
+    }
+  }
+  for (const [key, count] of templateCountByBatchMedium) {
+    if (count < config.batchSizing.minTemplatesPerMedium) {
+      const [source, mediumId] = key.split("|");
+      fail(
+        failures,
+        key,
+        "batch.sizing",
+        `batch "${source}" has only ${count} Template(s) for medium "${mediumId}" (want >= ${config.batchSizing.minTemplatesPerMedium})`,
+        source,
+      );
+    }
+  }
+
   const deduped = dedupe(failures);
   return {
     ok: deduped.length === 0,
     failures: deduped,
+    warnings: dedupe(warnings),
+    retiredIds: [...retiredIds].sort(),
     counts: {
       skills: lib.skills.length,
       mediums: lib.mediums.length,
