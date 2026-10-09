@@ -80,6 +80,41 @@ export const copy = {
     // Working address; the founder confirms it in the Story 7.4 launch checklist (see deferred-work.md).
     contactEmail: "hello@impromptu.app",
   },
+  // Story 8.1: the Setup journey (sections 02-04) and the night footer.
+  // Working copy for the three-line meta stacks per the spec's Design
+  // Notes; the founder may replace it later.
+  journey: {
+    whatsInAChallenge: {
+      eyebrow: "02 — IMPROMPTU",
+      title: "what's in a challenge.",
+      meta: ["inputs · levels · brief", "one challenge", "every time"] as const,
+    },
+    fourLevels: {
+      eyebrow: "03 — IMPROMPTU",
+      title: "four levels, all open.",
+      meta: ["explore · experiment", "develop · perform", "all open"] as const,
+    },
+    // 04's own headline is the y2k-display line below (not a SectionHeader);
+    // this meta stack is kept only because Design Notes ask for it.
+    closing: "reveal. make. again.",
+    inputs: {
+      skill: "SKILL",
+      medium: "MEDIUM",
+      topic: "TOPIC",
+      constraint: "CONSTRAINT",
+      brief: "BRIEF",
+    },
+    posters: {
+      reveal: "reveal.",
+      make: "make.",
+      reflect: "reflect.",
+    },
+    footer: {
+      practice: "Practice",
+      privacy: "Privacy",
+      wordmark: "impromptu",
+    },
+  },
   signup: {
     emailLabel: "Email",
     // This is the consent text whose version is config.signup.consentTextVersion: bump that when this line changes.
