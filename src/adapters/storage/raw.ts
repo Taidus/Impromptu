@@ -3,6 +3,8 @@ export interface RawStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+  readonly length: number;
+  key(index: number): string | null;
 }
 
 export function createMemoryRawStore(): RawStore {
@@ -11,6 +13,10 @@ export function createMemoryRawStore(): RawStore {
     getItem: (key) => map.get(key) ?? null,
     setItem: (key, value) => void map.set(key, value),
     removeItem: (key) => void map.delete(key),
+    get length() {
+      return map.size;
+    },
+    key: (index) => Array.from(map.keys())[index] ?? null,
   };
 }
 

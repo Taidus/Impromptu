@@ -32,7 +32,7 @@ export type Result<T = void> =
 export type SaveResult<T> =
   | { ok: true; value: Envelope<T> }
   | { ok: false; reason: "rev_conflict"; fresh: Envelope<T> | null }
-  | { ok: false; reason: string };
+  | { ok: false; reason: "unsupported_version" | "read_failed" | "write_failed" };
 
 export interface Repository {
   /** False when the startup probe failed; every key then runs on memory. */
@@ -41,7 +41,7 @@ export interface Repository {
   /** `envelope.rev` must be (the rev last read) + 1. */
   save<T>(key: StorageKey, envelope: Envelope<T>): SaveResult<T>;
   clearAll(): Result;
-  /** True once this key's most recent migration attempt threw; it now runs on memory. */
+  /** True once this key's most recent migration attempt threw; it now runs on memory. Only accurate after `load(key)` has run — a migration is only attempted on read. */
   migrationFailed(key: StorageKey): boolean;
   /** Notifies `listener` when another tab changes `key`. Returns an unsubscribe function. */
   subscribe(key: StorageKey, listener: () => void): () => void;

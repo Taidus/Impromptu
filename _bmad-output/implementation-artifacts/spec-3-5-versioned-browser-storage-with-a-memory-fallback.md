@@ -2,7 +2,7 @@
 title: 'Versioned browser storage with a memory fallback'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -72,6 +72,28 @@ baseline_commit: '4518307a414e701c12864257206d9604c8495338'
 - Files touched: `src/domain/ports.ts` (extended `Repository`/added `SaveResult<T>`), `src/adapters/storage/raw.ts`, `src/adapters/storage/migrations/index.ts`, `src/adapters/storage/index.ts`, `src/adapters/storage/index.test.ts` (new).
 - Matrix Test Audit: all 9 I/O & Edge-Case Matrix rows map 1:1 to a passing test in `src/adapters/storage/index.test.ts` (first load, normal round-trip, older-version migration, future-version read-only, migration-throws fallback, probe-failure fallback (both the throwing-store and no-storage-supplied cases), rev conflict, cross-tab subscription, `clearAll`). `npm test` ran all 36 tests (6 files) and all passed, including the new file.
 - Verification run: `npm run lint` (clean), `npm run typecheck` (clean), `npm test` (36/36 passed), `npm run build` (succeeded, all 5 routes still static).
+- Review fix-up pass: a stored version above the known schema version is now protected on `save()` too (previously only the incoming envelope's `v` was checked, so a lower-`v` write could overwrite newer stored data). `getItem`/`setItem`/`removeItem` failures after a successful probe (quota exceeded, revoked mid-session) now surface as `read_failed`/`write_failed`/`clear_failed` instead of throwing or silently falling back. `readEnvelope` was replaced with raw-text + `isEnvelope()`/`parseEnvelope()` so non-envelope JSON (`5`, `{}`) is treated as absent, and the migration-failure memory fallback is seeded from the original raw text rather than the parsed/migrated object. `SaveResult<T>`'s catch-all `{reason:string}` was replaced with the exact literal union `save()` returns, so `fresh` narrows correctly on `"rev_conflict"`. `RawStore` gained `length`/`key(i)` (implemented in the memory store; native `localStorage` already has them) so `clearAll()` enumerates and removes every `impromptu:*` key, not just the three known ones. `subscribe()` now ignores events from a different `storageArea` and returns a no-op unsubscribe when storage is unavailable or the key is already on its migration-failure fallback. `migrationFailed`'s docstring now notes it is only accurate after `load(key)` has run. Added tests for each case (18 tests total in the file now).
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Stored future-version value overwritten by a lower-`v` save | high | Reproduced: `{v:3}` replaced by `{v:1}`; violates AD-9 read-only future versions | patch |
+| 2 | blind, edge, verif-gap | Storage calls throwing after the probe escape the `Result` contract | medium | Reproduced: `save` threw `Error: Quota` | patch |
+| 3 | blind, edge, verif-gap | Non-envelope JSON returned as a valid envelope | medium | Reproduced: bytes `5` → `{ok:true, value:{}}` | patch |
+| 4 | verif-gap | Corrupted-bytes path untested | low | Pre-verified: removing the try/catch passes all tests | patch |
+| 5 | edge | Fallback seeded from possibly mutated parsed object | low | AD-9: stored value left untouched | patch |
+| 6 | blind | `SaveResult` cannot narrow to `rev_conflict` | low | Catch-all string reason overlaps the literal | patch |
+| 7 | blind, edge | `clearAll` removes only known keys | low | AD-9: "removes every `impromptu:*` key" | patch |
+| 8 | blind, edge | `subscribe` ignores `storageArea`; fires for memory-backed keys | low | Listener re-reads a memory copy | patch |
+| 9 | blind | `migrationFailed` accurate only after `load` | low | Docstring fix | patch |
+| 10 | verif-gap | AC 4 tested with one instance, not two | low | Spec says two instances | patch |
+| 11 | blind | Missing migration step silently sends users to memory | low | No migrations exist yet | reject |
+| 12 | blind | `unsupported_version` skips returning `fresh` | low | Callers never save above known version | reject |
+| 13 | edge | Save at `v` below current allowed | low | No path produces it | reject |
+| 14 | edge | Migration re-runs on every load of failed key | low | Pure cost | reject |
+| 15 | edge | Cross-tab read-check-write not atomic | low | AD-9 rev check is the specified mitigation | reject |
+| 16 | edge | Probe `removeItem` failure marks storage unavailable | low | Conservative, rare | reject |
 
 ## Verification
 

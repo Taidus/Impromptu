@@ -8,6 +8,7 @@ const keyFor = (key: StorageKey) => `${KEY_PREFIX}${key}`;
 
 interface StorageEventLike {
   key: string | null;
+  storageArea?: unknown;
 }
 interface EventTargetLike {
   addEventListener(type: "storage", listener: (event: StorageEventLike) => void): void;
@@ -37,6 +38,32 @@ function tryGlobalEventTarget(): EventTargetLike | null {
   return typeof window !== "undefined" ? window : null;
 }
 
+function isEnvelope(value: unknown): value is Envelope<unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return Number.isInteger(candidate.v) && Number.isInteger(candidate.rev) && "data" in candidate;
+}
+
+function parseEnvelope(text: string): Envelope<unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return isEnvelope(parsed) ? parsed : null;
+}
+
+/** Removes every key starting with `prefix` from `store`. */
+function removeAllPrefixed(store: RawStore, prefix: string): void {
+  const toRemove: string[] = [];
+  for (let i = 0; i < store.length; i++) {
+    const key = store.key(i);
+    if (key != null && key.startsWith(prefix)) toRemove.push(key);
+  }
+  for (const key of toRemove) store.removeItem(key);
+}
+
 /**
  * The one factory for the AD-9 Repository. Probes `storage` once; on failure every
  * operation runs against an in-memory store and `storageAvailable` is false. On
@@ -57,19 +84,17 @@ export function createRepository(options: CreateRepositoryOptions = {}): Reposit
 
   const rawFor = (key: StorageKey): RawStore => fallbacks.get(key) ?? base;
 
-  function readEnvelope(key: StorageKey): Envelope<unknown> | null {
-    const text = rawFor(key).getItem(keyFor(key));
-    if (text == null) return null;
-    try {
-      return JSON.parse(text) as Envelope<unknown>;
-    } catch {
-      return null; // corrupted bytes are treated as absent, never a hard failure.
-    }
-  }
-
   function load<T>(key: StorageKey): Result<Envelope<T> | null> {
-    const stored = readEnvelope(key);
-    if (stored == null) return { ok: true, value: null };
+    let text: string | null;
+    try {
+      text = rawFor(key).getItem(keyFor(key));
+    } catch {
+      return { ok: false, reason: "read_failed" };
+    }
+    if (text == null) return { ok: true, value: null };
+
+    const stored = parseEnvelope(text);
+    if (stored == null) return { ok: true, value: null }; // corrupted or not an envelope: treat as absent
 
     const known = schemaVersions[key];
     if (stored.v >= known) return { ok: true, value: stored as Envelope<T> };
@@ -78,7 +103,7 @@ export function createRepository(options: CreateRepositoryOptions = {}): Reposit
       return { ok: true, value: migrate<T>(key, stored, known, migrationTable) };
     } catch {
       const mem = createMemoryRawStore();
-      mem.setItem(keyFor(key), JSON.stringify(stored)); // seed with the untouched original
+      mem.setItem(keyFor(key), text); // seed with the untouched original bytes, not the parsed object
       fallbacks.set(key, mem);
       migrationFailedKeys.add(key);
       return { ok: true, value: stored as Envelope<T> };
@@ -89,25 +114,43 @@ export function createRepository(options: CreateRepositoryOptions = {}): Reposit
     const known = schemaVersions[key];
     if (envelope.v > known) return { ok: false, reason: "unsupported_version" };
 
-    const current = readEnvelope(key) as Envelope<T> | null;
+    let text: string | null;
+    try {
+      text = rawFor(key).getItem(keyFor(key));
+    } catch {
+      return { ok: false, reason: "read_failed" };
+    }
+    const current = text == null ? null : (parseEnvelope(text) as Envelope<T> | null);
+
+    // A stored version above what this app knows must never be overwritten, regardless of rev.
+    if (current != null && current.v > known) {
+      return { ok: false, reason: "unsupported_version" };
+    }
+
     const currentRev = current?.rev ?? 0;
     const expectedRev = envelope.rev - 1;
     if (currentRev !== expectedRev) {
       return { ok: false, reason: "rev_conflict", fresh: current };
     }
 
-    rawFor(key).setItem(keyFor(key), JSON.stringify(envelope));
+    try {
+      rawFor(key).setItem(keyFor(key), JSON.stringify(envelope));
+    } catch {
+      return { ok: false, reason: "write_failed" };
+    }
     return { ok: true, value: envelope };
   }
 
   function clearAll(): Result {
-    for (const key of Object.keys(schemaVersions) as StorageKey[]) {
-      base.removeItem(keyFor(key));
-      fallbacks.get(key)?.removeItem(keyFor(key));
-      fallbacks.delete(key);
+    try {
+      removeAllPrefixed(base, KEY_PREFIX);
+      for (const fallback of fallbacks.values()) removeAllPrefixed(fallback, KEY_PREFIX);
+      fallbacks.clear();
+      migrationFailedKeys.clear();
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: "clear_failed" };
     }
-    migrationFailedKeys.clear();
-    return { ok: true };
   }
 
   function migrationFailed(key: StorageKey): boolean {
@@ -115,9 +158,10 @@ export function createRepository(options: CreateRepositoryOptions = {}): Reposit
   }
 
   function subscribe(key: StorageKey, listener: () => void): () => void {
-    if (!eventTarget) return () => {};
+    if (!eventTarget || !storageAvailable || fallbacks.has(key)) return () => {};
     const storageKey = keyFor(key);
     const handler = (event: StorageEventLike) => {
+      if (event.storageArea !== undefined && event.storageArea !== primary) return; // another storage area (e.g. sessionStorage)
       if (event.key === null || event.key === storageKey) listener();
     };
     eventTarget.addEventListener("storage", handler);
