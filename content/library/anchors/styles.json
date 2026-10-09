@@ -1,0 +1,10 @@
+[
+  {
+    "id": "sty.horror",
+    "revealText": "Horror",
+    "briefText": "horror",
+    "tags": ["tone"],
+    "requires": [],
+    "excludes": []
+  }
+]
