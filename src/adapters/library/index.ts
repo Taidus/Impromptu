@@ -23,13 +23,13 @@ export async function loadLibrary(source: () => Promise<unknown>): Promise<LoadL
 }
 
 /**
- * The production library source, for the Story 1.7 follow-up (recorded in deferred-work.md) to
- * point at the real build output once it merges: replace this body with
- * `import("@/generated/library.json").then((m) => m.default)`.
- * Story 1.7 is not merged yet, so this story deliberately never imports `@/generated/**`.
+ * The production library source: the JSON that scripts/library/build.ts (Story 1.7) writes to
+ * `src/generated/library.json`, dynamically imported so it ships as its own chunk.
  */
 export async function loadGeneratedLibrarySource(): Promise<unknown> {
-  throw new Error("library source not wired yet: see deferred-work.md (Story 1.7 follow-up)");
+  // Emitted by scripts/library/build.ts on predev/prebuild (Story 1.7); a separate chunk, loaded on demand.
+  const mod = await import("@/generated/library.json");
+  return mod.default;
 }
 
 /**

@@ -68,7 +68,7 @@ describe("build", () => {
     expect(ids).toContain("top.spoon");
     expect(ids).not.toContain("top.draft-cup");
     expect(payload.topics.find((t) => t.id === "top.old-fork")?.retired).toBe(true);
-    expect(payload.anchors.length).toBeGreaterThanOrEqual(3);
+    expect(payload).not.toHaveProperty("anchors");
     expect(payload.libraryVersion).toMatch(/^[0-9a-f]{16}$/);
   });
 

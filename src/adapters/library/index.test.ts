@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadGeneratedLibrarySource, loadLibrary, prefetchOnIdle } from "./index";
+import { loadLibrary, prefetchOnIdle } from "./index";
 
 function validLibraryJson() {
   return {
@@ -51,12 +51,6 @@ describe("loadLibrary", () => {
       throw new Error("network down");
     });
     expect(result).toEqual({ ok: false, reason: "fetch_failed" });
-  });
-});
-
-describe("loadGeneratedLibrarySource", () => {
-  it("is a clearly-named stub that rejects until the Story 1.7 follow-up wires it", async () => {
-    await expect(loadGeneratedLibrarySource()).rejects.toThrow(/not wired yet/);
   });
 });
 
