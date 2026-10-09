@@ -399,3 +399,37 @@
   line-height: var(--typography-meta-leading);
   letter-spacing: var(--typography-meta-tracking);
 }
+
+/* Form label role (DESIGN.md → Text field). Added by Story 7.2. */
+@utility text-label {
+  font-family: var(--typography-label-family);
+  font-size: var(--typography-label-size);
+  font-weight: var(--typography-label-weight);
+  line-height: var(--typography-label-leading);
+  letter-spacing: var(--typography-label-tracking);
+}
+
+/* Consent checkbox (DESIGN.md → checkbox-consent): 24px box, 1.5px border in
+   the ground's text color, grape fill with a cream tick when checked. Added
+   by Story 7.2; the tick is inline SVG so no asset request is made. The
+   tick's stroke #f1ebdf is --color-cream (a data URI cannot read a var).
+   Forced-colors mode drops fills and images, so the native box returns. */
+@utility checkbox-consent {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-scrap);
+  background-color: transparent;
+  &:checked {
+    border-color: var(--color-grape);
+    background-color: var(--color-grape);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f1ebdf' stroke-width='3'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E");
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  @media (forced-colors: active) {
+    appearance: auto;
+  }
+}
