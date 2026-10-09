@@ -2,7 +2,7 @@
 title: 'Subscribe endpoint with consent, honeypot, and Resend'
 type: 'feature' # feature | bugfix | refactor | chore
 created: '2026-10-09'
-status: 'in-review' # draft | ready-for-dev | in-progress | in-review | done
+status: 'done' # draft | ready-for-dev | in-progress | in-review | done
 route: 'dispatch' # oneshot | dispatch
 review_loop_iteration: 0
 context: []
