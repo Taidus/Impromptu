@@ -15,13 +15,16 @@
     "check:static": "node scripts/check-static.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
     "library:validate": "tsx scripts/library/validate.ts",
-    "library:build": "tsx scripts/library/build.ts"
+    "library:build": "tsx scripts/library/build.ts",
+    "library:new-batch": "tsx scripts/library/new-batch.ts",
+    "library:sample": "tsx scripts/library/sample.ts"
   },
   "dependencies": {
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "resend": "6.32.1"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
