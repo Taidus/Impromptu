@@ -30,3 +30,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft.md`
   summary: After 1.6 and 1.8 both merge, make `scripts/library/sample.ts` reuse 1.6's `load.ts` instead of its own `loadActiveLibrary` file reading.
   evidence: The two stories were built in parallel and each wrote its own library loader.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-compose-a-challenge-from-setup-locks-and-the-recent-window.md`
+  summary: Measure `compose()` against the launch-size generated library (Story 2.8) and switch to lazy per-Template sampling if a click exceeds ~50 ms.
+  evidence: After review fixes, candidates are still enumerated (pre-filtered by slot tags) and every compatible combo is rendered before picking; cost scales with fills per Template.
