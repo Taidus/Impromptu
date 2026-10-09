@@ -2,7 +2,7 @@
 title: 'Story 1.1: Scaffold the app from the architecture starter'
 type: 'chore'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '6a8417892407e08e9de0d00471289115f95842ff'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -45,11 +45,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] repo root -- run the AD-1 command in a temp dir, move the generated app (excluding `node_modules`, `.next`) into the repo root, then `npm install` -- the target dir is non-empty, so scaffold-then-move
-- [ ] `.gitignore` -- merge scaffold rules with `_bmad/render/`, add `/src/generated/`
-- [ ] `package.json` -- exact pins per Always; add `engines.node: "24.x"`; add zod, vitest, vite, @playwright/test, tsx as listed (zod as dependency, the rest dev)
-- [ ] `src/app/stage/page.tsx`, `src/app/practice/page.tsx`, `src/app/privacy/page.tsx` -- minimal static placeholder page each with one `h1`; trim `src/app/page.tsx` to a placeholder too
-- [ ] source-tree folders -- create with `.gitkeep`: `content/library/{anchors,batches,pipeline}`, `scripts/library`, `src/{components,decor,domain,adapters,store,server/email,shared,config,styles}`, `public/decor`, `e2e` (`src/generated/` stays absent and ignored)
+- [x] repo root -- run the AD-1 command in a temp dir, move the generated app (excluding `node_modules`, `.next`) into the repo root, then `npm install` -- the target dir is non-empty, so scaffold-then-move
+- [x] `.gitignore` -- merge scaffold rules with `_bmad/render/`, add `/src/generated/`
+- [x] `package.json` -- exact pins per Always; add `engines.node: "24.x"`; add zod, vitest, vite, @playwright/test, tsx as listed (zod as dependency, the rest dev)
+- [x] `src/app/stage/page.tsx`, `src/app/practice/page.tsx`, `src/app/privacy/page.tsx` -- minimal static placeholder page each with one `h1`; trim `src/app/page.tsx` to a placeholder too
+- [x] source-tree folders -- create with `.gitkeep`: `content/library/{anchors,batches,pipeline}`, `scripts/library`, `src/{components,decor,domain,adapters,store,server/email,shared,config,styles}`, `public/decor`, `e2e` (`src/generated/` stays absent and ignored)
 
 **Acceptance Criteria:**
 - Given the scaffolded repo, when `npm run build` runs, then it succeeds and lists `/`, `/stage`, `/practice`, `/privacy` as `○ (Static)`, with no `ƒ` routes.
@@ -60,9 +60,33 @@ context:
 
 ## Implementation Notes
 
+- Scaffolded via AD-1 command in scratchpad, moved to repo root. Also pinned `@tailwindcss/turbopack` 4.3.3; layout title set to "Impromptu". Kept scaffold `README.md` and sample SVGs in `public/` (cleanup deferred to UI stories).
+- Implementation subagent pushed `story/1-1-scaffold` and opened PR #1 (https://github.com/Taidus/Impromptu/pull/1), per the frozen Vercel/GitHub decision.
+- Verified independently: build lists `/`, `/practice`, `/privacy`, `/stage` as `○`; lint and `tsc --noEmit` clean; installed versions match pins; `src/generated/` ignored; no `proxy.ts`.
+- BLOCKED (AC 5): Vercel connector `create_git_project` on team `taidus-projects` returns 403 "You don't have permission to create the project" (request iad1:sfo1::r7tl9-1791569254031-c9de17bfcf70). Vercel CLI not installed. Needs founder action in the Vercel dashboard.
+- npm warns `unrs-resolver` / `esbuild` install scripts not covered by `allowScripts`; local install and build unaffected.
+
+- Review patches applied (triage rows 1–6); build, lint, tsc, pins, ignore checks re-run and passing.
+- OPEN at completion: AC 5 (Vercel Preview / main → Production) awaits the founder adding `Impromptu` to the Vercel GitHub App's repository list; sprint status left at `review` until verified.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | `layout.tsx` global `LayoutProps` breaks `tsc --noEmit` on fresh clone | medium | Reproduced in a clean clone: TS2304 `Cannot find name 'LayoutProps'`; Story 1.2 CI typecheck would hit it | patch |
+| 2 | blind, edge | Geist fonts loaded but `body` hard-codes Arial | low | `globals.css` `font-family: Arial…` overrides `--font-sans`; two unused font downloads on every page | patch |
+| 3 | blind, edge | `.env*` ignores a future `.env.example` | low | Rule matches `.env.example`; Story 7.1 needs an env template; one-line fix | patch |
+| 4 | blind | Playwright output dirs not gitignored | low | `@playwright/test` installed, `e2e/` exists, no ignore for `test-results/` etc.; one-line fix | patch |
+| 5 | blind | README is create-next-app boilerplate with wrong facts | low | Says `app/page.tsx` (actual `src/app/page.tsx`), offers yarn/pnpm/bun, describes Geist | patch |
+| 6 | blind | Unused sample SVGs in `public/` | low | `grep` finds no reference after `page.tsx` was trimmed; deletion | patch |
+| 7 | edge | No PostCSS config, so Tailwind breaks under `--webpack` | false | No script or Vercel default uses `--webpack`; Next 16 builds with Turbopack and `next.config.ts` wires `@tailwindcss/turbopack` | reject |
+| 8 | blind, edge | ESLint will lint `src/generated/` output | false | Generated artifact is `library.json`; reproduced `npx eslint .` with a JSON file there: no output | reject |
+| 9 | blind | `engines.node` advisory only; add `.nvmrc` | low | Not a defect: engines is set (Vercel honors it), local Node is 24.19; extra tooling file not needed | reject |
+| 10 | blind | All routes share one page title | low | Placeholder pages; real pages and metadata arrive in Stories 3.7/3.9/6.1/7.3 | reject |
+| 11 | verif-gap, blind | No automated guard that routes stay static (`○`) | medium | Pre-verified: no test, script, or CI asserts prerendering; Story 1.2 owns test/CI harness | defer |
+| 12 | verif-gap | No `test` script despite vitest/playwright installed | low | Frozen intent assigns test config to Story 1.2 | reject |
 
 ## Verification
 
