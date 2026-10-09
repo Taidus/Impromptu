@@ -59,7 +59,7 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-design-tokens-fonts-and-base-action-components: backlog
+  3-1-design-tokens-fonts-and-base-action-components: done
   3-2-setup-and-session-schemas-and-the-setup-reducer: review
   3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: backlog
   3-4-session-reducer-for-commits-and-reveal-progress: backlog
