@@ -4,7 +4,7 @@
 
 ## Goal
 
-A visitor configures Level, Mediums, and Skill focus on the landing page, taps **Get a challenge**, and gets a valid, stable Challenge on its own Challenge Stage page. The Challenge survives reloads and navigation, and setup persists in the browser (no account). In this epic, reveal pieces land instantly; Epic 4 adds the theatrical shuffle/landing motion on top of the same state.
+A visitor configures Level, Mediums, and Skill focus on the landing page, taps "Get a challenge," and gets a valid, stable Challenge on its own Challenge Stage page. The Challenge survives reloads and navigation, and setup persists in the browser. This epic lands every piece instantly (no theatrical motion — that's Epic 4). It builds the pure domain core (library compatibility already exists from Epic 1) up through composition, session state, storage, the app store, and the setup/Stage UI.
 
 ## Stories
 
@@ -22,46 +22,39 @@ A visitor configures Level, Mediums, and Skill focus on the landing page, taps *
 
 ## Requirements & Constraints
 
-- Difficulty Dial selects Level (Explore/Experiment/Develop/Perform); all four always selectable, keyboard+pointer+touch, current value announced; no suggestions/gating. Perform adds a Timed/Untimed/Either choice (default Either).
-- Enable one or more Mediums; pick one or Random; generator never uses a disabled Medium; last enabled Medium can't be disabled (explained inline); default all on, Random.
-- Optional Skill focus (pick or Random) with an info control explaining each Skill; never shown during the Reveal unless asked.
-- Setup (Level, timing, Mediums, Skill focus, Quick reveal, sound, ambient motion) persists across reloads; no account/sign-in/email ever required.
-- Every reachable Challenge is compatible (no contradictions) and renders a standalone Brief; avoid repeats within the last 30 Challenges when an alternative exists.
-- A revealed Challenge is stable: changes only on explicit Reroll/Get a challenge; survives reload and a return trip to setup; setup edits apply only to the next Challenge.
-- Quick reveal shows the whole Challenge in one transition ≤ 1s (`config.reveal.quickMaxMs`).
-- Browser storage is versioned; app still works (challenges still generate) if storage is unavailable, with a banner explaining history won't be kept.
-- The Stage is its own page/route, with a visible "back to setup" control and Esc-to-setup when no Attempt is running; only step-relevant controls show.
-- Accessibility floor (WCAG 2.1 AA): every control keyboard-operable with visible focus; verified contrast pairs; no state conveyed by color alone; Reveal steps announced to screen readers.
-- Desktop-first responsive: ≥1280px primary target, works down to 320px.
+- A visitor sets Level via a Difficulty Dial (four stops, all selectable, keyboard-reachable, announced to screen readers); Perform adds a Timed/Untimed/Either choice, default Either.
+- The visitor enables one or more Mediums and can pick one or leave it random ("This time"). The generator never produces a Challenge in a disabled Medium. At least one Medium must always stay enabled — the control blocks disabling the last one and explains why. Default on first visit: all Mediums enabled, Medium randomized.
+- Skill focus is optional (pick one of six Skills, or random), with an info control explaining each Skill.
+- Setup (Level, Perform timing, Mediums, Skill focus, Quick reveal, sound/mute) persists across reloads in the same browser. No account is ever required.
+- Every generated Challenge must fit the chosen Level, Skill focus, and an enabled Medium, and never contradict itself (library compatibility rules from Epic 1).
+- A held Challenge is a stable, immutable snapshot: it never re-renders or changes when setup or the library changes later: only a new `compose()` call produces a new Challenge.
+- The Reveal lands one Input at a time at the user's pace (no auto-advance); Quick reveal lands everything at once as a setup preference.
+- No no-penalty-violating UI: no error/failure language, no streak or score copy.
 
 ## Technical Decisions
 
-- Layering/import boundaries (already enforced by ESLint from Story 1.2): `src/domain` (pure, no `window`/`localStorage`/`Date.now`/`Math.random`/`crypto`) → `ports.ts` → `src/adapters` → `src/store` → `src/shared` → `src/app`/`src/components` → `src/decor`/`src/server`.
-- One `compose(request, library, recent, random)` in `src/domain/compose` handles new/Reroll/Variation/"Change it again" via `locks`/`mustDiffer`; returns `{ok:true, challenge}` or `{ok:false, reason:'no_compatible', blockingLock}`. Only the store command layer calls it; components never call `compose()` directly or pass a Challenge in an event payload.
-- Immutable Challenge snapshot and Rep/Export zod schemas live in `src/domain/session/schema.ts`; types come only from `z.infer`.
-- Pure session reducer + one store (`setup`, `session`, `history` slices) built on `useSyncExternalStore`; one Stage-level key handler (Esc always; Space/Enter only when no control has focus, per Cross-Doc Resolution 3 below).
-- Repository (`src/adapters/storage`) is the only module touching `localStorage`; keys `impromptu:setup|session|history`; envelope `{v, rev, data}`; forward-only migrations; memory fallback on probe failure; cross-tab sync via `storage` events.
-- No stored state in first render: store reports `status: 'loading'|'ready'`; components render neutral placeholders until ready, then hydrate.
-- Recent ring: last 30 `templateId+topicId` keys, pushed on `challenge_committed` only (not on Retry).
-- Reveal progress is domain state (`revealed` set + `config.reveal.order`: skill, medium, topic, style, constraint, then brief); Quick reveal lands all kinds on commit.
-- One config module `src/config/app.ts` holds `generator.recentWindow`, `reveal.quickMaxMs`, `reveal.order`, `setup.defaults`, `reflection.maxChars`, `storage.schemaVersions`, `signup.consentTextVersion`.
-- Conventions: one copy map `src/components/copy.ts` for all UI strings; `{ok,reason}` result shapes; Tailwind v4 tokens in `src/styles/tokens.css`, no raw hex colors or px font sizes in `src/components`; `usePrefersReducedMotion` hook for motion gating; Vitest colocated `*.test.ts`.
-- Cross-Doc Resolution (Motion toggle): add `ambientMotion: boolean` to the `Setup` schema and `config.setup.defaults` (default `true`; `prefers-reduced-motion: reduce` always wins). Motion toggle never appears on the Stage (Stage motion only runs during shuffles and freezes when held — Epic 4 concern).
+- **Functional core / imperative shell.** `src/domain` is pure TypeScript: no React, no Next.js, no `window`/`localStorage`/`Date.now()`/`Math.random()`/`crypto`. Time comes from the `Clock` port, randomness/ids from the `Random` port (both in `src/domain/ports.ts`, already defined). `src/domain` imports only `@/config` and `zod`; an ESLint rule enforces this.
+- **Persisted shapes are zod schemas** in `src/domain/session/schema.ts` (`Setup`, `Challenge`, `Attempt`, `Rep`, `Session`, `Export`); every TypeScript type comes from `z.infer`, never a hand-written parallel interface. This mirrors the existing pattern in `src/domain/library/schema.ts` (strict objects, id patterns via regex, `z.infer` types).
+- **Challenge** (AD-5) is an immutable snapshot: `id` (uuid), `createdAt` (ISO 8601), `libraryVersion`, `templateId`, `level`, `timeLimitSec|null`, rendered `brief`, `guidance|null`, `inputs` (a record keyed by Input kind — `skill`, `medium`, `topic`, `style`, `constraint` — each `{id, revealText}`; kinds the Template omits are absent), and `origin: {kind:'new'|'reroll'|'retry'|'variation', fromRepId|null}`.
+- **Rep** (AD-5): `{id, challenge, finishedAt (ISO), timeUsedSec|null, reflection: {worked, change}|null}`. Reflection fields may be empty strings (never required, never penalized). **Export**: `{app:'impromptu', exportVersion, exportedAt, reps}`.
+- **Attempt** (AD-8): timers are derived from wall-clock timestamps, never a ticking stored counter. `{startedAt (epoch ms), pausedAt|null, pausedTotalMs, timeLimitSec|null}`. Elapsed/remaining/timeUp are always computed, never stored.
+- **One session state machine** (AD-7), implemented as a pure reducer `(state, event, now) → state` in `src/domain/session`, owns at most one held Challenge and at most one Attempt. States: `None → Held → Attempt → Finished → Saved`, looping back to `Held`. Setup events (`set_level`, `set_perform_timing`, `toggle_medium`, `choose_medium`, `set_skill_focus`, `set_quick_reveal`, `set_sound`) are handled by a **setup reducer** that is a pure domain rule module — this is Story 3.2's deliverable. The guard against disabling the last enabled Medium (FR-2) lives there, and so does the "This time" Medium falling back to random when its Medium is disabled.
+- **`compose()`** (AD-3, Story 3.3) is the single function behind New Challenge, Reroll, and Variation; it reads `isCompatible()` (already built in Epic 1, `src/domain/library/compat.ts`) and `render()` (`src/domain/library/render.ts`). It returns `{ok:true, challenge}` or `{ok:false, reason:'no_compatible', blockingLock}`, and never a partial Challenge.
+- **Recent-repeat window** (AD-11): the session slice keeps a ring of the last `config.generator.recentWindow` (30) `templateId+topicId` keys, pushed on every committed Challenge (not Retry). `compose()` excludes ring keys whenever an alternative exists.
+- **Repository** (AD-9, Story 3.5) is the sole `localStorage` accessor, three keys (`impromptu:setup`, `impromptu:session`, `impromptu:history`), each an envelope `{v, rev, data}` with forward-only migrations and a memory fallback. The `Repository.load/save` port signature is generic over `T` today (`src/domain/ports.ts`); Story 3.5 (on another branch) is extending it. Its deferred item "make `Repository.load/save` key-typed" can bind `load`/`save` to the exact `Setup`/`Session`/`Export`-history schemas this story defines, once that extension lands — do not implement that binding here.
+- **One config module** (`src/config/app.ts`, already built): `generator.recentWindow`, `reveal.order` (skill, medium, topic, style, constraint, then brief), `setup.defaults`, `reflection.maxChars` (280), `storage.schemaVersions`. Domain and store code read these; nothing hard-codes the numbers.
+- **One app store** (Story 3.6) using `useSyncExternalStore`, holding `setup`/`session`/`history` slices, running only domain reducers, persisting through the Repository after every transition. Components dispatch commands/events only; they never call `compose()` or write state directly.
+- Store hydration: no stored state in the first client render (AD-10). Components render a neutral placeholder until the store reports `status:'ready'`.
 
 ## UX & Interaction Patterns
 
-- No dark mode; `prefers-color-scheme` changes nothing. Four fixed grounds: night, lilac (incl. the Challenge Stage), paper, sun. Grain overlay at 0.1 opacity, suppressed inside the Stage safe area and behind essential text.
-- Three self-hosted font families via `next/font/google` with `display: swap`, no third-party origin requests: Bodoni Moda (400–900 + italic, editorial/reveal words), Unbounded (200–900, Y2K labels/buttons/stamps/countdown), Instrument Sans (400–700, reading voice: Briefs, body, forms). Stage renders after Bodoni + Instrument load (100ms max wait, then swap).
-- Base action components (visual in DESIGN.md → Components → Actions, behavior in EXPERIENCE.md → Component Patterns): **Sun button** (one primary action per view, sun-gradient pill, relabels per Stage step while keeping focus, never disabled during a Reveal step); **Ink button** (secondary strong action, solid ink pill); **Line button** (quiet actions: Reroll, Discard, Pause/Resume); **Stage icon button** (52px circle, back + sound, sound shows state via glyph + "SOUND OFF/ON" caption, never color-only). All are native `<button>`, ≥52px target, focus ring 2px/3px-offset colored per ground (`focus` on night/lilac/paper, `focus-on-sun` on sun stops, `focus-on-lilac-deep` on lilac-deep; never on `night-glow`).
-- Full token set (colors, typography roles, radii, spacing, component specs, shadows) is captured verbatim in DESIGN.md's YAML front matter — read it directly rather than re-deriving values; it is authoritative over the prose below it.
-- Voice: direct, one instruction per step, no motivational fluff; headlines are lowercase fragments ending in a full stop; buttons are verbs; never mention streaks/missed days/quality judgments. Working copy (Level one-liners, Skill descriptions, button/state strings) seeds `src/components/copy.ts`.
-- Setup page is a journey (night → lilac → paper → sun → night footer), each section its own ground; the Challenge Stage is the one held, still exception. Stage safe-area column width `{spacing.safe-area-width}`; back/sound sit in viewport corners outside it.
+- **Difficulty Dial**: one ARIA slider, four stops, arrow keys step, Home/End jump, click-to-set; value text joins the Level name and its one-liner. Perform shows the Timed/Untimed/Either control beside it.
+- **Chip toggle** (Enabled Mediums): toggle buttons (`aria-pressed`). Disabling the last enabled Medium is blocked — the chip stays on and an inline message says "Keep at least one medium on." If the Medium chosen under "This time" is turned off, "This time" falls back to Random.
+- **Select field** ("This time" Medium, Skill focus): native `<select>`. "This time" lists Random plus each enabled Medium; Skill lists Random plus the six Skills.
+- First visit defaults: Level Explore, all Mediums on, "This time" Random, Skill Random, Quick reveal off, Perform timing Either, sound off. Returning visitors get every setup choice restored.
 
 ## Cross-Story Dependencies
 
-- Story 3.1's tokens, fonts, and action components are a prerequisite for every later UI story in this epic (3.7–3.11) and for Epic 4/5/8 UI.
-- Story 3.2's schemas and setup reducer are required by 3.3 (compose), 3.5 (Repository envelopes), and 3.6 (store slices).
-- Story 3.3's `compose()` depends on Epic 1's library schema, `isCompatible()`, and `render()`.
-- Story 3.4's session reducer depends on 3.2's schemas and feeds 3.6's store and 3.9–3.11's Stage behavior.
-- Story 3.5 (storage) and Story 3.3 (compose) are both prerequisites for Story 3.6 (the store), which 3.7–3.11 all read/write through.
-- Story 3.9 (Stage shell) must exist before 3.10 (reveal stepping) and 3.11 (stability across navigation/reload) can be verified end-to-end.
+- Story 3.2 (this story) defines the schemas Stories 3.3–3.6 build on (`compose()`'s `Challenge` return shape, the session reducer's state shape, the Repository's persisted envelopes) and the setup reducer that Story 3.6's store calls directly for setup events.
+- Story 3.2 depends on Epic 1's library schema (`src/domain/library/schema.ts`) for id types and on `src/config/app.ts` for tunables; both already exist and are not modified by this story.
+- Story 3.5 (storage) is being extended on a separate branch to make `Repository.load/save` key-typed against the schemas Story 3.2 defines; that binding is explicitly out of scope here.

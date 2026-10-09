@@ -1,0 +1,26 @@
+[
+  {
+    "templateId": "tpl.observation.explore.nearby-object",
+    "mediumId": "med.drawing",
+    "topicId": "top.nearby-object",
+    "styleId": null,
+    "constraintId": "con.unnoticed-details",
+    "expectedBrief": "Draw an object near you. Include three details you have never paid attention to."
+  },
+  {
+    "templateId": "tpl.expression.experiment.coming-home",
+    "mediumId": "med.photography",
+    "topicId": "top.coming-home",
+    "styleId": null,
+    "constraintId": "con.no-people",
+    "expectedBrief": "Take two photos of coming home. Make one feel comforting and the other lonely. Keep people out of both."
+  },
+  {
+    "templateId": "tpl.idea-generation.perform.first-date-horror",
+    "mediumId": "med.writing",
+    "topicId": "top.first-date",
+    "styleId": "sty.horror",
+    "constraintId": "con.nothing-bad-happens",
+    "expectedBrief": "Write three premises for a first date that feels like horror, even though nothing bad happens."
+  }
+]
