@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadLibrary } from "./load";
+import { filterAccepted, loadLibrary } from "./load";
+import type { LoadedLibrary } from "./load";
 
 function writeJson(filePath: string, data: unknown) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -149,5 +150,62 @@ describe("loadLibrary — batch folders", () => {
 
     const lib = loadLibrary(root);
     expect(lib.issues.some((i) => i.message.includes('unexpected file "notes.json"'))).toBe(true);
+  });
+});
+
+describe("filterAccepted", () => {
+  // Minimal fixture: filterAccepted only inspects `.source` and `.status`, never parses or
+  // validates, so loosely-shaped stand-ins are fine here.
+  function fixture(): LoadedLibrary {
+    return {
+      tags: [],
+      skills: [],
+      mediums: [],
+      templates: [
+        { value: { id: "tpl.draft" } as never, source: "2026-01-01-topics-draft" },
+        { value: { id: "tpl.accepted" } as never, source: "2026-01-01-topics-accepted" },
+        { value: { id: "tpl.anchor" } as never, source: "anchors" },
+      ],
+      topics: [],
+      styles: [],
+      constraints: [],
+      anchors: [],
+      manifests: [
+        { value: { status: "draft" } as never, source: "2026-01-01-topics-draft" },
+        { value: { status: "accepted" } as never, source: "2026-01-01-topics-accepted" },
+      ],
+      issues: [
+        { source: "/repo/content/library/tags.json", message: "base file issue" },
+        {
+          source: "/repo/content/library/batches/2026-01-01-topics-draft/topics.json",
+          message: "draft batch issue",
+        },
+        {
+          source: "/repo/content/library/batches/2026-01-01-topics-accepted/topics.json",
+          message: "accepted batch issue",
+        },
+      ],
+    };
+  }
+
+  it("keeps anchors-sourced and accepted-batch-sourced entities, drops draft-sourced ones", () => {
+    const filtered = filterAccepted(fixture());
+    expect(filtered.templates.map((t) => t.value.id)).toEqual(["tpl.accepted", "tpl.anchor"]);
+  });
+
+  it("keeps only accepted manifests", () => {
+    const filtered = filterAccepted(fixture());
+    expect(filtered.manifests.map((m) => m.source)).toEqual(["2026-01-01-topics-accepted"]);
+  });
+
+  it("keeps base-file issues and accepted-batch issues, drops draft-batch issues", () => {
+    const filtered = filterAccepted(fixture());
+    expect(filtered.issues.map((i) => i.message)).toEqual(["base file issue", "accepted batch issue"]);
+  });
+
+  it("is a no-op shape-wise on a library with no batches at all (anchors only)", () => {
+    const anchorsOnly: LoadedLibrary = { ...fixture(), templates: [{ value: { id: "tpl.anchor" } as never, source: "anchors" }], manifests: [], issues: [] };
+    const filtered = filterAccepted(anchorsOnly);
+    expect(filtered.templates).toHaveLength(1);
   });
 });

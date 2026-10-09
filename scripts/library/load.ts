@@ -154,3 +154,34 @@ export function loadLibrary(root: string): LoadedLibrary {
 
   return { tags, skills, mediums, templates, topics, styles, constraints, anchors, manifests, issues };
 }
+
+/** Restricts a loaded library to anchors plus batches whose manifest status is "accepted" —
+ * used by build.ts so a Vercel build never ships an unreviewed draft batch. Pure (no fs). */
+export function filterAccepted(lib: LoadedLibrary): LoadedLibrary {
+  const acceptedSources = new Set(lib.manifests.filter((m) => m.value.status === "accepted").map((m) => m.source));
+  const keep = <T>(items: Sourced<T>[]): Sourced<T>[] =>
+    items.filter((i) => i.source === "anchors" || acceptedSources.has(i.source));
+
+  // An issue's `source` is a filesystem path; pull the batch folder name (the segment right
+  // after "batches") back out so a draft/invalid batch's issues don't block an unrelated
+  // accepted batch's build. An issue with no "batches" segment is a base-file issue and
+  // always counts.
+  const batchFolderOf = (source: string): string | undefined => {
+    const parts = source.split(path.sep);
+    const idx = parts.indexOf("batches");
+    return idx >= 0 ? parts[idx + 1] : undefined;
+  };
+
+  return {
+    ...lib,
+    templates: keep(lib.templates),
+    topics: keep(lib.topics),
+    styles: keep(lib.styles),
+    constraints: keep(lib.constraints),
+    manifests: lib.manifests.filter((m) => m.value.status === "accepted"),
+    issues: lib.issues.filter((i) => {
+      const folder = batchFolderOf(i.source);
+      return folder === undefined || acceptedSources.has(folder);
+    }),
+  };
+}

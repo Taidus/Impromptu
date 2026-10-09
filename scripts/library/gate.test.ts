@@ -198,6 +198,7 @@ describe("runGate — integrity", () => {
     );
     expect(report.ok).toBe(true);
     expect(report.counts.retired).toBe(1);
+    expect(report.retiredIds).toEqual(["top.bad"]); // consumed by build.ts to exclude retired entries.
   });
 
   it("does not throw on malformed JSON or a missing required file; both surface as issues", () => {
@@ -275,13 +276,103 @@ describe("runGate — Brief rules", () => {
     expect(rulesOf(report)).toContain("integrity.no-pattern");
   });
 
-  it("does not fail when a compatible combination's render fails (reachability is Story 1.7)", () => {
+  it("does not treat a failed render as a brief.* violation (reachability, not Brief rules, catches it)", () => {
     // A second Template, id "y": topicTags non-empty but the pattern has no {topic}
-    // token -> render returns unused_fill. The default Template/anchor stay untouched.
+    // token -> render returns unused_fill for every combination, so it has zero valid
+    // combinations. Unlike the default (anchor) Template, "y" isn't anchor-exempt, so
+    // Story 1.7's reachability check fails it — but never via a brief.* rule.
     const broken = template({ id: "tpl.observation.explore.y", briefPattern: "{style} {constraint}." });
     const report = runGate(baseLib({ templates: [sourced(template()), sourced(broken)] }), gateConfig);
+    expect(rulesOf(report).filter((r) => r.startsWith("brief."))).toEqual([]);
+    const failure = report.failures.find((f) => f.id === "tpl.observation.explore.y");
+    expect(failure?.rule).toBe("reachability.min-combinations");
+  });
+});
+
+describe("runGate — reachability", () => {
+  it("fails a non-anchor Template with fewer than 3 valid combinations", () => {
+    // The default Template/topic/style/constraint yield exactly 1 valid combination.
+    const report = runGate(baseLib({ anchors: [] }), gateConfig);
+    const failure = report.failures.find((f) => f.rule === "reachability.min-combinations");
+    expect(failure?.id).toBe("tpl.observation.explore.x");
+  });
+
+  it("exempts a Template referenced by an anchor from the >=3 rule", () => {
+    // Same 1-combination shortfall, but defaultAnchor references this Template's id.
+    const report = runGate(baseLib(), gateConfig);
+    expect(rulesOf(report)).not.toContain("reachability.min-combinations");
+  });
+
+  it("passes a Template with >=3 valid combinations", () => {
+    const topics = [
+      sourced(fillEntry("top.a", ["t"], { briefText: "a" })),
+      sourced(fillEntry("top.b", ["t"], { briefText: "b" })),
+      sourced(fillEntry("top.c", ["t"], { briefText: "c" })),
+    ];
+    const report = runGate(baseLib({ anchors: [], topics }), gateConfig);
+    expect(rulesOf(report)).not.toContain("reachability.min-combinations");
+  });
+});
+
+describe("runGate — coverage and repeat headroom", () => {
+  it("warns (never fails) on a thin cell and setup when coverage.enforce is false", () => {
+    const report = runGate(baseLib(), gateConfig);
     expect(report.ok).toBe(true);
     expect(report.failures).toEqual([]);
+    expect(report.warnings.some((w) => w.rule === "coverage.templates")).toBe(true);
+    expect(report.warnings.some((w) => w.rule === "coverage.headroom")).toBe(true);
+  });
+
+  it("fails the same shortfalls when coverage.enforce is true", () => {
+    const config = { ...gateConfig, coverage: { ...gateConfig.coverage, enforce: true } };
+    const report = runGate(baseLib(), config);
+    expect(report.ok).toBe(false);
+    expect(rulesOf(report)).toContain("coverage.templates");
+    expect(rulesOf(report)).toContain("coverage.headroom");
+  });
+
+  it("always warns on a thin Skill-focused cell, even when coverage.enforce is true", () => {
+    const config = { ...gateConfig, coverage: { ...gateConfig.coverage, enforce: true } };
+    const report = runGate(baseLib(), config);
+    expect(report.warnings.some((w) => w.rule === "coverage.headroom-focused")).toBe(true);
+    expect(rulesOf(report)).not.toContain("coverage.headroom-focused");
+  });
+});
+
+describe("runGate — batch sizing (AD-17)", () => {
+  const acceptedManifest = draftManifest({
+    status: "accepted",
+    review: { judge: "m", founderSample: 1, rejectedIds: [], date: "2026-10-09" },
+  });
+
+  it("fails a batch whose Templates give one of its own Mediums fewer than 3 Templates", () => {
+    const t1 = template({ id: "tpl.observation.explore.a" });
+    const t2 = template({ id: "tpl.observation.explore.b" });
+    const report = runGate(
+      baseLib({
+        anchors: [],
+        templates: [sourced(t1, "batch-1"), sourced(t2, "batch-1")],
+        manifests: [sourced(acceptedManifest, "batch-1")],
+      }),
+      gateConfig,
+    );
+    const failure = report.failures.find((f) => f.rule === "batch.sizing");
+    expect(failure?.source).toBe("batch-1");
+  });
+
+  it("passes a batch with >=3 Templates for every Medium it declares", () => {
+    const templates = ["a", "b", "c"].map((slug) => sourced(template({ id: `tpl.observation.explore.${slug}` }), "batch-1"));
+    const report = runGate(
+      baseLib({ anchors: [], templates, manifests: [sourced(acceptedManifest, "batch-1")] }),
+      gateConfig,
+    );
+    expect(rulesOf(report)).not.toContain("batch.sizing");
+  });
+
+  it("never checks the anchors source for batch sizing", () => {
+    // baseLib()'s single default Template is sourced "anchors" and alone in its Medium.
+    const report = runGate(baseLib({ anchors: [] }), gateConfig);
+    expect(rulesOf(report)).not.toContain("batch.sizing");
   });
 });
 

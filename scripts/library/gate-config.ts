@@ -41,6 +41,31 @@ export const gateConfig = {
     // claim; a phrase made of only these plus mood words plus "and"/"or" still lints.
     moodIntensifiers: ["very", "so", "quite", "really", "extremely", "incredibly", "somewhat", "slightly"],
   },
+  // Story 1.7 (AD-16/CL-2): reachability — at least this many valid Template x Medium x
+  // fill combinations per active Template. The three CL-5 anchor Templates (their ids are
+  // read from content/library/anchors/anchors.json) are exempt: each intentionally admits
+  // only its own pinned fill, and the byte-for-byte anchor check pins them instead.
+  reachability: {
+    minCombinations: 3,
+  },
+  // Story 1.7 (CL-3/FR-6): coverage and repeat headroom. `enforce` starts false because the
+  // library can't reach launch coverage until Epic 2 completes and the app must build in
+  // the meantime; Story 2.8 switches it on. Below enforce, shortfalls are warnings only.
+  coverage: {
+    // Widened to `boolean` (not narrowed by `as const`) so tests can override it in a
+    // config object literal, e.g. `{ ...gateConfig.coverage, enforce: true }`.
+    enforce: false as boolean,
+    minTemplatesPerCell: 2, // Skill x Level x Medium
+    minComboPerLevelMedium: 60, // Level x Medium, Skill random (repeat headroom)
+    // Skill-focused (single-Skill setup) headroom — always a warning, never a failure,
+    // regardless of `enforce`: a single Skill is allowed to be thin pre-launch.
+    minComboPerSkillFocusedCell: 31,
+  },
+  // Story 1.7 (AD-17): batch sizing is always enforced for the batch under review,
+  // regardless of `coverage.enforce`.
+  batchSizing: {
+    minTemplatesPerMedium: 3,
+  },
 } as const;
 
 export type GateConfig = typeof gateConfig;
