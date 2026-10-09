@@ -19,13 +19,12 @@ export const emptySession: Session = {
  * The first-visit `Setup`, resolving `config.setup.defaults.enabledMediums`'s `"all"` sentinel
  * against the loaded library's real Medium ids -- the one piece of the default no domain schema
  * can supply on its own (flagged in `src/domain/session/setup-fixture.ts` as this story's job).
- * Mediums carry no `retired` flag, so a Medium counts as retired when no non-retired Template
- * uses it. A default `medium`/`skillFocus` the library doesn't offer falls back to `"random"`.
- * Returns `null` when the result isn't a valid `Setup` (no usable Medium).
+ * Mediums are base data and never retired (AD-6 retires batch entries only), so every library
+ * Medium starts enabled (FR-2, AD-19). A default `medium`/`skillFocus` the library doesn't offer
+ * falls back to `"random"`. Returns `null` when the result isn't a valid `Setup` (no Medium).
  */
 export function buildDefaultSetup(library: ComposeLibrary): Setup | null {
-  const activeMediums = new Set(library.templates.filter((t) => !t.retired).flatMap((t) => t.mediums));
-  const enabledMediums = library.mediums.map((m) => m.id).filter((id) => activeMediums.has(id));
+  const enabledMediums = library.mediums.map((m) => m.id);
   const { medium, skill } = config.setup.defaults;
   const parsed = Setup.safeParse({
     level: config.setup.defaults.level,

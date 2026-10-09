@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createMemoryRawStore } from "@/adapters/storage/raw";
 import { createRepository } from "@/adapters/storage";
 import { fakeClock, seededRandom } from "@/domain/test-doubles";
@@ -157,9 +157,15 @@ describe("createStore — library load failure", () => {
     expect(store.getState().status).toBe("error");
   });
 
-  it("goes to 'error' instead of persisting an invalid Setup when no Medium is usable", async () => {
+  it("goes to 'error' instead of persisting an invalid Setup when the default Setup is invalid", async () => {
     const repository = createRepository({ storage: createMemoryRawStore() });
-    const store = createStore(makeDeps({ repository, library: { ...workingLibrary, templates: [tpl({ retired: true })] } }));
+    const defaults = config.setup.defaults as { level: string };
+    const original = defaults.level;
+    defaults.level = "not-a-level";
+    onTestFinished(() => {
+      defaults.level = original;
+    });
+    const store = createStore(makeDeps({ repository, library: workingLibrary }));
     store.hydrate();
     await vi.runAllTimersAsync();
     expect(store.getState().status).toBe("error");
@@ -336,12 +342,9 @@ describe("createStore — cross-tab Setup", () => {
 });
 
 describe("buildDefaultSetup", () => {
-  it("skips Mediums only retired Templates use", () => {
-    const library: ComposeLibrary = {
-      ...workingLibrary,
-      templates: [tpl({ mediums: ["med.a"] }), tpl({ id: "tpl.observation.explore.two", mediums: ["med.b"], retired: true })],
-    };
-    expect(buildDefaultSetup(library)?.enabledMediums).toEqual(["med.a"]);
+  it("enables every library Medium, including one no Template uses yet (FR-2)", () => {
+    const library: ComposeLibrary = { ...workingLibrary, templates: [tpl({ mediums: ["med.a"] })] };
+    expect(buildDefaultSetup(library)?.enabledMediums).toEqual(["med.a", "med.b"]);
   });
 
   it("falls back a default Medium the library lacks to random", () => {

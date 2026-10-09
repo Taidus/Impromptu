@@ -2,7 +2,7 @@
 title: 'The app store and the library loader'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '05e862d60e61ed71e113da1bff008eff4196fb09'
@@ -111,6 +111,8 @@ Added to `_bmad-output/implementation-artifacts/deferred-work.md`: once Story 1.
 - **Why `status` can wait on `libraryStatus`:** `Setup.enabledMediums` requires at least one real Medium id (`z.array(MediumId).min(1)`), and the only source for Medium ids is the library. A returning visitor's persisted `Setup` already has concrete ids baked in from a previous resolution, so the common case never waits on the library. Only the very first visit (no persisted `Setup`) needs it, which is also the only time `config.setup.defaults.enabledMediums === "all"` must be resolved — exactly the gap `setup-fixture.ts` flagged as "a store/library-loader concern, Story 3.6".
 - **Rev-conflict retry is generic, not per-slice:** one `persist(key, version, rev, data, reapply)` helper (loop bounded at 10 retries) is shared by `dispatchSetup`, `dispatchSession`, and the command layer. `reapply(freshData)` is always "re-run the same reducer with the same event against `freshData`", never "take my already-computed `data` and force it in" — that is what keeps two tabs from losing each other's writes.
 - **The store, not a UI idle callback, owns the library prefetch trigger:** since no Setup UI exists yet (Story 3.8), `createStore()` itself calls `prefetchOnIdle(() => loadLibrary(librarySource))` once on construction. `prefetchOnIdle` stays a small, separately-exported helper so a future Setup-page effect can also call it (idempotent: `loadLibrary` is only ever in flight once per store instance).
+
+- Orchestrator correction after `07e898e`: Mediums are base data and never retired (AD-6), so `buildDefaultSetup` enables every library Medium (FR-2, AD-19); the "unused Medium = retired" heuristic was removed.
 
 ## Review Triage Log
 
