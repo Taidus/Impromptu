@@ -7,11 +7,20 @@ import { compose, recentKeyFor } from "./compose";
 
 const skill = (id: string): Skill => ({ id, revealText: id, info: id, tags: [] });
 const medium = (id: string, tags: string[] = []): Medium => ({ id, revealText: id, info: id, tags });
-const fill = <T extends { id: string }>(id: string, tags: string[], over: Partial<T> = {}) =>
-  ({ id, revealText: id, briefText: id, tags, requires: [], excludes: [], ...over }) as unknown as T;
-const topic = (id: string, tags: string[], over: Partial<Topic> = {}) => fill<Topic>(id, tags, over);
-const style = (id: string, tags: string[], over: Partial<Style> = {}) => fill<Style>(id, tags, over);
-const constraint = (id: string, tags: string[], over: Partial<Constraint> = {}) => fill<Constraint>(id, tags, over);
+
+/** Topic/Style/Constraint share one shape; typed once here, no `as unknown as` needed. */
+const fill = (id: string, tags: string[], over: Partial<Topic> = {}): Topic => ({
+  id,
+  revealText: id,
+  briefText: id,
+  tags,
+  requires: [],
+  excludes: [],
+  ...over,
+});
+const topic = (id: string, tags: string[], over: Partial<Topic> = {}): Topic => fill(id, tags, over);
+const style = (id: string, tags: string[], over: Partial<Style> = {}): Style => fill(id, tags, over);
+const constraint = (id: string, tags: string[], over: Partial<Constraint> = {}): Constraint => fill(id, tags, over);
 
 const tpl = (over: Partial<Template> = {}): Template => ({
   id: "tpl.alpha.explore.one",
@@ -63,6 +72,37 @@ describe("compose", () => {
     if (result.ok) expect(result.challenge.templateId).toBe(explore.id);
   });
 
+  it("Skill focus without a Lock: only matching-Skill Templates are candidates", () => {
+    const alpha = tpl({ id: "tpl.alpha.explore.one", skill: "skl.alpha" });
+    const beta = tpl({ id: "tpl.beta.explore.one", skill: "skl.beta" });
+    const lib = library({ templates: [alpha, beta] });
+    const result = compose(request({ skillFocus: "skl.beta" }), lib, [], clock, rand());
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.challenge.templateId).toBe(beta.id);
+  });
+
+  it("a specific request.medium without a Lock: only that Medium is produced", () => {
+    const t = tpl({ mediums: ["med.a", "med.b"] });
+    const lib = library({ templates: [t] });
+    const result = compose(request({ medium: "med.b" }), lib, [], clock, rand());
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.challenge.inputs.medium.id).toBe("med.b");
+  });
+
+  it("mustDiffer.skill excludes Templates of that Skill; mustDiffer.medium excludes that Medium", () => {
+    const alpha = tpl({ id: "tpl.alpha.explore.one", skill: "skl.alpha", mediums: ["med.a", "med.b"] });
+    const beta = tpl({ id: "tpl.beta.explore.one", skill: "skl.beta", mediums: ["med.a", "med.b"] });
+    const lib = library({ templates: [alpha, beta] });
+
+    const skillResult = compose(request({ mustDiffer: { skill: "skl.alpha" } }), lib, [], clock, rand());
+    expect(skillResult.ok).toBe(true);
+    if (skillResult.ok) expect(skillResult.challenge.templateId).toBe(beta.id);
+
+    const mediumResult = compose(request({ mustDiffer: { medium: "med.a" } }), lib, [], clock, rand());
+    expect(mediumResult.ok).toBe(true);
+    if (mediumResult.ok) expect(mediumResult.challenge.inputs.medium.id).toBe("med.b");
+  });
+
   it("Perform timing: 'timed' keeps only Templates with a Time Limit, 'untimed' only those without", () => {
     const timed = tpl({ id: "tpl.alpha.perform.timed", level: "perform", timeLimitSec: 300 });
     const untimed = tpl({ id: "tpl.alpha.perform.untimed", level: "perform" });
@@ -106,14 +146,74 @@ describe("compose", () => {
     }
   });
 
-  it("excludes a recent key whenever an alternative exists", () => {
+  it("retired Style and Constraint are never chosen; locking a retired Style fails", () => {
+    const t = tpl({
+      id: "tpl.alpha.explore.fills",
+      briefPattern: "{topic} {style} {constraint}",
+      styleTags: ["visual"],
+      constraintTags: ["visual"],
+    });
+    const lib = library({
+      templates: [t],
+      styles: [style("sty.retired", ["visual"], { retired: true }), style("sty.live", ["visual"])],
+      constraints: [constraint("con.retired", ["visual"], { retired: true }), constraint("con.live", ["visual"])],
+    });
+
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const result = compose(request(), lib, [], clock, seededRandom(seed));
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.challenge.inputs.style?.id).toBe("sty.live");
+        expect(result.challenge.inputs.constraint?.id).toBe("con.live");
+      }
+    }
+
+    const lockedRetired = compose(request({ locks: { style: "sty.retired" } }), lib, [], clock, rand());
+    expect(lockedRetired.ok).toBe(false);
+  });
+
+  it("a style lock with a slotless Template also in the library always returns the locked Style", () => {
+    const slotless = tpl({ id: "tpl.alpha.explore.slotless" });
+    const withStyle = tpl({ id: "tpl.alpha.explore.styled", briefPattern: "{topic} {style}", styleTags: ["visual"] });
+    const lib = library({ templates: [slotless, withStyle], styles: [style("sty.a", ["visual"])] });
+
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const result = compose(request({ locks: { style: "sty.a" } }), lib, [], clock, seededRandom(seed));
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.challenge.inputs.style?.id).toBe("sty.a");
+    }
+  });
+
+  it("requires/excludes on a fill: one Style is accepted, the other rejected", () => {
+    const t = tpl({
+      id: "tpl.alpha.explore.reqex",
+      briefPattern: "{topic} {style}",
+      styleTags: ["visual"],
+      tags: ["lit"],
+    });
+    const lib = library({
+      templates: [t],
+      styles: [style("sty.ok", ["visual"], { requires: ["lit"] }), style("sty.bad", ["visual"], { requires: ["unlit"] })],
+    });
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const result = compose(request(), lib, [], clock, seededRandom(seed));
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.challenge.inputs.style?.id).toBe("sty.ok");
+    }
+  });
+
+  it("recent window: avoiding the one combo the RNG would otherwise pick lands on the other", () => {
     const t = tpl();
     const lib = library({ templates: [t] });
-    const recent = [recentKeyFor(t.id, "top.one")];
     for (const seed of [1, 2, 3, 4, 5]) {
-      const result = compose(request(), lib, recent, clock, seededRandom(seed));
-      expect(result.ok).toBe(true);
-      if (result.ok) expect(result.challenge.inputs.topic?.id).toBe("top.two");
+      const freeResult = compose(request(), lib, [], clock, seededRandom(seed));
+      expect(freeResult.ok).toBe(true);
+      if (!freeResult.ok) continue;
+      const avoidedTopic = freeResult.challenge.inputs.topic!.id;
+      const recent = [recentKeyFor(t.id, avoidedTopic)];
+      const avoidedResult = compose(request(), lib, recent, clock, seededRandom(seed));
+      expect(avoidedResult.ok).toBe(true);
+      if (avoidedResult.ok) expect(avoidedResult.challenge.inputs.topic?.id).not.toBe(avoidedTopic);
     }
   });
 
@@ -126,6 +226,41 @@ describe("compose", () => {
     if (result.ok) expect(["top.one", "top.two"]).toContain(result.challenge.inputs.topic?.id);
   });
 
+  it("the same seed produces an identical result", () => {
+    const lib = library();
+    const a = compose(request(), lib, [], clock, seededRandom(42));
+    const b = compose(request(), lib, [], clock, seededRandom(42));
+    expect(a).toEqual(b);
+  });
+
+  it("weighting: a 1-combo Template is chosen about as often as a 50-combo Template", () => {
+    const small = tpl({ id: "tpl.alpha.explore.small", topicTags: ["place"] });
+    const big = tpl({
+      id: "tpl.alpha.explore.big",
+      briefPattern: "{topic} {style}",
+      topicTags: ["mood"],
+      styleTags: ["mood"],
+    });
+    const bigTopics = Array.from({ length: 5 }, (_, i) => topic(`top.big${i}`, ["mood"]));
+    const bigStyles = Array.from({ length: 10 }, (_, i) => style(`sty.big${i}`, ["mood"]));
+    const lib = library({
+      templates: [small, big],
+      topics: [topic("top.one", ["place"]), ...bigTopics],
+      styles: bigStyles,
+    });
+
+    const seeds = 400;
+    let smallCount = 0;
+    for (let seed = 1; seed <= seeds; seed++) {
+      const result = compose(request(), lib, [], clock, seededRandom(seed));
+      expect(result.ok).toBe(true);
+      if (result.ok && result.challenge.templateId === small.id) smallCount++;
+    }
+    const ratio = smallCount / seeds;
+    expect(ratio).toBeGreaterThan(0.35);
+    expect(ratio).toBeLessThan(0.65);
+  });
+
   it("Locks: every locked Input in the result equals the lock, overriding enabled/focus filters", () => {
     const alpha = tpl({ id: "tpl.alpha.explore.one", skill: "skl.alpha", mediums: ["med.a", "med.b"] });
     const beta = tpl({ id: "tpl.beta.explore.one", skill: "skl.beta", mediums: ["med.a", "med.b"] });
@@ -134,20 +269,6 @@ describe("compose", () => {
       styles: [style("sty.a", ["visual"]), style("sty.b", ["visual"])],
       constraints: [constraint("con.a", ["visual"]), constraint("con.b", ["visual"])],
     });
-
-    const mediumLocked = compose(
-      request({ enabledMediums: ["med.a"], locks: { medium: "med.b" } }),
-      lib,
-      [],
-      clock,
-      rand(),
-    );
-    expect(mediumLocked.ok).toBe(true);
-    if (mediumLocked.ok) expect(mediumLocked.challenge.inputs.medium.id).toBe("med.b");
-
-    const skillLocked = compose(request({ skillFocus: "skl.alpha", locks: { skill: "skl.beta" } }), lib, [], clock, rand());
-    expect(skillLocked.ok).toBe(true);
-    if (skillLocked.ok) expect(skillLocked.challenge.templateId).toBe(beta.id);
 
     const topicLocked = compose(request({ locks: { topic: "top.two" } }), lib, [], clock, rand());
     expect(topicLocked.ok).toBe(true);
@@ -168,6 +289,24 @@ describe("compose", () => {
     );
     expect(constraintLocked.ok).toBe(true);
     if (constraintLocked.ok) expect(constraintLocked.challenge.inputs.constraint?.id).toBe("con.a");
+  });
+
+  it("FR-2: a Medium Lock must also be enabled, else no_compatible with blockingLock 'medium'", () => {
+    const alpha = tpl({ id: "tpl.alpha.explore.one", skill: "skl.alpha", mediums: ["med.a", "med.b"] });
+    const beta = tpl({ id: "tpl.beta.explore.one", skill: "skl.beta", mediums: ["med.a", "med.b"] });
+    const lib = library({ templates: [alpha, beta] });
+
+    const mediumLocked = compose(request({ enabledMediums: ["med.a"], locks: { medium: "med.b" } }), lib, [], clock, rand());
+    expect(mediumLocked).toEqual({ ok: false, reason: "no_compatible", blockingLock: "medium" });
+  });
+
+  it("FR-2: a Skill Lock outside a non-random focus is no_compatible with blockingLock 'skill'", () => {
+    const alpha = tpl({ id: "tpl.alpha.explore.one", skill: "skl.alpha", mediums: ["med.a", "med.b"] });
+    const beta = tpl({ id: "tpl.beta.explore.one", skill: "skl.beta", mediums: ["med.a", "med.b"] });
+    const lib = library({ templates: [alpha, beta] });
+
+    const skillLocked = compose(request({ skillFocus: "skl.alpha", locks: { skill: "skl.beta" } }), lib, [], clock, rand());
+    expect(skillLocked).toEqual({ ok: false, reason: "no_compatible", blockingLock: "skill" });
   });
 
   it("mustDiffer: the result never has that kind's current value", () => {
@@ -194,6 +333,21 @@ describe("compose", () => {
     expect(result).toEqual({ ok: false, reason: "no_compatible", blockingLock: "medium" });
   });
 
+  it("two Locks that only block together (neither release alone unblocks it) return blockingLock: null", () => {
+    const t = tpl({ skill: "skl.alpha", mediums: ["med.a"] });
+    const lib = library({ templates: [t] });
+    // Releasing `skill` alone still leaves the (nonexistent) medium blocking; releasing
+    // `medium` alone still leaves the mismatched skill blocking. Neither release helps alone.
+    const result = compose(
+      request({ locks: { skill: "skl.beta", medium: "med.ghost" } }),
+      lib,
+      [],
+      clock,
+      rand(),
+    );
+    expect(result).toEqual({ ok: false, reason: "no_compatible", blockingLock: null });
+  });
+
   it("no compatible Challenge with no Locks: blockingLock is null (no Lock to name)", () => {
     const lib = library({ templates: [tpl({ level: "explore" })] });
     const result = compose(request({ level: "develop" }), lib, [], clock, rand());
@@ -207,11 +361,14 @@ describe("compose", () => {
     expect(result).toEqual({ ok: false, reason: "no_compatible", blockingLock: null });
   });
 
-  it("a Lock referencing a removed/retired id can never be satisfied", () => {
+  it("a Lock referencing a removed/retired id can never be satisfied: blockingLock names 'topic'", () => {
     const t = tpl();
-    const lib = library({ templates: [t], topics: [topic("top.one", ["place"], { retired: true })] });
+    const lib = library({
+      templates: [t],
+      topics: [topic("top.one", ["place"], { retired: true }), topic("top.two", ["place"])],
+    });
     const result = compose(request({ locks: { topic: "top.one" } }), lib, [], clock, rand());
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: false, reason: "no_compatible", blockingLock: "topic" });
   });
 
   it("returns a full AD-5 snapshot and never a partial Challenge", () => {
@@ -251,6 +408,22 @@ describe("compose", () => {
     const sty = lib.styles.find((s) => s.id === inputs.style?.id) ?? null;
     const con = lib.constraints.find((c) => c.id === inputs.constraint?.id) ?? null;
     expect(isCompatible(template, med, top, sty, con)).toBe(true);
+  });
+
+  it("totality: a non-finite Clock returns no_compatible with blockingLock null instead of throwing", () => {
+    const lib = library();
+    const brokenClock = { now: () => NaN };
+    expect(() => compose(request(), lib, [], brokenClock, rand())).not.toThrow();
+    const result = compose(request(), lib, [], brokenClock, rand());
+    expect(result).toEqual({ ok: false, reason: "no_compatible", blockingLock: null });
+  });
+
+  it("totality: Random.next() at or past 1 never indexes past the pool", () => {
+    const lib = library();
+    const maxRandom = { next: () => 1, uuid: () => "11111111-1111-4111-8111-111111111111" };
+    expect(() => compose(request(), lib, [], clock, maxRandom)).not.toThrow();
+    const result = compose(request(), lib, [], clock, maxRandom);
+    expect(result.ok).toBe(true);
   });
 
   it("never throws and never mutates its inputs", () => {

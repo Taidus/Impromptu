@@ -44,6 +44,7 @@ export type ComposeResult =
 
 type Fill = Topic | Style | Constraint;
 
+/** A renderable, `isCompatible()`-approved combination; `brief`/`guidance` are pre-rendered. */
 type Combo = {
   template: Template;
   skill: Skill;
@@ -51,6 +52,14 @@ type Combo = {
   topic: Topic | null;
   style: Style | null;
   constraint: Constraint | null;
+  brief: string;
+  guidance: string | null;
+};
+
+/** All of one Template's renderable combos (never empty — Templates with none are dropped). */
+type TemplateGroup = {
+  template: Template;
+  combos: Combo[];
 };
 
 const LOCK_ORDER: InputKind[] = ["skill", "medium", "topic", "style", "constraint"];
@@ -58,6 +67,11 @@ const LOCK_ORDER: InputKind[] = ["skill", "medium", "topic", "style", "constrain
 /** The single AD-11 recent-repeat key: `templateId+topicId`. Shared with the session reducer (Story 3.4). */
 export function recentKeyFor(templateId: TemplateId, topicId: TopicId | null): string {
   return `${templateId}|${topicId ?? ""}`;
+}
+
+/** Clamps a `Random.next()` draw (contract: `[0,1)`, but never trust it) to a valid array index. */
+function pickIndex(nextValue: number, length: number): number {
+  return Math.min(Math.max(Math.floor(nextValue * length), 0), length - 1);
 }
 
 /**
@@ -71,26 +85,30 @@ export function compose(
   clock: Clock,
   random: Random,
 ): ComposeResult {
-  const combos = buildCandidates(request, library, request.locks);
-  if (combos.length === 0) {
+  const nowMs = clock.now();
+  if (!Number.isFinite(nowMs)) {
+    // Totality: `new Date(NaN).toISOString()` throws, and a broken Clock names no Lock to blame.
+    return { ok: false, reason: "no_compatible", blockingLock: null };
+  }
+
+  const groups = buildCandidates(request, library, request.locks);
+  if (groups.length === 0) {
     return { ok: false, reason: "no_compatible", blockingLock: findBlockingLock(request, library) };
   }
 
   const recentSet = new Set(recent);
-  const fresh = combos.filter((c) => !recentSet.has(recentKeyFor(c.template.id, c.topic?.id ?? null)));
-  const pool = fresh.length > 0 ? fresh : combos;
-  const picked = pool[Math.floor(random.next() * pool.length)];
+  const isFresh = (c: Combo) => !recentSet.has(recentKeyFor(c.template.id, c.topic?.id ?? null));
 
-  const rendered = render(picked.template, picked.medium, {
-    topic: picked.topic,
-    style: picked.style,
-    constraint: picked.constraint,
-  });
-  if (!rendered.ok) {
-    // Defensive only: the library gate (Story 1.6) guarantees every isCompatible
-    // combo renders. Never surface a partial Challenge if it somehow doesn't.
-    return { ok: false, reason: "no_compatible", blockingLock: null };
-  }
+  // AD-11: pick the Template uniformly among Templates with a fresh combo, if any exist;
+  // only fall back to the full set when the ring has exhausted every Template.
+  const freshGroups = groups.filter((g) => g.combos.some(isFresh));
+  const templatePool = freshGroups.length > 0 ? freshGroups : groups;
+  const group = templatePool[pickIndex(random.next(), templatePool.length)];
+
+  // Then pick uniformly among that Template's fresh combos, if any; else any of its combos.
+  const freshCombos = group.combos.filter(isFresh);
+  const comboPool = freshCombos.length > 0 ? freshCombos : group.combos;
+  const picked = comboPool[pickIndex(random.next(), comboPool.length)];
 
   const inputs: ChallengeInputs = {
     skill: { id: picked.skill.id, revealText: picked.skill.revealText },
@@ -104,26 +122,37 @@ export function compose(
     ok: true,
     challenge: {
       id: random.uuid(),
-      createdAt: new Date(clock.now()).toISOString(),
+      createdAt: new Date(nowMs).toISOString(),
       libraryVersion: library.libraryVersion,
       templateId: picked.template.id,
       level: picked.template.level,
       timeLimitSec: picked.template.timeLimitSec ?? null,
-      brief: rendered.brief,
-      guidance: rendered.guidance,
+      brief: picked.brief,
+      guidance: picked.guidance,
       inputs,
       origin: request.origin,
     },
   };
 }
 
-function buildCandidates(request: ComposeRequest, library: ComposeLibrary, locks: Locks): Combo[] {
+function buildCandidates(request: ComposeRequest, library: ComposeLibrary, locks: Locks): TemplateGroup[] {
+  // FR-2: a Lock must still satisfy the broader restriction it would otherwise override —
+  // a disabled/unfocused Medium or an unfocused Skill can never be produced just by locking it.
+  if (locks.skill && request.skillFocus !== "random" && request.skillFocus !== locks.skill) return [];
+  if (
+    locks.medium &&
+    (!request.enabledMediums.includes(locks.medium) || (request.medium !== "random" && request.medium !== locks.medium))
+  ) {
+    return [];
+  }
+
   const skillsById = new Map(library.skills.map((s) => [s.id, s]));
+  const mediumsById = new Map(library.mediums.map((m) => [m.id, m]));
   const activeTopics = library.topics.filter((t) => !t.retired);
   const activeStyles = library.styles.filter((s) => !s.retired);
   const activeConstraints = library.constraints.filter((c) => !c.retired);
 
-  const combos: Combo[] = [];
+  const groups: TemplateGroup[] = [];
 
   for (const template of library.templates) {
     if (template.retired || template.level !== request.level) continue;
@@ -135,25 +164,35 @@ function buildCandidates(request: ComposeRequest, library: ComposeLibrary, locks
     const skill = skillsById.get(template.skill);
     if (!skill) continue;
 
-    const mediums = mediumChoices(template, request, library, locks);
-    const topics = fillChoices(template.topicTags, activeTopics, locks.topic, request.mustDiffer.topic);
-    const styles = fillChoices(template.styleTags, activeStyles, locks.style, request.mustDiffer.style);
-    const constraints = fillChoices(template.constraintTags, activeConstraints, locks.constraint, request.mustDiffer.constraint);
+    const incompatible = new Set(template.incompatible);
+    const mediums = mediumChoices(template, request, locks, mediumsById);
+    const topics = fillChoices(template.topicTags, activeTopics, incompatible, locks.topic, request.mustDiffer.topic);
+    const styles = fillChoices(template.styleTags, activeStyles, incompatible, locks.style, request.mustDiffer.style);
+    const constraints = fillChoices(
+      template.constraintTags,
+      activeConstraints,
+      incompatible,
+      locks.constraint,
+      request.mustDiffer.constraint,
+    );
 
+    const combos: Combo[] = [];
     for (const medium of mediums) {
       for (const topic of topics) {
         for (const style of styles) {
           for (const constraint of constraints) {
-            if (isCompatible(template, medium, topic, style, constraint)) {
-              combos.push({ template, skill, medium, topic, style, constraint });
-            }
+            if (!isCompatible(template, medium, topic, style, constraint)) continue;
+            const rendered = render(template, medium, { topic, style, constraint });
+            if (!rendered.ok) continue; // defensive only: the library gate guarantees this never happens
+            combos.push({ template, skill, medium, topic, style, constraint, brief: rendered.brief, guidance: rendered.guidance });
           }
         }
       }
     }
+    if (combos.length > 0) groups.push({ template, combos });
   }
 
-  return combos;
+  return groups;
 }
 
 function matchesPerformTiming(template: Template, performTiming: PerformTiming): boolean {
@@ -162,10 +201,14 @@ function matchesPerformTiming(template: Template, performTiming: PerformTiming):
   return performTiming === "timed" ? timed : !timed;
 }
 
-function mediumChoices(template: Template, request: ComposeRequest, library: ComposeLibrary, locks: Locks): Medium[] {
-  const byId = new Map(library.mediums.map((m) => [m.id, m]));
+function mediumChoices(
+  template: Template,
+  request: ComposeRequest,
+  locks: Locks,
+  mediumsById: Map<MediumId, Medium>,
+): Medium[] {
   if (locks.medium) {
-    const m = byId.get(locks.medium);
+    const m = mediumsById.get(locks.medium);
     return m && template.mediums.includes(m.id) && m.id !== request.mustDiffer.medium ? [m] : [];
   }
   return template.mediums
@@ -175,18 +218,28 @@ function mediumChoices(template: Template, request: ComposeRequest, library: Com
         (request.medium === "random" || id === request.medium) &&
         id !== request.mustDiffer.medium,
     )
-    .map((id) => byId.get(id))
+    .map((id) => mediumsById.get(id))
     .filter((m): m is Medium => m !== undefined);
 }
 
-/** A slot is present iff `slotTags` is non-empty (same rule as `isCompatible`). */
-function fillChoices<T extends Fill>(slotTags: string[], pool: T[], lockId?: string, mustDifferId?: string): (T | null)[] {
+/**
+ * A slot is present iff `slotTags` is non-empty (same rule as `isCompatible`).
+ * Pre-filters the pool to fills sharing a slot tag and not Template-incompatible, before the
+ * caller's cross product multiplies it out — `isCompatible()` still makes the final call.
+ */
+function fillChoices<T extends Fill>(
+  slotTags: string[],
+  pool: T[],
+  incompatible: Set<string>,
+  lockId?: string,
+  mustDifferId?: string,
+): (T | null)[] {
   if (slotTags.length === 0) return lockId ? [] : [null];
   if (lockId) {
     const fill = pool.find((f) => f.id === lockId);
     return fill && fill.id !== mustDifferId ? [fill] : [];
   }
-  return pool.filter((f) => f.id !== mustDifferId);
+  return pool.filter((f) => f.id !== mustDifferId && !incompatible.has(f.id) && f.tags.some((t) => slotTags.includes(t)));
 }
 
 /** Names the one locked kind whose release alone would allow a result, else `null` (no Lock to name). */
