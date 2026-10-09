@@ -1,24 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { config } from "@/config/app";
+import { baseChallenge as challenge } from "./session-fixture";
 import { baseSetup } from "./setup-fixture";
 import { Attempt, Challenge, ComposeError, Export, Origin, Rep, Session, Setup } from "./schema";
-
-const challenge: Challenge = {
-  id: "123e4567-e89b-42d3-a456-426614174000",
-  createdAt: "2026-10-09T12:00:00.000Z",
-  libraryVersion: "abc123",
-  templateId: "tpl.observation.explore.near-object",
-  level: "explore",
-  timeLimitSec: null,
-  brief: "Draw an object near you.",
-  guidance: null,
-  inputs: {
-    skill: { id: "skl.observation", revealText: "Observation" },
-    medium: { id: "med.drawing", revealText: "Drawing" },
-    topic: { id: "top.near-object", revealText: "An object near you" },
-  },
-  origin: { kind: "new", fromRepId: null },
-};
 
 describe("Setup", () => {
   it("parses the config.setup.defaults-derived fixture", () => {
