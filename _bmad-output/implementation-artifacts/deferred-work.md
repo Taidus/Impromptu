@@ -24,3 +24,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-7-3-privacy-note-page.md`
   summary: Confirm the erasure-request contact address (`copy.privacy.contactEmail`, working value hello@impromptu.app) with the founder in the Story 7.4 launch checklist.
   evidence: The privacy note publishes a mailto: route (AD-20) but no domain or mailbox has been set up yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors.md`
+  summary: Add a subprocess test that `npm run library:validate` exits non-zero on a failing library, when the first real batches land (Story 1.9).
+  evidence: `process.exitCode = report.ok ? 0 : 1` is the only thing making the CI step block merges; nothing exercises the failure exit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft.md`
+  summary: After 1.6 and 1.8 both merge, make `scripts/library/sample.ts` reuse 1.6's `load.ts` instead of its own `loadActiveLibrary` file reading.
+  evidence: The two stories were built in parallel and each wrote its own library loader.
