@@ -16,4 +16,10 @@ test("/privacy states every section and links out correctly", async ({ page }) =
   );
   await expect(page.getByRole("link", { name: copy.stage.back })).toHaveAttribute("href", "/");
   await expect(page).toHaveTitle("Privacy · Impromptu");
+
+  // Story 8.1: the shared night footer.
+  await expect(
+    page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: copy.journey.footer.practice }),
+  ).toHaveAttribute("href", "/practice");
+  await expect(page.getByLabel(copy.signup.emailLabel, { exact: true })).toBeVisible();
 });
