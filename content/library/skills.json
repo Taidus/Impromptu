@@ -1,0 +1,8 @@
+[
+  { "id": "skl.observation", "revealText": "Observation", "info": "Notice what's actually there.", "tags": [] },
+  { "id": "skl.idea-generation", "revealText": "Idea generation", "info": "Come up with many options, fast.", "tags": [] },
+  { "id": "skl.connection", "revealText": "Connection", "info": "Join things that don't belong together.", "tags": [] },
+  { "id": "skl.perspective", "revealText": "Perspective", "info": "See it from somewhere else.", "tags": [] },
+  { "id": "skl.expression", "revealText": "Expression", "info": "Make a feeling land.", "tags": [] },
+  { "id": "skl.revision", "revealText": "Revision", "info": "Change it on purpose.", "tags": [] }
+]
