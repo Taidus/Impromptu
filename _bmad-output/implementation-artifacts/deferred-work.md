@@ -41,3 +41,6 @@
   evidence: Story 1.7 (the `build.ts` step that emits the gitignored `src/generated/library.json`) was not merged when this story was built, so the store's library loader is wired against an injected source only; the production function is a clearly-named stub that throws until this one-line swap (`import("@/generated/library.json").then((m) => m.default)`) lands.
   status: resolved
   resolved_by: Story 3.6 after merging main (Story 1.7): `loadGeneratedLibrarySource` imports `@/generated/library.json`; `scripts/library/library-contract.test.ts` pins build payload ↔ loader schema.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
+  summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
+  evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.

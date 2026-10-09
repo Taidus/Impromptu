@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadLibrary, prefetchOnIdle } from "./index";
 
 function validLibraryJson() {
@@ -55,12 +55,25 @@ describe("loadLibrary", () => {
 });
 
 describe("prefetchOnIdle", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it("runs the callback (via the setTimeout fallback in this non-browser test env) and swallows its rejection", async () => {
-    vi.useFakeTimers();
     const run = vi.fn().mockRejectedValue(new Error("boom"));
     prefetchOnIdle(run);
     await vi.runAllTimersAsync();
     expect(run).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+  });
+
+  it("uses requestIdleCallback with a 2s timeout when available", () => {
+    const ric = vi.fn((cb: () => void) => cb());
+    vi.stubGlobal("requestIdleCallback", ric);
+    const run = vi.fn().mockResolvedValue(undefined);
+    prefetchOnIdle(run);
+    expect(ric).toHaveBeenCalledWith(expect.any(Function), { timeout: 2000 });
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

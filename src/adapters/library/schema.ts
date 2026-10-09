@@ -12,9 +12,9 @@ const text = z.string().trim().min(1);
 export const LibraryFile = z
   .object({
     libraryVersion: text,
-    skills: z.array(Skill),
-    mediums: z.array(Medium),
-    templates: z.array(Template),
+    skills: z.array(Skill).min(1),
+    mediums: z.array(Medium).min(1),
+    templates: z.array(Template).min(1),
     topics: z.array(Topic),
     styles: z.array(Style),
     constraints: z.array(Constraint),

@@ -12,12 +12,17 @@ import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
 const schemaVersions = config.storage.schemaVersions;
 const HistoryList = z.array(Rep);
 
-const initialState: StoreState = {
+/** Each rev conflict means another tab wrote in between; ten in a row is a runaway loop, not real contention. */
+const MAX_SAVE_ATTEMPTS = 10;
+
+/** The neutral pre-hydration state (AD-10); also the server snapshot. */
+export const initialState: StoreState = {
   status: "loading",
   libraryStatus: "loading",
   setup: null,
   session: emptySession,
   history: [],
+  saveFailed: false,
 };
 
 /**
@@ -60,19 +65,26 @@ export function createStore(deps: StoreDeps): Store {
     return { data: parsed.success ? parsed.data : null, rev: result.value.rev };
   }
 
-  /** Saves `data`; on a rev conflict, re-reads the fresh envelope and re-applies the same transform to it before retrying (bounded, so a pathological conflict loop can't hang). */
-  function persist<T>(key: StorageKey, version: number, rev: number, data: T, reapply: (fresh: T) => T): { data: T; rev: number } {
+  /**
+   * Saves `data`; on a rev conflict, re-reads the fresh envelope (zod-validated; invalid counts as
+   * absent) and re-applies the same transform to it -- `reapply(null)` means "nothing valid stored",
+   * so the caller re-applies to its pre-event base. Bounded; once exhausted, holds what is stored.
+   * `saved` is false when the change could not be written.
+   */
+  function persist<T>(key: StorageKey, schema: z.ZodType<T>, rev: number, data: T, reapply: (fresh: T | null) => T): { data: T; rev: number; saved: boolean } {
     let currentData = data;
     let currentRev = rev;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const result = repository.save<T>(key, { v: version, rev: currentRev + 1, data: currentData });
-      if (result.ok) return { data: currentData, rev: result.value.rev };
-      if (result.reason !== "rev_conflict") return { data: currentData, rev: currentRev }; // give up, keep this in memory only
-      const fresh: Envelope<T> | null = result.fresh;
+    for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt++) {
+      const result = repository.save<T>(key, { v: schemaVersions[key], rev: currentRev + 1, data: currentData });
+      if (result.ok) return { data: currentData, rev: result.value.rev, saved: true };
+      if (result.reason !== "rev_conflict") return { data: currentData, rev: currentRev, saved: false }; // keep this in memory only
+      const fresh: Envelope<unknown> | null = result.fresh;
+      const parsed = fresh ? schema.safeParse(fresh.data) : null;
       currentRev = fresh ? fresh.rev : 0;
-      currentData = reapply(fresh ? fresh.data : currentData);
+      currentData = reapply(parsed?.success ? parsed.data : null);
     }
-    return { data: currentData, rev: currentRev };
+    const stored = loadSlice(key, schema);
+    return { data: stored.data ?? currentData, rev: stored.rev, saved: false };
   }
 
   function hydrate(): void {
@@ -103,7 +115,14 @@ export function createStore(deps: StoreDeps): Store {
   function rereadSetup(): void {
     const slice = loadSlice("setup", Setup);
     setupRev = slice.rev;
-    setState({ ...state, setup: slice.data ?? state.setup });
+    if (slice.data !== null) {
+      setState({ ...state, setup: slice.data, status: "ready" });
+      drainPending();
+      return;
+    }
+    // Cleared or invalid in another tab: same as a first visit.
+    setState({ ...state, setup: null, status: state.libraryStatus === "error" ? "error" : "loading" });
+    if (state.libraryStatus === "ready" && library !== null) ensureSetup(library);
   }
 
   function rereadSession(): void {
@@ -121,27 +140,36 @@ export function createStore(deps: StoreDeps): Store {
     if (libraryRequested) return;
     libraryRequested = true;
     prefetchOnIdle(async () => {
-      const result = await loadLibrary(librarySource);
-      if (result.ok) {
+      try {
+        const result = await loadLibrary(librarySource);
+        if (!result.ok) throw new Error(`library load failed: ${result.reason}`);
         library = result.library;
         onLibraryReady(result.library);
+      } catch {
+        // No retry this story: report it and drop whatever was waiting on the library.
+        pendingCommands.length = 0;
+        setState({ ...state, libraryStatus: "error", status: state.setup === null ? "error" : state.status });
       }
-      // On failure, libraryStatus stays 'loading' for this store's lifetime (no retry this story).
     });
   }
 
   function onLibraryReady(loaded: ComposeLibrary): void {
-    let next: StoreState = { ...state, libraryStatus: "ready" };
+    if (state.setup === null) ensureSetup(loaded);
+    setState({ ...state, libraryStatus: "ready" });
+    drainPending();
+  }
 
-    if (next.setup === null) {
-      const defaultSetup = buildDefaultSetup(loaded);
-      // A concurrent first-visit write (another tab) wins outright rather than being overwritten.
-      const persisted = persist("setup", schemaVersions.setup, setupRev, defaultSetup, (fresh) => fresh);
-      setupRev = persisted.rev;
-      next = { ...next, setup: persisted.data, status: "ready" };
-    }
+  /** First visit: builds and persists the default Setup. A concurrent first-visit write (another tab) wins outright. */
+  function ensureSetup(loaded: ComposeLibrary): void {
+    const defaultSetup = buildDefaultSetup(loaded);
+    if (defaultSetup === null) throw new Error("library has no usable Medium");
+    const persisted = persist("setup", Setup, setupRev, defaultSetup, (fresh) => fresh ?? defaultSetup);
+    setupRev = persisted.rev;
+    setState({ ...state, setup: persisted.data, status: "ready", saveFailed: !persisted.saved });
+  }
 
-    setState(next);
+  function drainPending(): void {
+    if (!isReadyToCompose()) return;
     for (const command of pendingCommands.splice(0, pendingCommands.length)) runCommand(command);
   }
 
@@ -151,7 +179,8 @@ export function createStore(deps: StoreDeps): Store {
 
   function dispatch(command: StoreCommand): void {
     if (!isReadyToCompose()) {
-      pendingCommands.push(command);
+      if (state.status === "error" || state.libraryStatus === "error") return; // nothing will ever drain it
+      if (!pendingCommands.some((c) => c.type === command.type)) pendingCommands.push(command); // at most one per type
       return;
     }
     runCommand(command);
@@ -187,11 +216,12 @@ export function createStore(deps: StoreDeps): Store {
 
   function dispatchSetup(event: SetupEvent): void {
     if (state.setup === null) return; // nothing to apply to yet
-    const result = setupReducer(state.setup, event);
-    if (result.setup === state.setup) return; // no-op; `result.notice` has no consumer yet (no UI this story)
-    const persisted = persist("setup", schemaVersions.setup, setupRev, result.setup, (fresh) => setupReducer(fresh, event).setup);
+    const base = state.setup;
+    const result = setupReducer(base, event);
+    if (result.setup === base) return; // no-op; `result.notice` has no consumer yet (no UI this story)
+    const persisted = persist("setup", Setup, setupRev, result.setup, (fresh) => setupReducer(fresh ?? base, event).setup);
     setupRev = persisted.rev;
-    setState({ ...state, setup: persisted.data });
+    setState({ ...state, setup: persisted.data, saveFailed: !persisted.saved });
   }
 
   function dispatchSession(event: SessionEvent): void {
@@ -200,13 +230,12 @@ export function createStore(deps: StoreDeps): Store {
 
   function applySessionEvent(event: SessionEvent): void {
     const quickReveal = state.setup?.quickReveal ?? false;
-    const next = sessionReducer(state.session, event, { quickReveal });
-    if (next === state.session) return;
-    const persisted = persist("session", schemaVersions.session, sessionRev, next, (fresh) =>
-      sessionReducer(fresh, event, { quickReveal: state.setup?.quickReveal ?? false }),
-    );
+    const base = state.session;
+    const next = sessionReducer(base, event, { quickReveal });
+    if (next === base) return;
+    const persisted = persist("session", Session, sessionRev, next, (fresh) => sessionReducer(fresh ?? base, event, { quickReveal }));
     sessionRev = persisted.rev;
-    setState({ ...state, session: persisted.data });
+    setState({ ...state, session: persisted.data, saveFailed: !persisted.saved });
   }
 
   return { getState, subscribe, hydrate, dispatchSetup, dispatchSession, dispatch };

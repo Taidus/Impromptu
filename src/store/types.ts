@@ -3,17 +3,19 @@ import type { Rep, Session, Setup } from "@/domain/session/schema";
 import type { SessionEvent } from "@/domain/session/session-reducer";
 import type { SetupEvent } from "@/domain/session/setup-reducer";
 
-export type Status = "loading" | "ready";
+export type Status = "loading" | "ready" | "error";
 
 export interface StoreState {
-  /** AD-10: Repository hydration status. `setup` is only meaningful once this is `'ready'`. */
+  /** AD-10: Repository hydration status. `setup` is only meaningful once this is `'ready'`; `'error'` when no Setup exists and the library can't supply one. */
   status: Status;
-  /** The library loader's status; `compose`-backed commands wait for `'ready'` (queued otherwise). */
+  /** The library loader's status; `compose`-backed commands wait for `'ready'` (queued otherwise, dropped on `'error'`). */
   libraryStatus: Status;
   /** `null` until hydration resolves it -- either from storage, or (first visit) from the library. */
   setup: Setup | null;
   session: Session;
   history: Rep[];
+  /** True after a save failed for a reason other than a rev conflict (the change is held in memory only); cleared by the next successful save. */
+  saveFailed: boolean;
 }
 
 /** The command layer (AD-7): calls into `compose()`. Later stories add `reroll`, `retry`, `vary`. */

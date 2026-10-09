@@ -5,26 +5,37 @@ import { loadGeneratedLibrarySource } from "@/adapters/library";
 import { cryptoRandom } from "@/adapters/random";
 import { systemClock } from "@/adapters/clock";
 import { createRepository } from "@/adapters/storage";
-import { createStore } from "./store";
-import type { StoreState } from "./types";
+import { createStore, initialState } from "./store";
+import type { Store, StoreState } from "./types";
 
-/** The one production app store (AD-7). Created once per client; never re-instantiated. */
-export const store = createStore({
-  repository: createRepository(),
-  clock: systemClock,
-  random: cryptoRandom,
-  librarySource: loadGeneratedLibrarySource,
-});
+let store: Store | null = null;
 
 /**
- * Reads the store (AD-10: `status`/`libraryStatus` start `'loading'` on first render, including
- * server/static HTML, since `createStore` never touches the Repository until `hydrate()` runs).
- * Hydration is kicked off from an effect, never during render.
+ * The one production app store (AD-7), created on first use in the browser -- never at module
+ * scope, since a `"use client"` module still evaluates during server prerendering.
+ */
+export function getAppStore(): Store {
+  store ??= createStore({
+    repository: createRepository(),
+    clock: systemClock,
+    random: cryptoRandom,
+    librarySource: loadGeneratedLibrarySource,
+  });
+  return store;
+}
+
+const subscribe = (listener: () => void) => getAppStore().subscribe(listener);
+const getSnapshot = () => getAppStore().getState();
+const getServerSnapshot = () => initialState;
+
+/**
+ * Reads the store (AD-10: the server snapshot and the first client render are the neutral
+ * `loading` state). Hydration is kicked off from an effect, never during render.
  */
 export function useAppStore(): StoreState {
-  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   useEffect(() => {
-    store.hydrate();
+    getAppStore().hydrate();
   }, []);
   return state;
 }

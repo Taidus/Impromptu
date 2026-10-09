@@ -6,6 +6,8 @@ import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
 import type { Setup } from "@/domain/session/schema";
+import { config } from "@/config/app";
+import { buildDefaultSetup } from "./defaults";
 import { createStore } from "./store";
 import type { StoreDeps } from "./types";
 
@@ -16,7 +18,7 @@ const tpl = (over: Partial<Template> = {}): Template => ({
   id: "tpl.observation.explore.one",
   skill: "skl.observation",
   level: "explore",
-  mediums: ["med.a"],
+  mediums: ["med.a", "med.b"],
   briefPattern: "{topic}",
   topicTags: ["place"],
   styleTags: [],
@@ -36,7 +38,8 @@ const workingLibrary: ComposeLibrary = {
   constraints: [],
 };
 
-const emptyTemplateLibrary: ComposeLibrary = { ...workingLibrary, templates: [] };
+// Valid library, but nothing at the "explore" level a test Setup asks for.
+const noCompatibleLibrary: ComposeLibrary = { ...workingLibrary, templates: [tpl({ id: "tpl.observation.develop.one", level: "develop" })] };
 
 const concreteSetup: Setup = {
   level: "explore",
@@ -134,12 +137,33 @@ describe("createStore — hydrate, brand-new visitor", () => {
 });
 
 describe("createStore — library load failure", () => {
-  it("leaves libraryStatus:'loading' forever (no retry this story)", async () => {
+  it("sets libraryStatus and (with no Setup) status to 'error', and drops queued commands", async () => {
     const store = createStore(makeDeps({ library: "reject" }));
+    store.dispatch({ type: "new_challenge" });
     store.hydrate();
     await vi.runAllTimersAsync();
 
-    expect(store.getState().libraryStatus).toBe("loading");
+    expect(store.getState().libraryStatus).toBe("error");
+    expect(store.getState().status).toBe("error");
+
+    expect(store.getState().session.state).toBe("none");
+  });
+
+  it("treats a library that fails validation the same way", async () => {
+    const store = createStore(makeDeps({ library: { ...workingLibrary, mediums: [] } }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().libraryStatus).toBe("error");
+    expect(store.getState().status).toBe("error");
+  });
+
+  it("goes to 'error' instead of persisting an invalid Setup when no Medium is usable", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository, library: { ...workingLibrary, templates: [tpl({ retired: true })] } }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().status).toBe("error");
+    expect(repository.load("setup")).toEqual({ ok: true, value: null });
   });
 });
 
@@ -153,6 +177,18 @@ describe("createStore — new_challenge command", () => {
     await vi.runAllTimersAsync();
 
     expect(store.getState().session.state).toBe("held");
+  });
+
+  it("keeps at most one pending command per type (five new_challenge while loading commit once)", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    for (let i = 0; i < 5; i++) store.dispatch({ type: "new_challenge" });
+    store.hydrate();
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().session.recent).toHaveLength(1);
+    const stored = repository.load("session");
+    expect(stored.ok && stored.value?.rev).toBe(1);
   });
 
   it("composes and commits a held Challenge, persisting the session", async () => {
@@ -173,7 +209,7 @@ describe("createStore — new_challenge command", () => {
   it("dispatches compose_failed when no compatible Template exists", async () => {
     const repository = createRepository({ storage: createMemoryRawStore() });
     repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
-    const store = createStore(makeDeps({ repository, library: emptyTemplateLibrary }));
+    const store = createStore(makeDeps({ repository, library: noCompatibleLibrary }));
     store.hydrate();
     await vi.runAllTimersAsync();
 
@@ -207,6 +243,116 @@ describe("createStore — setup events, rev conflict", () => {
     expect(store.getState().setup).toEqual({ ...otherTabSetup, quickReveal: true });
     const stored = repository.load<Setup>("setup");
     expect(stored).toEqual({ ok: true, value: { v: 1, rev: 3, data: { ...otherTabSetup, quickReveal: true } } });
+  });
+});
+
+describe("createStore — setup events, fresh === null conflict", () => {
+  it("re-applies the event once to the pre-event base, saving at rev 1", () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    createRepository({ storage }).clearAll(); // another tab clears everything, no event seen yet
+
+    store.dispatchSetup({ type: "toggle_medium", mediumId: "med.b" });
+
+    const expected = { ...concreteSetup, enabledMediums: ["med.a"] };
+    expect(store.getState().setup).toEqual(expected); // applied once, not toggled back on
+    expect(repository.load("setup")).toEqual({ ok: true, value: { v: 1, rev: 1, data: expected } });
+  });
+});
+
+describe("createStore — save failures", () => {
+  it("sets saveFailed on write_failed and clears it on the next successful save", () => {
+    const real = createRepository({ storage: createMemoryRawStore() });
+    real.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    let failWrites = true;
+    const repository: Repository = {
+      ...real,
+      save: (key, envelope) => (failWrites ? { ok: false, reason: "write_failed" } : real.save(key, envelope)),
+    };
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    store.dispatchSetup({ type: "set_sound", sound: true });
+    expect(store.getState().saveFailed).toBe(true);
+    expect(store.getState().setup?.sound).toBe(true); // held in memory
+
+    failWrites = false;
+    store.dispatchSetup({ type: "set_quick_reveal", quickReveal: true });
+    expect(store.getState().saveFailed).toBe(false);
+  });
+});
+
+describe("createStore — cross-tab Setup", () => {
+  function twoTabs() {
+    const storage = createMemoryRawStore();
+    const target = fakeEventTarget();
+    const repoA = createRepository({ storage, eventTarget: target });
+    const repoB = createRepository({ storage, eventTarget: target });
+    return { storage, target, repoA, repoB };
+  }
+
+  it("re-reads and updates setup when another tab writes it", () => {
+    const { storage, target, repoA, repoB } = twoTabs();
+    repoA.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    const store = createStore(makeDeps({ repository: repoB }));
+    store.hydrate();
+
+    repoA.save("setup", { v: 1, rev: 2, data: { ...concreteSetup, sound: true } });
+    target.fire("impromptu:setup", storage);
+
+    expect(store.getState().setup?.sound).toBe(true);
+  });
+
+  it("promotes status to 'ready' while loading when another tab's Setup arrives", () => {
+    const { storage, target, repoA, repoB } = twoTabs();
+    const store = createStore(makeDeps({ repository: repoB }));
+    store.hydrate();
+    expect(store.getState().status).toBe("loading");
+
+    repoA.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    target.fire("impromptu:setup", storage);
+
+    expect(store.getState().status).toBe("ready");
+    expect(store.getState().setup).toEqual(concreteSetup);
+  });
+
+  it("brand-new visitor keeps a Setup another tab wrote first, not the defaults", async () => {
+    const { repoA, repoB } = twoTabs();
+    const store = createStore(makeDeps({ repository: repoB }));
+    store.hydrate();
+
+    const otherTabSetup: Setup = { ...concreteSetup, enabledMediums: ["med.b"], medium: "med.b" };
+    repoA.save("setup", { v: 1, rev: 1, data: otherTabSetup }); // no storage event delivered
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().setup).toEqual(otherTabSetup);
+    const stored = repoB.load<Setup>("setup");
+    expect(stored.ok && stored.value?.data).toEqual(otherTabSetup);
+  });
+});
+
+describe("buildDefaultSetup", () => {
+  it("skips Mediums only retired Templates use", () => {
+    const library: ComposeLibrary = {
+      ...workingLibrary,
+      templates: [tpl({ mediums: ["med.a"] }), tpl({ id: "tpl.observation.explore.two", mediums: ["med.b"], retired: true })],
+    };
+    expect(buildDefaultSetup(library)?.enabledMediums).toEqual(["med.a"]);
+  });
+
+  it("falls back a default Medium the library lacks to random", () => {
+    const defaults = config.setup.defaults as { medium: string };
+    const original = defaults.medium;
+    defaults.medium = "med.gone";
+    try {
+      expect(buildDefaultSetup(workingLibrary)?.medium).toBe("random");
+    } finally {
+      defaults.medium = original;
+    }
   });
 });
 

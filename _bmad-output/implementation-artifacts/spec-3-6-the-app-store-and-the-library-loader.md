@@ -2,7 +2,7 @@
 title: 'The app store and the library loader'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '05e862d60e61ed71e113da1bff008eff4196fb09'
@@ -98,6 +98,8 @@ context:
 - `createStore()`'s dependencies (`repository`, `clock`, `random`, `librarySource`) are all required, non-optional parameters — `src/store/index.ts` is the only place that supplies the real `createRepository()`, `systemClock`, `cryptoRandom`, and `loadGeneratedLibrarySource`, keeping `store.ts` itself fully injectable for tests with no `window`/`localStorage`.
 - `setupReducer`'s `notice: 'last_medium'` return value is intentionally dropped by `dispatchSetup` for now — no UI in this story consumes it (Story 3.8 will dispatch `toggle_medium` from a real control and will need to read it then). Noted here rather than in deferred-work.md since it's a one-line change to `dispatchSetup`'s return type when that story needs it, not a tracked gap.
 - History slice persistence (write path) is intentionally not implemented — this story has no event that mutates `history` (`clear_all_data` and `save_rep` are AD-7 events owned by later stories). `hydrate()`/cross-tab `rereadHistory()` still read it, so the slice is already wired for whichever later story adds its first write.
+- After merging main (Story 1.7), `loadGeneratedLibrarySource()` is wired to `import("@/generated/library.json")` (no longer a stub); `src/types/generated-library.d.ts` declares that gitignored module as `unknown` so typecheck runs before the build generates it, and `scripts/library/library-contract.test.ts` pins the build payload against the loader's `LibraryFile` schema. `anchors` were removed from the build payload (they failed the strict schema).
+- Review patches (triage rows 1-10): `persist` validates `fresh.data` with the slice schema, re-applies to the pre-event base when nothing valid is stored, and after `MAX_SAVE_ATTEMPTS` holds what is stored; `Status` gained `'error'` (library load/validation failure, or no usable Medium on a first visit) and pending commands are dropped then; at most one pending command per type; a cross-tab Setup promotes `status` to `'ready'` and drains, while a null re-read is treated as a first visit; `StoreState.saveFailed` flags non-conflict save failures; `buildDefaultSetup` drops Mediums no non-retired Template uses (Mediums have no `retired` field), falls back unknown `medium`/`skillFocus` to `"random"`, and validates with `Setup`; `LibraryFile` requires at least one skill/medium/template; `prefetchOnIdle` passes `{ timeout: 2000 }`; the production store is created lazily via `getAppStore()` with `initialState` as the server snapshot. This supersedes the frozen matrix's "Library load fails -> stays `'loading'` forever" row.
 
 ## Deferred-Work Follow-Up
 
@@ -109,6 +111,24 @@ Added to `_bmad-output/implementation-artifacts/deferred-work.md`: once Story 1.
 - **Why `status` can wait on `libraryStatus`:** `Setup.enabledMediums` requires at least one real Medium id (`z.array(MediumId).min(1)`), and the only source for Medium ids is the library. A returning visitor's persisted `Setup` already has concrete ids baked in from a previous resolution, so the common case never waits on the library. Only the very first visit (no persisted `Setup`) needs it, which is also the only time `config.setup.defaults.enabledMediums === "all"` must be resolved — exactly the gap `setup-fixture.ts` flagged as "a store/library-loader concern, Story 3.6".
 - **Rev-conflict retry is generic, not per-slice:** one `persist(key, version, rev, data, reapply)` helper (loop bounded at 10 retries) is shared by `dispatchSetup`, `dispatchSession`, and the command layer. `reapply(freshData)` is always "re-run the same reducer with the same event against `freshData`", never "take my already-computed `data` and force it in" — that is what keeps two tabs from losing each other's writes.
 - **The store, not a UI idle callback, owns the library prefetch trigger:** since no Setup UI exists yet (Story 3.8), `createStore()` itself calls `prefetchOnIdle(() => loadLibrary(librarySource))` once on construction. `prefetchOnIdle` stays a small, separately-exported helper so a future Setup-page effect can also call it (idempotent: `loadLibrary` is only ever in flight once per store instance).
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 0 | orchestrator | Build payload's `anchors` field fails the strict `LibraryFile` schema | high | Contract test against the real build payload returned `{ok:false, reason:'invalid'}`: production would never load a library. Fixed in `b5b26b0` (anchors dropped from payload; contract test added) | patch (applied) |
+| 1 | blind, edge | `persist` double-applies when `fresh` is null; unvalidated `fresh.data`; stale data after retries | medium | `reapply(fresh ? fresh.data : currentData)` re-runs on already-transformed data | patch |
+| 2 | blind, edge | Library load failure leaves status `loading` forever; errors swallowed | medium | `Status` has no error state; test pins "loading forever" | patch |
+| 3 | blind, edge | Duplicate `new_challenge` commands queue and each commit | low | `pendingCommands` unbounded, no de-dupe | patch |
+| 4 | edge | Cross-tab Setup during loading never promotes status; null re-read inconsistent | medium | `rereadSetup` keeps stale Setup while resetting rev | patch |
+| 5 | blind | Non-conflict save failures are silent | low | `write_failed` returns early with no state signal | patch |
+| 6 | blind, edge | `buildDefaultSetup` enables retired Mediums, unchecked defaults, empty-medium Setup | low | Invalid Setup persisted then rejected on reload | patch |
+| 7 | edge | Empty skills/mediums/templates pass `LibraryFile` | low | Unusable library reports ready | patch |
+| 8 | blind | `requestIdleCallback` without timeout; misleading comment | low | Busy thread can delay first load indefinitely | patch |
+| 9 | blind | Store/Repository created at module scope during SSR | low | `"use client"` modules still evaluate on the server | patch |
+| 10 | verif-gap, blind | Cross-tab Setup, concurrent first-visit, fresh-null, queue, idle-callback branch untested; fake timers leak | low | Pre-verified: deleting the setup subscription passes all tests | patch |
+| 11 | verif-gap | Production `loadGeneratedLibrarySource` import never executed in tests | medium | CI tests run before the build generates the file; needs the first UI story's e2e | defer |
+| 12 | edge | Cross-tab read-modify-write not atomic | low | AD-9 rev check is the specified mitigation | reject |
 
 ## Verification
 

@@ -33,13 +33,16 @@ export async function loadGeneratedLibrarySource(): Promise<unknown> {
 }
 
 /**
- * Schedules `run` for a browser idle period (`requestIdleCallback`), falling back to a short
- * `setTimeout` where it's unavailable (older Safari, non-browser test environments). Errors from
- * `run` are swallowed -- a failed prefetch is not fatal, the real load (awaited elsewhere) still runs.
+ * Schedules `run` for a browser idle period (`requestIdleCallback`, capped at 2s so a busy main
+ * thread can't delay a first-time visitor indefinitely), falling back to a short `setTimeout`
+ * where it's unavailable (older Safari, non-browser test environments). Rejections from `run` are
+ * swallowed; `run` owns its own error handling (the store's library load reports its failures).
  */
 export function prefetchOnIdle(run: () => Promise<unknown>): void {
   const schedule: (cb: () => void) => void =
-    typeof requestIdleCallback === "function" ? (cb) => requestIdleCallback(cb) : (cb) => setTimeout(cb, 0);
+    typeof requestIdleCallback === "function"
+      ? (cb) => requestIdleCallback(cb, { timeout: 2000 })
+      : (cb) => setTimeout(cb, 0);
   schedule(() => {
     run().catch(() => {});
   });
