@@ -2,7 +2,7 @@
 title: 'Story 1.8: Generation pipeline kit: prompt, rubric, batch folders, and soft-gate tooling'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -76,10 +76,24 @@ context:
 - Spec approved under "keep building" (founder instruction, 2026-10-09); no checkpoint halt.
 - Open Question "briefText convention per slot" resolved in the frozen block above (lowercase fragment, no fill-level punctuation) — the conservative, schema-untouched option; the alternative (a second `briefPatternSentence` token in `render.ts`) was rejected as a code change outside this story's scope.
 - Addresses the 1.8 half of the sprint-status action item "Founder decision 2026-10-09: Styles are named art styles ... Story 1.8 PROMPT.md must encode this" — encoded in `PROMPT.md`; the 1.9 half (`styles-01` must include "your choice") is unchanged and left for Story 1.9.
+- Review patches applied (triage rows 1-9): `buildCombos` now returns `{combos, renderFailures}`; render-pass-but-render-fail combinations are no longer dropped and render as a "Render failures" `sample.md` section. `loadActiveLibrary` applies `retire[]` only from `accepted` batches or from `sampledBatchFolder` itself (the sampled batch's own patch); a malformed-but-present `manifest.json` now throws naming its folder, a missing `manifest.json` still skips. `buildCombos` warns on stderr past 50,000 candidate combinations (no cap). `new-batch.ts`: `scope` must match the kebab-slug pattern or `createBatch` throws (main() also fast-fails with a usage message); version headers are parsed and the manifest built before any `mkdirSync`; the batch folder's `mkdirSync` is non-recursive (throws `EEXIST` instead of reusing/overwriting); the `Version:` regex no longer crosses a newline; `nextBatchSeq` parses the full `<date>-<kind>-<scope>-<nn>` shape with an anchored regex instead of `indexOf` (closes a same-prefix-scope false match); the batch date is the local calendar day, not UTC; the dead post-log `existsSync` check is removed. `KINDS`/`Kind` are now declared once in `new-batch.ts` and imported by `sample.ts`. `README.md`/`PROMPT.md`: batch landing now says status/review are set in the PR before merge (not "on merge"); the batch author (not the AI session) replaces the `TBD` generator fields by hand; `library:validate` is marked as arriving with Stories 1.6/1.7; the `scope` convention (fill: free slug; Template: `<skill-slug>-<level>`) and `sample.md` being committed with the PR are now stated; the founder-sample wording matches the code (20 drawn from the batch's own rendered combinations); PROMPT.md's "and nothing else" line, which contradicted pasting the Regeneration-context section on a re-run, is reworded. Added tests for each (row 9): draft-batch exclusion from `active` (and its own-batch `retire[]` exception), a `retired: true` entry, a `templates`-kind batch using only the new Template, the default-20 cap at 21+ combos, and a render failure appearing in its own section; plus `isSlug`/invalid-scope and a mocked-stale-listing existing-folder test for `new-batch.ts`. Triage row 10 (batch entry-count checks) rejected as out of scope — that is the Story 1.7 hard gate's job.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | Compatible-but-unrenderable combos silently dropped from `sample.md` | medium | `if (!rendered.ok) continue;` hides failures the judge must see | patch |
+| 2 | blind, edge, verif-gap | Draft batches' `retire[]` removes active ids | medium | `retired.add` runs before the accepted check; spec says accepted batches only | patch |
+| 3 | blind, edge | Malformed accepted manifest skipped silently | medium | `catch { continue; }` drops an accepted batch's entries | patch |
+| 4 | blind, edge | `scope` unvalidated (path traversal, invalid names) | medium | Joined into the folder path verbatim | patch |
+| 5 | blind, edge | Orphan folder on missing version; existing folder overwritten; version regex crosses lines; seq parsing via `indexOf`; UTC date | low | Code reviewed; each is a direct correction | patch |
+| 6 | blind | `KINDS`/`Kind` duplicated | low | Identical declarations in two scripts | patch |
+| 7 | blind | Unbounded cross-product | low | ~3.3M checks possible; a warning suffices | patch |
+| 8 | blind | README/PROMPT contradictions and missing conventions | low | Step 7 vs 8; `TBD` generator; `library:validate` not yet present; scope and `sample.md` unspecified | patch |
+| 9 | verif-gap | Draft exclusion, templates batch, default 20, `retired: true` untested | low | Pre-verified: inverting each passes all tests | patch |
+| 10 | blind | Batch entry counts not checked | low | Batch sizing belongs to the Story 1.7 hard gate (AD-17) | reject |
 
 ## Design Notes
 

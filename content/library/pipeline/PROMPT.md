@@ -2,11 +2,11 @@ Version: 1.0.0
 
 # Library batch generation prompt
 
-Paste this whole file (plus the "Regeneration context" section if this is a re-run) into
-the AI coding-agent session that will author one batch. Give it the batch's folder path
-(from `npm run library:new-batch -- <kind> <scope>`) and nothing else. The session edits
-only that batch's `<kind>.json` file — never `manifest.json`, never another batch, never
-`src/`.
+Paste this whole file into the AI coding-agent session that will author one batch, along
+with the batch's folder path (from `npm run library:new-batch -- <kind> <scope>`). On a
+regeneration round (attempt 2 or 3), also fill in and paste the "Regeneration context"
+section below. The session edits only that batch's `<kind>.json` file — never
+`manifest.json`, never another batch, never `src/`.
 
 ## What you are building
 

@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { resolve, join, dirname } from "node:path";
-import { readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
 import { z } from "zod";
 import { isCompatible } from "../../src/domain/library/compat";
 import { render } from "../../src/domain/library/render";
@@ -12,9 +12,7 @@ import {
   Template,
   Topic,
 } from "../../src/domain/library/schema";
-
-export const KINDS = ["topics", "styles", "constraints", "templates"] as const;
-export type Kind = (typeof KINDS)[number];
+import { KINDS, type Kind } from "./new-batch";
 
 export type Active = {
   mediums: Medium[];
@@ -43,6 +41,17 @@ export type ComboResult = {
   guidance: string | null;
 };
 
+export type RenderFailure = {
+  templateId: string;
+  mediumId: string;
+  topicId: string | null;
+  styleId: string | null;
+  constraintId: string | null;
+  reason: string;
+};
+
+const MAX_WARN_CANDIDATES = 50_000;
+
 const KIND_SCHEMA = { topics: Topic, styles: Style, constraints: Constraint, templates: Template };
 
 /** Which `<kind>.json` lives directly in this batch folder. Exactly one is expected. */
@@ -60,9 +69,18 @@ export function findBatchFolder(folderNames: string[], batchId: string): string 
   return matches[0];
 }
 
-/** Anchors (always active) plus every `accepted` batch, minus anything any batch's `retire[]` names. */
-export function loadActiveLibrary(opts: { anchorsDir: string; baseDir: string; batchesDir: string }): Active {
-  const { anchorsDir, baseDir, batchesDir } = opts;
+/**
+ * Anchors (always active) plus every `accepted` batch, minus ids retired by an `accepted`
+ * batch or by `sampledBatchFolder` itself (a draft patch batch retires ids from the batch
+ * folder currently being sampled; any other draft batch's `retire[]` is not yet in effect).
+ */
+export function loadActiveLibrary(opts: {
+  anchorsDir: string;
+  baseDir: string;
+  batchesDir: string;
+  sampledBatchFolder?: string;
+}): Active {
+  const { anchorsDir, baseDir, batchesDir, sampledBatchFolder } = opts;
   const readJson = (path: string) => JSON.parse(readFileSync(path, "utf8"));
 
   const mediums = z.array(Medium).parse(readJson(join(baseDir, "mediums.json")));
@@ -72,20 +90,21 @@ export function loadActiveLibrary(opts: { anchorsDir: string; baseDir: string; b
   const constraints = [...z.array(Constraint).parse(readJson(join(anchorsDir, "constraints.json")))];
 
   const retired = new Set<string>();
-  const folders = readdirSync(batchesDir).filter((name) => {
-    const path = join(batchesDir, name);
-    return statSync(path).isDirectory();
-  });
+  const folders = readdirSync(batchesDir).filter((name) => statSync(join(batchesDir, name)).isDirectory());
   for (const folder of folders) {
     const folderPath = join(batchesDir, folder);
     const manifestPath = join(folderPath, "manifest.json");
-    let manifest;
+    if (!existsSync(manifestPath)) continue; // not a batch folder
+
+    let manifest: BatchManifest;
     try {
       manifest = BatchManifest.parse(readJson(manifestPath));
-    } catch {
-      continue; // not a batch folder (or malformed) -- ignore
+    } catch (err) {
+      throw new Error(`invalid manifest.json in batch folder "${folder}": ${err instanceof Error ? err.message : String(err)}`);
     }
-    for (const id of manifest.retire) retired.add(id);
+
+    const isSampledBatch = folder === sampledBatchFolder;
+    if (manifest.status === "accepted" || isSampledBatch) for (const id of manifest.retire) retired.add(id);
     if (manifest.status !== "accepted") continue;
 
     const files = readdirSync(folderPath);
@@ -107,15 +126,26 @@ export function loadActiveLibrary(opts: { anchorsDir: string; baseDir: string; b
  * Every `isCompatible` combination that exercises a new entry (plus active data for every
  * other slot). The "self" kind's candidates are the new entries only; the other two fill
  * slots offer every active entry of that kind, or `null` when the Template has no slot.
+ * A combination that passes `isCompatible` but fails `render` is returned separately in
+ * `renderFailures` rather than dropped -- that divergence is exactly what the judge needs
+ * to see (e.g. a per-Medium `briefPattern` missing a token a tag says should be there).
  */
-export function buildCombos(active: Active, newEntries: NewEntries): ComboResult[] {
+export function buildCombos(active: Active, newEntries: NewEntries): { combos: ComboResult[]; renderFailures: RenderFailure[] } {
   const templates = newEntries.kind === "templates" ? newEntries.entries : active.templates;
   const topics: (Topic | null)[] = newEntries.kind === "topics" ? newEntries.entries : [...active.topics, null];
   const styles: (Style | null)[] = newEntries.kind === "styles" ? newEntries.entries : [...active.styles, null];
   const constraints: (Constraint | null)[] =
     newEntries.kind === "constraints" ? newEntries.entries : [...active.constraints, null];
 
-  const results: ComboResult[] = [];
+  const candidateCount = templates.reduce((sum, t) => sum + t.mediums.length, 0) * topics.length * styles.length * constraints.length;
+  if (candidateCount > MAX_WARN_CANDIDATES) {
+    console.error(
+      `library:sample warning: ${candidateCount} candidate combinations before compatibility filtering (no cap applied; this may be slow).`,
+    );
+  }
+
+  const combos: ComboResult[] = [];
+  const renderFailures: RenderFailure[] = [];
   for (const template of templates) {
     for (const mediumId of template.mediums) {
       const medium = active.mediums.find((m) => m.id === mediumId);
@@ -125,13 +155,19 @@ export function buildCombos(active: Active, newEntries: NewEntries): ComboResult
           for (const constraint of constraints) {
             if (!isCompatible(template, medium, topic, style, constraint)) continue;
             const rendered = render(template, medium, { topic, style, constraint });
-            if (!rendered.ok) continue;
-            results.push({
+            const ids = {
               templateId: template.id,
               mediumId: medium.id,
               topicId: topic?.id ?? null,
               styleId: style?.id ?? null,
               constraintId: constraint?.id ?? null,
+            };
+            if (!rendered.ok) {
+              renderFailures.push({ ...ids, reason: rendered.slot ? `${rendered.reason} (${rendered.slot})` : rendered.reason });
+              continue;
+            }
+            combos.push({
+              ...ids,
               skill: template.skill,
               level: template.level,
               timeLimitSec: template.timeLimitSec,
@@ -143,7 +179,7 @@ export function buildCombos(active: Active, newEntries: NewEntries): ComboResult
       }
     }
   }
-  return results;
+  return { combos, renderFailures };
 }
 
 function comboLine(n: number, c: ComboResult): string {
@@ -161,6 +197,18 @@ function comboLine(n: number, c: ComboResult): string {
   return `${n}. **Brief:** ${c.brief}\n   - ${parts.join(", ")}${guidance}`;
 }
 
+function failureLine(n: number, f: RenderFailure): string {
+  const parts = [
+    `template: ${f.templateId}`,
+    `medium: ${f.mediumId}`,
+    `topic: ${f.topicId ?? "none"}`,
+    `style: ${f.styleId ?? "none"}`,
+    `constraint: ${f.constraintId ?? "none"}`,
+    `reason: ${f.reason}`,
+  ];
+  return `${n}. ${parts.join(", ")}`;
+}
+
 /** Fisher-Yates using an injectable `rng() => [0,1)` so tests can be deterministic. */
 function shuffled<T>(list: T[], rng: () => number): T[] {
   const copy = [...list];
@@ -171,7 +219,12 @@ function shuffled<T>(list: T[], rng: () => number): T[] {
   return copy;
 }
 
-export function toMarkdown(batchId: string, combos: ComboResult[], opts: { sampleSize?: number; rng?: () => number } = {}): string {
+export function toMarkdown(
+  batchId: string,
+  combos: ComboResult[],
+  renderFailures: RenderFailure[] = [],
+  opts: { sampleSize?: number; rng?: () => number } = {},
+): string {
   const sampleSize = opts.sampleSize ?? 20;
   const rng = opts.rng ?? Math.random;
   const sample = shuffled(combos, rng).slice(0, Math.min(sampleSize, combos.length));
@@ -185,6 +238,12 @@ export function toMarkdown(batchId: string, combos: ComboResult[], opts: { sampl
     "## Judge pass",
     "",
     ...(combos.length ? combos.map((c, i) => comboLine(i + 1, c)) : ["(no compatible combination renders yet)"]),
+    "",
+    "## Render failures",
+    "",
+    ...(renderFailures.length
+      ? renderFailures.map((f, i) => failureLine(i + 1, f))
+      : ["(none -- every isCompatible combination above rendered)"]),
     "",
     "## Founder skim (random)",
     "",
@@ -213,12 +272,12 @@ function main() {
   const raw = JSON.parse(readFileSync(join(folderPath, `${kind}.json`), "utf8"));
   const entries = z.array(KIND_SCHEMA[kind]).parse(raw);
 
-  const active = loadActiveLibrary({ anchorsDir, baseDir: libraryDir, batchesDir });
-  const combos = buildCombos(active, { kind, entries } as NewEntries);
-  const markdown = toMarkdown(folderName, combos);
+  const active = loadActiveLibrary({ anchorsDir, baseDir: libraryDir, batchesDir, sampledBatchFolder: folderName });
+  const { combos, renderFailures } = buildCombos(active, { kind, entries } as NewEntries);
+  const markdown = toMarkdown(folderName, combos, renderFailures);
   const outPath = join(folderPath, "sample.md");
   writeFileSync(outPath, markdown);
-  console.log(`Wrote ${combos.length} combo(s) to ${outPath}`);
+  console.log(`Wrote ${combos.length} combo(s) (${renderFailures.length} render failure(s)) to ${outPath}`);
 }
 
 if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
