@@ -1,0 +1,39 @@
+[
+  {
+    "id": "tpl.observation.explore.nearby-object",
+    "skill": "skl.observation",
+    "level": "explore",
+    "mediums": ["med.drawing"],
+    "briefPattern": "Draw {topic}. {constraint}",
+    "topicTags": ["object"],
+    "styleTags": [],
+    "constraintTags": ["visual"],
+    "incompatible": [],
+    "tags": []
+  },
+  {
+    "id": "tpl.expression.experiment.coming-home",
+    "skill": "skl.expression",
+    "level": "experiment",
+    "mediums": ["med.photography"],
+    "briefPattern": "Take two photos of {topic}. Make one feel comforting and the other lonely. {constraint}",
+    "topicTags": ["place"],
+    "styleTags": [],
+    "constraintTags": ["exclusion"],
+    "incompatible": [],
+    "tags": []
+  },
+  {
+    "id": "tpl.idea-generation.perform.first-date-horror",
+    "skill": "skl.idea-generation",
+    "level": "perform",
+    "mediums": ["med.writing"],
+    "briefPattern": "Write three premises for {topic} that feels like {style}, even though {constraint}.",
+    "topicTags": ["people"],
+    "styleTags": ["tone"],
+    "constraintTags": ["outcome"],
+    "incompatible": [],
+    "tags": [],
+    "timeLimitSec": 300
+  }
+]

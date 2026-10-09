@@ -1,0 +1,26 @@
+[
+  {
+    "id": "top.nearby-object",
+    "revealText": "A nearby object",
+    "briefText": "an object near you",
+    "tags": ["object"],
+    "requires": [],
+    "excludes": []
+  },
+  {
+    "id": "top.coming-home",
+    "revealText": "Coming home",
+    "briefText": "coming home",
+    "tags": ["place"],
+    "requires": [],
+    "excludes": []
+  },
+  {
+    "id": "top.first-date",
+    "revealText": "A first date",
+    "briefText": "a first date",
+    "tags": ["people"],
+    "requires": [],
+    "excludes": []
+  }
+]
