@@ -2,7 +2,7 @@
 title: 'Story 1.8: Generation pipeline kit: prompt, rubric, batch folders, and soft-gate tooling'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
 route: 'dispatch'
 review_loop_iteration: 0
