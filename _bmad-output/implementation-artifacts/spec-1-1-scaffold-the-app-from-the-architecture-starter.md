@@ -67,7 +67,8 @@ context:
 - npm warns `unrs-resolver` / `esbuild` install scripts not covered by `allowScripts`; local install and build unaffected.
 
 - Review patches applied (triage rows 1–6); build, lint, tsc, pins, ignore checks re-run and passing.
-- OPEN at completion: AC 5 (Vercel Preview / main → Production) awaits the founder adding `Impromptu` to the Vercel GitHub App's repository list; sprint status left at `review` until verified.
+- RESOLVED (was open at completion): AC 5 (Vercel Preview / main → Production) awaits the founder adding `Impromptu` to the Vercel GitHub App's repository list; sprint status left at `review` until verified.
+- AC 5 verified 2026-10-09: founder granted the Vercel GitHub App repo access; peer session created project `impromptu` (prj_i0HaOUOBQpQymx6kCGKVRiNytocY, Production branch `main`) via Vercel CLI. Pushing 439a655 triggered a Preview for PR #1; GitHub check `Vercel` passed ("Deployment has completed"). Previews use Vercel Authentication by default. Production deploys on first merge to `main`.
 
 ## Spec Change Log
 
