@@ -437,6 +437,16 @@
   letter-spacing: var(--typography-meta-tracking);
 }
 
+/* Brand mark role (DESIGN.md → On the Stage → Stage mark), reused by the
+   Setup header's brand mark (Story 3.7; cream on night instead of plum). */
+@utility text-stage-mark {
+  font-family: var(--typography-stage-mark-family);
+  font-size: var(--typography-stage-mark-size);
+  font-weight: var(--typography-stage-mark-weight);
+  line-height: var(--typography-stage-mark-leading);
+  letter-spacing: var(--typography-stage-mark-tracking);
+}
+
 /* Form label role (DESIGN.md → Text field). Added by Story 7.2. */
 @utility text-label {
   font-family: var(--typography-label-family);

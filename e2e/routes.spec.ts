@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { copy } from "../src/components/copy";
 
 const routes = [
-  ["/", "Impromptu"],
+  ["/", copy.setup.headline],
   ["/stage", "Stage"],
   ["/practice", "Practice"],
   ["/privacy", "privacy."],
