@@ -50,7 +50,6 @@ export const copy = {
     challengeInProgress: "You have a challenge in progress.",
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
-    emailSignupPitch: "Occasional emails when there's something new. Unsubscribe any time.",
   },
   privacy: {
     title: "privacy.",
@@ -80,6 +79,24 @@ export const copy = {
     contactLead: "Erasure requests:",
     // Working address; the founder confirms it in the Story 7.4 launch checklist (see deferred-work.md).
     contactEmail: "hello@impromptu.app",
+  },
+  signup: {
+    emailLabel: "Email",
+    // This is the consent text whose version is config.signup.consentTextVersion: bump that when this line changes.
+    consent: "Occasional emails when there's something new. Unsubscribe any time.",
+    privacyLink: "Privacy note",
+    opensInNewTab: "(opens in new tab)",
+    honeypotLabel: "Website",
+    submit: "Sign up",
+    submitting: "Signing up…",
+    success: "You're on the list.",
+    errors: {
+      invalid_email: "That email doesn't look right.",
+      consent_required: "Tick the box to confirm you want emails.",
+      rate_limited: "Too many tries. Wait a minute and try again.",
+      unavailable: "Couldn't sign you up just now. Try again in a moment.",
+      offline: "You're offline. Try again when you're connected.",
+    },
   },
 } as const;
 

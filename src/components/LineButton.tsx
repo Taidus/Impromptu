@@ -1,7 +1,7 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { FOCUS_RING_BASE, focusRingClassName, groundTextClassName, type Ground } from "./ground";
 
-export interface LineButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface LineButtonProps extends ComponentProps<"button"> {
   /** Which ground this button sits on, for text, border, and focus-ring color. */
   ground?: Ground;
 }
