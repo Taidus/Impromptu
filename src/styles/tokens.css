@@ -88,6 +88,8 @@
   --spacing-header-inset: 40px;
   --spacing-content-max: 1360px;
   --spacing-reading-max: 760px;
+  --spacing-seam-fade-min: 120px;
+  --spacing-seam-fade-max: 260px;
 
   /* DESIGN.md → Typography: phone is ≤ 860px, so desktop starts at 861px. */
   --breakpoint-desktop: 861px;
@@ -354,6 +356,41 @@
   font-weight: var(--typography-button-sun-weight);
   line-height: var(--typography-button-sun-leading);
   letter-spacing: var(--typography-button-sun-tracking);
+}
+
+/* Story 8.1: the journey's own headline/title roles — var already existed,
+   no utility yet. Same `@utility` form as the roles above. */
+@utility text-display {
+  font-family: var(--typography-display-family);
+  font-size: var(--typography-display-size);
+  font-weight: var(--typography-display-weight);
+  line-height: var(--typography-display-leading);
+  letter-spacing: var(--typography-display-tracking);
+}
+
+@utility text-card-title {
+  font-family: var(--typography-card-title-family);
+  font-size: var(--typography-card-title-size);
+  font-weight: var(--typography-card-title-weight);
+  line-height: var(--typography-card-title-leading);
+  letter-spacing: var(--typography-card-title-tracking);
+}
+
+@utility text-y2k-display {
+  font-family: var(--typography-y2k-display-family);
+  /* Phone ramp so the Y2K line never breaks a word. */
+  font-size: min(var(--typography-y2k-display-size), 16vw);
+  font-weight: var(--typography-y2k-display-weight);
+  line-height: var(--typography-y2k-display-leading);
+  letter-spacing: var(--typography-y2k-display-tracking);
+}
+
+@utility text-brief-setup {
+  font-family: var(--typography-brief-setup-family);
+  font-size: var(--typography-brief-setup-size);
+  font-weight: var(--typography-brief-setup-weight);
+  line-height: var(--typography-brief-setup-leading);
+  letter-spacing: var(--typography-brief-setup-tracking);
 }
 
 /* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
