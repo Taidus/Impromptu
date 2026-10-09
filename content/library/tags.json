@@ -10,5 +10,8 @@
   { "id": "object", "description": "Centers on a physical thing." },
   { "id": "place", "description": "Centers on a location or setting." },
   { "id": "sound", "description": "Centers on something heard." },
-  { "id": "color", "description": "Centers on color." }
+  { "id": "color", "description": "Centers on color." },
+  { "id": "tone", "description": "Names a genre or mood." },
+  { "id": "exclusion", "description": "A rule about what to leave out." },
+  { "id": "outcome", "description": "A rule about what may or may not happen." }
 ]
