@@ -2,7 +2,7 @@
 title: 'Story 1.7: Library hard gate: reachability, coverage, repeat headroom, and the build step'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 baseline_commit: '4d2a92215be466b71a81725ed5143a3156cc6d2e'
 route: 'dispatch'
 review_loop_iteration: 0
