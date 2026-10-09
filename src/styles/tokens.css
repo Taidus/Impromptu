@@ -11,6 +11,11 @@
  */
 
 @theme {
+  /* Clear Tailwind's default color palette first: components must use a
+     DESIGN.md token (e.g. `bg-ink`), never an unrelated default utility
+     like `text-red-500`. */
+  --color-*: initial;
+
   /* Grounds */
   --color-night: #121010;
   --color-night-glow: #221c19;
@@ -318,8 +323,12 @@
   --typography-stage-meta-phone-tracking: 0.14em;
 }
 
-/* Ready-to-use classes for the roles Story 3.1's Action components consume. */
-.text-stage-meta {
+/* Ready-to-use utilities for the roles Story 3.1's Action components
+   consume. Declared with `@utility`, not a plain class: a plain class lives
+   outside Tailwind's utility layer, so it would beat every Tailwind
+   utility regardless of order and could never take a variant (e.g.
+   `hover:text-button`). */
+@utility text-stage-meta {
   font-family: var(--typography-stage-meta-family);
   font-size: var(--typography-stage-meta-size);
   font-weight: var(--typography-stage-meta-weight);
@@ -327,7 +336,7 @@
   letter-spacing: var(--typography-stage-meta-tracking);
 }
 
-.text-button {
+@utility text-button {
   font-family: var(--typography-button-family);
   font-size: var(--typography-button-size);
   font-weight: var(--typography-button-weight);
@@ -335,7 +344,7 @@
   letter-spacing: var(--typography-button-tracking);
 }
 
-.text-button-sun {
+@utility text-button-sun {
   font-family: var(--typography-button-sun-family);
   font-size: var(--typography-button-sun-size);
   font-weight: var(--typography-button-sun-weight);

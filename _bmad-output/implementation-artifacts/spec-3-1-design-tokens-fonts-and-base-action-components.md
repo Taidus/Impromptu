@@ -2,7 +2,7 @@
 title: 'Design tokens, fonts, and base action components'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -62,6 +62,25 @@ baseline_commit: '4518307a414e701c12864257206d9604c8495338'
 - A font fallback entry quoted with embedded `"` (e.g. `'"Bodoni 72"'`) breaks `next/font`'s generated inline-style string at build time; pass fallback names unquoted (`"Bodoni 72"`) and let the loader quote them.
 - A CSS block comment containing a literal `*/` substring inside explanatory prose (e.g. writing `--font-*/--text-*`) closes the comment early and corrupts the rest of the stylesheet; avoided by writing out namespace names instead of using `*/`-style globs in comments.
 - Verification: `npm run lint`, `npm run typecheck`, `npm test` (30/30 passing, including the new guard), and `npm run build` (all 5 routes still statically prerendered, confirmed via `npm run check:static`) all pass clean.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | edge | Bodoni fallback `Bodoni 72` emitted unquoted, invalidating the font-family | high | Built CSS: `--font-bodoni-moda:"Bodoni Moda", Didot, Bodoni 72, serif`; an identifier starting with a digit is invalid, so every Bodoni role (the brand's display voice) falls back | patch |
+| 2 | blind, edge | Night Ink button edge removed on mouse focus | medium | `focus:outline-none` overrides the `outline` edge on `:focus` | patch |
+| 3 | blind, edge | Ink/Line/Stage icon buttons have no disabled state | low | No `disabled:` styles; hover/active still apply | patch |
+| 4 | blind, edge | Stage icon button: no required accessible name; caption stretches the 52px disc; plum glyph on any ground | medium | DESIGN → Stage icon button: 52px circle; NFR-1 accessible names | patch |
+| 5 | blind, edge | Typography helpers unlayered, beating utilities | low | Plain rules at the end of `tokens.css`; Tailwind v4 `@utility` is the fix | patch |
+| 6 | blind | Default Tailwind palette still available | low | No `--color-*: initial`; AR-23 token-only styling bypassable | patch |
+| 7 | blind | No `color-scheme: light` | low | DESIGN "No dark mode"; native controls still follow OS | patch |
+| 8 | blind | Sun button motion ignores reduced motion | low | `hover:-translate-y-0.5` without `motion-reduce:` | patch |
+| 9 | blind | `copy.ts` missing Stage icon strings | low | DESIGN names "SOUND OFF" caption; no back/sound strings | patch |
+| 10 | blind, edge, verif-gap | Token guard blind spots (`//` in strings, colour functions, file types) and no fixture | low | Pre-verified: a URL line hides hex/px; AC 3 untested negatively | patch |
+| 11 | verif-gap | Ground maps and disabled `SunButton` untested | low | Pre-verified: remapping `sun` focus ring passes all checks | patch |
+| 12 | blind | Bodoni `opsz` axis not loaded | low | DESIGN does not specify optical sizing | reject |
+| 13 | blind | Spacing namespace holds widths; dropped tokens lack TODOs | low | Naming follows DESIGN tokens; deferrals recorded in spec notes | reject |
+| 14 | verif-gap | One-off DESIGN↔tokens diff script not committed | low | Drift check would add tooling beyond scope | reject |
 
 ## Verification
 

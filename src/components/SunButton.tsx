@@ -19,13 +19,13 @@ export function SunButton({
 }: SunButtonProps) {
   const tone = disabled
     ? "bg-cream-dim text-ink-soft"
-    : "bg-gradient-to-b from-sun-light via-sun to-sun-deep text-ink shadow-sun-glow hover:-translate-y-0.5 active:translate-y-px";
+    : "bg-gradient-to-b from-sun-light via-sun to-sun-deep text-ink shadow-sun-glow hover:-translate-y-0.5 active:translate-y-px motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
 
   return (
     <button
       type={type}
       disabled={disabled}
-      className={`inline-flex min-h-target-min items-center justify-center gap-2 rounded-full px-6 text-button-sun uppercase transition-transform duration-[250ms] ease-out ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone} ${className}`}
+      className={`inline-flex min-h-target-min items-center justify-center gap-2 rounded-full px-6 text-button-sun uppercase transition-transform duration-[250ms] ease-out motion-reduce:transition-none ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone} ${className}`}
       {...props}
     />
   );

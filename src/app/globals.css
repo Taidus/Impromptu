@@ -2,7 +2,13 @@
 @import "../styles/tokens.css";
 
 /* DESIGN.md -> Colors: "No dark mode." Grounds are fixed by position in
-   the journey; prefers-color-scheme must never change them. */
+   the journey; prefers-color-scheme must never change them. Pinning
+   color-scheme stops the OS dark mode from darkening native controls
+   (scrollbars, form controls) that `prefers-color-scheme` doesn't touch. */
+:root {
+  color-scheme: light;
+}
+
 body {
   background: var(--color-paper);
   color: var(--color-ink);

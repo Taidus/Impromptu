@@ -13,12 +13,18 @@ export function LineButton({
   ground = "night",
   className = "",
   type = "button",
+  disabled,
   ...props
 }: LineButtonProps) {
+  const tone = disabled
+    ? "pointer-events-none border-cream-dim text-ink-soft"
+    : `border-current hover:bg-current/[0.08] active:bg-current/[0.12] ${groundTextClassName(ground)}`;
+
   return (
     <button
       type={type}
-      className={`inline-flex min-h-target-min items-center justify-center gap-2 rounded-full border border-current px-6 text-button uppercase transition-colors hover:bg-current/[0.08] active:bg-current/[0.12] ${groundTextClassName(ground)} ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${className}`}
+      disabled={disabled}
+      className={`inline-flex min-h-target-min items-center justify-center gap-2 rounded-full border px-6 text-button uppercase transition-colors ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone} ${className}`}
       {...props}
     />
   );

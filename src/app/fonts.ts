@@ -10,7 +10,7 @@ export const bodoniModa = Bodoni_Moda({
   subsets: ["latin"],
   style: ["normal", "italic"],
   display: "swap",
-  fallback: ["Didot", "Bodoni 72", "serif"],
+  fallback: ["Didot", "'Bodoni 72'", "serif"],
   variable: "--font-bodoni-moda",
 });
 

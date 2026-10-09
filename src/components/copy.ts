@@ -17,6 +17,13 @@ export const copy = {
     expression: "Make a feeling land.",
     revision: "Change it on purpose.",
   },
+  stage: {
+    back: "Back to setup",
+    soundOffCaption: "SOUND OFF",
+    soundOnCaption: "SOUND ON",
+    soundOffAnnounced: "Sound, off",
+    soundOnAnnounced: "Sound, on",
+  },
   button: {
     getAChallenge: "Get a challenge",
     revealNext: "Reveal next",
