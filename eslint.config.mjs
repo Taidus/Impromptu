@@ -49,7 +49,10 @@ const eslintConfig = defineConfig([
     files: ["src/domain/**/*.{ts,tsx}"],
     rules: {
       ...restrictImports(
-        allowLayers(["config"], "src/domain is the pure core: it imports only @/config and zod."),
+        allowLayers(
+          ["config", "domain"],
+          "src/domain is the pure core: it imports only @/config, @/domain (its own submodules), and zod.",
+        ),
         {
           group: ["next", "next/*", "react", "react/*", "react-dom", "react-dom/*"],
           message: "src/domain is the pure core: no framework imports.",
