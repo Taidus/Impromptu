@@ -1,0 +1,34 @@
+import { config } from "@/config/app";
+import type { ComposeLibrary } from "@/domain/compose/compose";
+import type { Session, Setup } from "@/domain/session/schema";
+
+/** Library-independent: valid immediately -- no stored data, no held Challenge, no Attempt. */
+export const emptySession: Session = {
+  state: "none",
+  challenge: null,
+  revealed: [],
+  locks: {},
+  attempt: null,
+  reflectionDraft: null,
+  lastRepId: null,
+  lastComposeError: null,
+  recent: [],
+};
+
+/**
+ * The first-visit `Setup`, resolving `config.setup.defaults.enabledMediums`'s `"all"` sentinel
+ * against the loaded library's real Medium ids -- the one piece of the default no domain schema
+ * can supply on its own (flagged in `src/domain/session/setup-fixture.ts` as this story's job).
+ */
+export function buildDefaultSetup(library: ComposeLibrary): Setup {
+  return {
+    level: config.setup.defaults.level,
+    performTiming: config.setup.defaults.performTiming,
+    enabledMediums: library.mediums.map((m) => m.id),
+    medium: config.setup.defaults.medium,
+    skillFocus: config.setup.defaults.skill,
+    quickReveal: config.setup.defaults.quickReveal,
+    sound: config.setup.defaults.sound,
+    ambientMotion: config.setup.defaults.ambientMotion,
+  };
+}

@@ -1,0 +1,72 @@
+import { describe, expect, it, vi } from "vitest";
+import { loadGeneratedLibrarySource, loadLibrary, prefetchOnIdle } from "./index";
+
+function validLibraryJson() {
+  return {
+    libraryVersion: "v1",
+    skills: [{ id: "skl.observation", revealText: "Observation", info: "Notice things.", tags: [] }],
+    mediums: [{ id: "med.drawing", revealText: "Drawing", info: "Draw it.", tags: [] }],
+    templates: [
+      {
+        id: "tpl.observation.explore.near-object",
+        skill: "skl.observation",
+        level: "explore",
+        mediums: ["med.drawing"],
+        briefPattern: "Draw {topic}.",
+        topicTags: ["object"],
+        styleTags: [],
+        constraintTags: [],
+        incompatible: [],
+        tags: [],
+      },
+    ],
+    topics: [
+      {
+        id: "top.near-object",
+        revealText: "An object near you",
+        briefText: "an object near you",
+        tags: ["object"],
+        requires: [],
+        excludes: [],
+      },
+    ],
+    styles: [],
+    constraints: [],
+  };
+}
+
+describe("loadLibrary", () => {
+  it("returns {ok:true, library} for a valid source", async () => {
+    const result = await loadLibrary(async () => validLibraryJson());
+    expect(result).toEqual({ ok: true, library: validLibraryJson() });
+  });
+
+  it("returns {ok:false, reason:'invalid'} for a shape that fails validation", async () => {
+    const result = await loadLibrary(async () => ({ libraryVersion: "v1" })); // missing every array
+    expect(result).toEqual({ ok: false, reason: "invalid" });
+  });
+
+  it("returns {ok:false, reason:'fetch_failed'} when the source rejects, never throwing", async () => {
+    const result = await loadLibrary(async () => {
+      throw new Error("network down");
+    });
+    expect(result).toEqual({ ok: false, reason: "fetch_failed" });
+  });
+});
+
+describe("loadGeneratedLibrarySource", () => {
+  it("is a clearly-named stub that rejects until the Story 1.7 follow-up wires it", async () => {
+    await expect(loadGeneratedLibrarySource()).rejects.toThrow(/not wired yet/);
+  });
+});
+
+describe("prefetchOnIdle", () => {
+  it("runs the callback (via the setTimeout fallback in this non-browser test env) and swallows its rejection", async () => {
+    vi.useFakeTimers();
+    const run = vi.fn().mockRejectedValue(new Error("boom"));
+    prefetchOnIdle(run);
+    await vi.runAllTimersAsync();
+    expect(run).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+});
