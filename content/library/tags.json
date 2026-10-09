@@ -1,0 +1,14 @@
+[
+  { "id": "person", "description": "Involves a single person, including the user or someone else." },
+  { "id": "people", "description": "Involves more than one person." },
+  { "id": "camera", "description": "Needs a camera to capture the result." },
+  { "id": "text", "description": "Produces written words." },
+  { "id": "visual", "description": "Produces something seen rather than read or heard." },
+  { "id": "voice", "description": "Produces something spoken aloud." },
+  { "id": "outdoor", "description": "Happens or is found outside." },
+  { "id": "indoor", "description": "Happens or is found inside." },
+  { "id": "object", "description": "Centers on a physical thing." },
+  { "id": "place", "description": "Centers on a location or setting." },
+  { "id": "sound", "description": "Centers on something heard." },
+  { "id": "color", "description": "Centers on color." }
+]

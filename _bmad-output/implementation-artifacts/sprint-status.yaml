@@ -38,7 +38,7 @@ development_status:
   epic-1: in-progress
   1-1-scaffold-the-app-from-the-architecture-starter: done
   1-2-architecture-guardrails-config-module-ports-and-test-harness: done
-  1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums: backlog
+  1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums: review
   1-4-one-compatibility-function-and-one-brief-renderer: backlog
   1-5-transcribe-the-three-cl-5-anchors-verbatim: backlog
   1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors: backlog

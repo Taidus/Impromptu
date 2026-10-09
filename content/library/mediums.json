@@ -1,0 +1,6 @@
+[
+  { "id": "med.writing", "revealText": "Writing", "info": "Answer in words on the page.", "tags": ["text"] },
+  { "id": "med.drawing", "revealText": "Drawing", "info": "Answer with lines and marks on paper or screen.", "tags": ["visual"] },
+  { "id": "med.photography", "revealText": "Photography", "info": "Answer with photos you take.", "tags": ["camera", "visual"] },
+  { "id": "med.spoken-storytelling", "revealText": "Spoken storytelling", "info": "Answer out loud, as if telling someone.", "tags": ["voice"] }
+]

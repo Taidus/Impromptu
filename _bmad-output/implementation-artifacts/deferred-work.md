@@ -12,3 +12,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-architecture-guardrails-config-module-ports-and-test-harness.md`
   summary: Extend the AD-13 privacy guard beyond package.json (grep `src/` for `<Script src=`, `next/third-parties`, known tracker hosts) in Story 9.4.
   evidence: An analytics loader via `next/script` or `next/third-parties` needs no new dependency and passes `check:privacy`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-library-schema-id-rules-tag-vocabulary-skills-and-mediums.md`
+  summary: Pin `Anchor.constraintId: null`, `BatchManifest.review.date` format, and `edits[]` item shape with real fixtures when anchors (1.5) and manifests (1.8) first consume them.
+  evidence: Verification-gap review showed dropping `.nullable()`, loosening `date` to text, or `edits` to `z.any()` passes all 1.3 tests.
