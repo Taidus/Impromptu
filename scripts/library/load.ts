@@ -1,6 +1,7 @@
 // Loads library content from disk and parses it through the Story 1.3 schemas.
 // Pure I/O + parsing only — no gate rules here (see gate.ts). Never throws: every
-// parse failure becomes an `issue` so the gate can report all of them at once.
+// parse failure (bad JSON, a non-array file, a missing required file, a schema
+// mismatch) becomes an `issue` so the gate can report all of them at once.
 import fs from "node:fs";
 import path from "node:path";
 import { Anchor, BatchManifest, Constraint, Medium, Skill, Style, Tag, Template, Topic } from "../../src/domain/library/schema";
@@ -29,9 +30,27 @@ export interface LoadedLibrary {
   issues: LoadIssue[];
 }
 
-function readJsonArray(filePath: string): unknown[] {
-  const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  if (!Array.isArray(raw)) throw new Error(`${filePath}: expected a JSON array`);
+const FILL_FILENAMES = ["topics.json", "styles.json", "constraints.json"];
+const KNOWN_BATCH_FILENAMES = new Set(["manifest.json", "templates.json", ...FILL_FILENAMES]);
+
+/** Reads and JSON.parses a file, returning `undefined` (and recording an issue) instead
+ * of throwing on bad JSON, a missing file, or a non-array body. */
+function readJsonArray(filePath: string, issues: LoadIssue[], required: boolean): unknown[] | undefined {
+  if (!fs.existsSync(filePath)) {
+    if (required) issues.push({ source: filePath, message: "required file is missing" });
+    return undefined;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (e) {
+    issues.push({ source: filePath, message: `invalid JSON: ${e instanceof Error ? e.message : String(e)}` });
+    return undefined;
+  }
+  if (!Array.isArray(raw)) {
+    issues.push({ source: filePath, message: "expected a JSON array" });
+    return undefined;
+  }
   return raw;
 }
 
@@ -39,10 +58,12 @@ function parseEach<T>(
   filePath: string,
   schema: { safeParse: (v: unknown) => { success: boolean; data?: T; error?: { issues: { message: string }[] } } },
   issues: LoadIssue[],
+  options: { required?: boolean } = {},
 ): T[] {
-  if (!fs.existsSync(filePath)) return [];
+  const raw = readJsonArray(filePath, issues, options.required ?? false);
+  if (raw === undefined) return [];
   const out: T[] = [];
-  for (const item of readJsonArray(filePath)) {
+  for (const item of raw) {
     const result = schema.safeParse(item);
     if (result.success && result.data !== undefined) {
       out.push(result.data);
@@ -56,32 +77,25 @@ function parseEach<T>(
   return out;
 }
 
-const FILL_FILES: [string, typeof Topic | typeof Style | typeof Constraint][] = [
-  ["topics.json", Topic],
-  ["styles.json", Style],
-  ["constraints.json", Constraint],
-];
-
 function loadFills(
   dir: string,
   issues: LoadIssue[],
   source: string,
   buckets: { topics: Sourced<Topic>[]; styles: Sourced<Style>[]; constraints: Sourced<Constraint>[] },
 ) {
-  for (const [file, schema] of FILL_FILES) {
-    const list = parseEach<Topic | Style | Constraint>(path.join(dir, file), schema, issues);
-    const bucket = file === "topics.json" ? buckets.topics : file === "styles.json" ? buckets.styles : buckets.constraints;
-    for (const value of list) bucket.push({ value: value as never, source });
-  }
+  for (const value of parseEach<Topic>(path.join(dir, "topics.json"), Topic, issues)) buckets.topics.push({ value, source });
+  for (const value of parseEach<Style>(path.join(dir, "styles.json"), Style, issues)) buckets.styles.push({ value, source });
+  for (const value of parseEach<Constraint>(path.join(dir, "constraints.json"), Constraint, issues))
+    buckets.constraints.push({ value, source });
 }
 
 export function loadLibrary(root: string): LoadedLibrary {
   const issues: LoadIssue[] = [];
   const libraryDir = path.join(root, "content", "library");
 
-  const tags = parseEach<Tag>(path.join(libraryDir, "tags.json"), Tag, issues);
-  const skills = parseEach<Skill>(path.join(libraryDir, "skills.json"), Skill, issues);
-  const mediums = parseEach<Medium>(path.join(libraryDir, "mediums.json"), Medium, issues);
+  const tags = parseEach<Tag>(path.join(libraryDir, "tags.json"), Tag, issues, { required: true });
+  const skills = parseEach<Skill>(path.join(libraryDir, "skills.json"), Skill, issues, { required: true });
+  const mediums = parseEach<Medium>(path.join(libraryDir, "mediums.json"), Medium, issues, { required: true });
 
   const templates: Sourced<Template>[] = [];
   const topics: Sourced<Topic>[] = [];
@@ -94,7 +108,7 @@ export function loadLibrary(root: string): LoadedLibrary {
     templates.push({ value, source: "anchors" });
   }
   loadFills(anchorsDir, issues, "anchors", { topics, styles, constraints });
-  const anchors = parseEach<Anchor>(path.join(anchorsDir, "anchors.json"), Anchor, issues);
+  const anchors = parseEach<Anchor>(path.join(anchorsDir, "anchors.json"), Anchor, issues, { required: true });
 
   const batchesDir = path.join(libraryDir, "batches");
   const batchFolders = fs.existsSync(batchesDir)
@@ -107,12 +121,24 @@ export function loadLibrary(root: string): LoadedLibrary {
 
   for (const folder of batchFolders) {
     const dir = path.join(batchesDir, folder);
+
+    for (const entry of fs.readdirSync(dir)) {
+      if (entry.endsWith(".json") && !KNOWN_BATCH_FILENAMES.has(entry))
+        issues.push({ source: path.join(dir, entry), message: `unexpected file "${entry}" in batch folder "${folder}"` });
+    }
+
     const manifestPath = path.join(dir, "manifest.json");
     if (!fs.existsSync(manifestPath)) {
       issues.push({ source: dir, message: `batch folder "${folder}" has no manifest.json` });
       continue;
     }
-    const manifestRaw = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    let manifestRaw: unknown;
+    try {
+      manifestRaw = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    } catch (e) {
+      issues.push({ source: manifestPath, message: `invalid JSON: ${e instanceof Error ? e.message : String(e)}` });
+      continue;
+    }
     const manifestResult = BatchManifest.safeParse(manifestRaw);
     if (!manifestResult.success) {
       issues.push({ source: manifestPath, message: manifestResult.error.issues.map((i) => i.message).join("; ") });

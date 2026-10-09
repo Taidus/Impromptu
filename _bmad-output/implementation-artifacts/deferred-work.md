@@ -21,3 +21,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-transcribe-the-three-cl-5-anchors-verbatim.md`
   summary: Story 1.8 PROMPT/RUBRIC must fix a `briefText` format convention per slot (full sentence vs lowercase fragment) and keep Template-specific phrasing ("Keep people out of both.") from being reused by other Templates.
   evidence: Anchor fills mix sentence-form and fragment-form `briefText`; nothing in data or schema records which a slot expects, so mixed batches can render lowercase sentence starts or doubled periods.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors.md`
+  summary: Add a subprocess test that `npm run library:validate` exits non-zero on a failing library, when the first real batches land (Story 1.9).
+  evidence: `process.exitCode = report.ok ? 0 : 1` is the only thing making the CI step block merges; nothing exercises the failure exit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft.md`
+  summary: After 1.6 and 1.8 both merge, make `scripts/library/sample.ts` reuse 1.6's `load.ts` instead of its own `loadActiveLibrary` file reading.
+  evidence: The two stories were built in parallel and each wrote its own library loader.

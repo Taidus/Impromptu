@@ -2,7 +2,7 @@
 title: 'Story 1.6: Library hard gate: integrity, Brief rules, Time Limits, anchors, and the CL-4 lint'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -75,18 +75,39 @@ context:
 - Gate tunables deliberately live in a new `scripts/library/gate-config.ts`, not in `src/config/app.ts` (AR-21's runtime config): `src/config/app.ts` ships into the client bundle, and the 160-char cap / CL-4 word lists are build-time-only. This is a judgment call (no founder-visible effect), documented here rather than raised as an Open Question.
 - `gate.ts` is a pure function (`runGate(lib, config)`, no `fs`) so Story 1.7's `build.ts` can reuse `load.ts` + `gate.ts` unchanged and layer its own reachability/coverage/headroom checks and `coverage.enforce` flag on top.
 - Retirement model: an entity is retired if its own `retired` field is `true` **or** its id appears in any loaded batch's `manifest.retire[]`. Reference-resolution checks (`incompatible[]`, `retire[]`, anchor fields) use the full id set (including retired), matching "retired entries ... still resolvable"; only the Brief-rule enumeration and the CL-4 lint use the active (non-retired) subset.
-- `timeLimitSec`-below-Perform is enforced by the Story 1.3 schema refinement already; the loader's per-item `safeParse` surfaces that as an `integrity.parse` gate failure naming the Template id rather than re-implementing the rule in `gate.ts`.
+- `timeLimitSec`-below-Perform is enforced by the Story 1.3 schema refinement (surfaced via the loader's `safeParse` as `integrity.parse`) **and** directly by `gate.ts` itself (`integrity.time-limit`), since `gate.test.ts` exercises `runGate` with hand-built fixtures that bypass schema parsing entirely — belt-and-suspenders, added in the review-fix round below.
 - A compatible fill combination whose `render()` call returns `{ok:false}` (e.g. a Template's `topicTags` and its `briefPattern` tokens disagree) is intentionally **not** a gate failure in this story — Story 1.7's reachability check ("≥3 valid combinations per Template") is what catches a Template with zero renderable Briefs. Covered by a dedicated test (`gate.test.ts` → "does not fail when a compatible combination's render fails").
 - CL-4 word lists (`styleRuleStartWords`, `styleCountWords`, `constraintMoodWords`) start as short, literal examples straight from the epics AC text plus a small starter mood-word set; marked with `ponytail:` comments in `gate-config.ts` to extend as real batches (Story 1.8/1.9) surface false negatives.
 - Sentence counting is a cheap heuristic (`[^.!?]*[.!?]+` groups) — it doesn't understand abbreviations; acceptable for the controlled, authored Brief patterns this gate validates.
 - `npm run library:validate` passes clean (`ok:true`) against the real `content/library` tree (anchors only, zero batches); `gate-report.json` is written to the repo root and gitignored.
 
+**Review-fix round (Review Triage Log rows 1–12, patch-routed):** `load.ts` now catches malformed JSON / a non-array body instead of throwing, and treats `tags.json`/`skills.json`/`mediums.json`/`anchors/anchors.json` as required (missing → issue) and flags any unexpected `*.json` filename in a batch folder; `loadFills` is three typed `parseEach` calls, no `as never`. `validate.ts` resolves the repo root from its own file location, not `process.cwd()`. `gate.ts`: `entityIds` now covers templates+fills only (never skills/Mediums); each anchor field resolves against its own kind-specific id set (a field pointing at the wrong kind is now actually reported, not silently treated as "already reported"); an anchor resolving to a retired id fails `anchor.retired`; `manifest.edits[].id` and `review.rejectedIds` are resolved too; all by-id lookups are first-wins, matching the duplicate-id check; zero loaded anchors fails `anchor.missing`; `render()`'s `unknown_slot` now reports `brief.braces` and `no_pattern_for_medium` reports `integrity.no-pattern` (only `missing_fill`/`unused_fill` stay reachability-deferred); a Brief must end with `.`/`!`/`?`, and a decimal point (`3.5`) no longer counts as a sentence break; every `GateFailure` now carries an optional `source` (the culprit's batch/`anchors` origin) and, for a Brief-rule failure caused by one fill's own text, names that fill's id instead of the Template's; failures are de-duplicated by (rule, culprit id), merging distinct messages rather than dropping them. CL-4: the count check now only matches a standalone digit run or number word (not `1920s`, `35mm`, or a hyphenated `one-point`), and the mood lint also flags a phrase made only of mood words, intensifiers, and "and"/"or" (`very moody`, `dreamy and soft`), checked against `revealText` and `briefText` alike, and skipped for retired entities. `load.test.ts`'s real-tree assertion checks minimums, not exact counts.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Loader throws on malformed JSON / manifest despite "never throws" | high | Unguarded `JSON.parse` in `readJsonArray` and manifest read; one bad file aborts the gate with no report | patch |
+| 2 | blind, edge | Missing base files and zero anchors pass the gate | high | Edge reviewer ran from an empty cwd: PASS with 0 of everything; CL-5 anchor guarantee void | patch |
+| 3 | edge | `validate.ts` depends on cwd | medium | Root from `process.cwd()`; combined with #2 an empty library passes | patch |
+| 4 | blind, edge | Anchor fields resolve against any kind; skill/medium ids resolve for refs; anchors may use retired entities; edits/rejectedIds unresolved; last-wins maps | medium | `entityIds` built from `allIds`; anchor loop `continue`s without a report | patch |
+| 5 | edge | `unknown_slot` and `no_pattern_for_medium` silently skip Brief checks | medium | `if (!result.ok) continue` before checks | patch |
+| 6 | blind, edge | Sentence count accepts unterminated tails; decimals inflate count | low | `countSentences` regex behaviour | patch |
+| 7 | blind, edge | Failures lack batch/fill attribution; one bad fill floods the report | low | `GateFailure` has no `source`; failures keyed by template per combination | patch |
+| 8 | blind | CL-4 lint false positives (`1920s`, `one-point`) and misses multi-word moods | low | `/\d/` and `\bone\b`; mood lint matches whole single words only | patch |
+| 9 | blind | `loadFills` uses `as never` | low | Type safety lost by filename switch | patch |
+| 10 | blind | Real-tree test hardcodes counts | low | Every content batch would break `npm test` | patch |
+| 11 | blind, verif-gap | Missing tests: Time Limit, retired lint exclusion, `revealText` lint, `anchor.incompatible`, malformed input | low | Pre-verified mutations pass all tests | patch |
+| 12 | edge | Misnamed batch content files ignored | low | Content silently dropped | patch |
+| 13 | edge | Draft batches gated like accepted ones | false | AD-17: the hard gate runs on the draft batch under review; only `build.ts` (1.7) restricts to accepted | reject |
+| 14 | edge | Emoji counted as two UTF-16 units | low | Briefs are authored plain text; negligible | reject |
+| 15 | verif-gap | CLI non-zero exit never exercised | low | Needs a subprocess harness; no real batches until 1.9 | defer |
 
 ## Verification
 
 **Commands:**
 - `npm run lint && npm run typecheck && npm test && npm run library:validate && npm run build` -- expected: all exit 0
 - **Actual (2026-10-09):** lint clean; typecheck clean; `npm test` 12 files / 119 tests passed; `library:validate` → `Library gate: PASS — 3 templates, 3 topics, 1 styles, 3 constraints, 3 anchors, 0 batches, 0 retired.` (exit 0); `next build` compiled and prerendered all 5 routes statically (exit 0). All green.
+- **Review-fix round (2026-10-09):** re-ran the same full chain after patching rows 1–12 above — lint clean, typecheck clean, `npm test` 12 files / 136 tests passed (14 new tests), `library:validate` still `PASS` against the real tree (including from a non-repo cwd, confirming the root-resolution fix), `next build` green.

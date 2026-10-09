@@ -10,14 +10,14 @@ function writeJson(filePath: string, data: unknown) {
 }
 
 describe("loadLibrary — real content tree", () => {
-  it("loads content/library with zero issues (anchors only, no batches yet)", () => {
+  it("loads content/library with zero issues", () => {
+    // Minimums only, never exact counts: a real content batch landing must not break this.
     const lib = loadLibrary(path.resolve(__dirname, "../.."));
     expect(lib.issues).toEqual([]);
-    expect(lib.skills).toHaveLength(6);
-    expect(lib.mediums).toHaveLength(4);
-    expect(lib.templates).toHaveLength(3);
-    expect(lib.anchors).toHaveLength(3);
-    expect(lib.manifests).toHaveLength(0); // content/library/batches/ holds only .gitkeep so far
+    expect(lib.skills.length).toBeGreaterThanOrEqual(6);
+    expect(lib.mediums.length).toBeGreaterThanOrEqual(4);
+    expect(lib.templates.length).toBeGreaterThanOrEqual(3);
+    expect(lib.anchors.length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -30,6 +30,7 @@ describe("loadLibrary — batch folders", () => {
     writeJson(path.join(lib, "skills.json"), []);
     writeJson(path.join(lib, "mediums.json"), []);
     writeJson(path.join(lib, "tags.json"), [{ id: "t", description: "t" }]);
+    writeJson(path.join(lib, "anchors", "anchors.json"), []);
   });
 
   afterEach(() => {
@@ -104,5 +105,49 @@ describe("loadLibrary — batch folders", () => {
     expect(lib.topics.map((t) => t.value.id)).toEqual(["top.good"]);
     expect(lib.issues).toHaveLength(1);
     expect(lib.issues[0].message).toContain("not-a-topic-id");
+  });
+
+  it("reports malformed JSON (base file and batch file) as issues instead of throwing", () => {
+    fs.writeFileSync(path.join(root, "content", "library", "tags.json"), "{ not json");
+    const batches = path.join(root, "content", "library", "batches");
+    writeJson(path.join(batches, "2026-05-01-topics-broken", "manifest.json"), {
+      status: "draft",
+      generator: { tool: "cli", model: "m", promptVersion: "1" },
+      rubricVersion: "1",
+      review: null,
+    });
+    fs.writeFileSync(path.join(batches, "2026-05-01-topics-broken", "topics.json"), "[not valid json");
+
+    expect(() => loadLibrary(root)).not.toThrow();
+    const lib = loadLibrary(root);
+    expect(lib.tags).toEqual([]);
+    expect(lib.topics).toEqual([]);
+    expect(lib.issues.some((i) => i.source.endsWith("tags.json") && i.message.includes("invalid JSON"))).toBe(true);
+    expect(lib.issues.some((i) => i.source.endsWith("topics.json") && i.message.includes("invalid JSON"))).toBe(true);
+  });
+
+  it("reports a missing required base file as an issue instead of throwing", () => {
+    fs.rmSync(path.join(root, "content", "library", "tags.json"));
+    expect(() => loadLibrary(root)).not.toThrow();
+    const lib = loadLibrary(root);
+    expect(lib.tags).toEqual([]);
+    expect(lib.issues.some((i) => i.source.endsWith("tags.json") && i.message.includes("required file is missing"))).toBe(
+      true,
+    );
+  });
+
+  it("flags an unexpected *.json filename inside a batch folder", () => {
+    const batches = path.join(root, "content", "library", "batches");
+    writeJson(path.join(batches, "2026-06-01-topics-extra", "manifest.json"), {
+      status: "draft",
+      generator: { tool: "cli", model: "m", promptVersion: "1" },
+      rubricVersion: "1",
+      review: null,
+    });
+    writeJson(path.join(batches, "2026-06-01-topics-extra", "topics.json"), []);
+    writeJson(path.join(batches, "2026-06-01-topics-extra", "notes.json"), { stray: true });
+
+    const lib = loadLibrary(root);
+    expect(lib.issues.some((i) => i.message.includes('unexpected file "notes.json"'))).toBe(true);
   });
 });

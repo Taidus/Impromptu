@@ -35,7 +35,11 @@ export const gateConfig = {
       "rustic",
       "retro",
       "futuristic",
+      "soft",
     ],
+    // Words that only intensify a mood word ("very moody") rather than add a separate
+    // claim; a phrase made of only these plus mood words plus "and"/"or" still lints.
+    moodIntensifiers: ["very", "so", "quite", "really", "extremely", "incredibly", "somewhat", "slightly"],
   },
 } as const;
 

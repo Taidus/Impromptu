@@ -2,11 +2,15 @@
 // gate, writes gate-report.json, prints a human summary, and exits non-zero on failure.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { gateConfig } from "./gate-config";
 import { runGate } from "./gate";
 import { loadLibrary } from "./load";
 
-const root = process.cwd();
+// Resolve the repo root from this file's own location, not process.cwd(), so the gate
+// behaves the same regardless of where `npm run library:validate` is invoked from.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 const lib = loadLibrary(root);
 const report = runGate(lib, gateConfig);
 
@@ -21,7 +25,7 @@ console.log(
 );
 if (!report.ok) {
   console.log(`${report.failures.length} failure(s):`);
-  for (const f of report.failures) console.log(`  [${f.rule}] ${f.id}: ${f.message}`);
+  for (const f of report.failures) console.log(`  [${f.rule}] ${f.id}${f.source ? ` (${f.source})` : ""}: ${f.message}`);
 }
 console.log(`Report written to ${reportPath}`);
 
