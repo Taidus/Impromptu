@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleSubscribe, type ResendContactsClient } from "./subscribe";
 
 const segmentId = "seg_test";
@@ -37,9 +37,18 @@ describe("handleSubscribe", () => {
     expect(client.contacts.create).not.toHaveBeenCalled();
   });
 
-  it("missing consent returns consent_required", async () => {
+  it("consent false returns consent_required", async () => {
     const client = fakeClient();
     const result = await handleSubscribe({ ...validBody, consent: false }, client, segmentId);
+    expect(result).toEqual({ ok: false, error: "consent_required" });
+    expect(client.contacts.create).not.toHaveBeenCalled();
+  });
+
+  it("consent omitted entirely returns consent_required (not invalid_email)", async () => {
+    const { consent, ...bodyWithoutConsent } = validBody;
+    void consent;
+    const client = fakeClient();
+    const result = await handleSubscribe(bodyWithoutConsent, client, segmentId);
     expect(result).toEqual({ ok: false, error: "consent_required" });
     expect(client.contacts.create).not.toHaveBeenCalled();
   });
@@ -97,9 +106,41 @@ describe("handleSubscribe", () => {
     expect(result).toEqual({ ok: false, error: "unavailable" });
   });
 
+  it("provider failure (update fails even though segments.add succeeds) returns unavailable", async () => {
+    const client = fakeClient({
+      create: vi.fn().mockResolvedValue({ error: { message: "exists" } }),
+      get: vi.fn().mockResolvedValue({ data: { id: "contact_1" }, error: null }),
+      update: vi.fn().mockResolvedValue({ error: { message: "down" } }),
+    });
+    const result = await handleSubscribe(validBody, client, segmentId);
+    expect(result).toEqual({ ok: false, error: "unavailable" });
+    expect(client.contacts.segments.add).toHaveBeenCalled();
+  });
+
   it("client throwing is caught and returns unavailable", async () => {
     const client = fakeClient({ create: vi.fn().mockRejectedValue(new Error("network down")) });
     const result = await handleSubscribe(validBody, client, segmentId);
     expect(result).toEqual({ ok: false, error: "unavailable" });
+  });
+
+  describe("provider-failure logging", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("never logs the email address across any failure branch", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const client = fakeClient({
+        create: vi.fn().mockResolvedValue({ error: { name: "down", statusCode: 500 } }),
+        get: vi.fn().mockResolvedValue({ data: null, error: { name: "down", statusCode: 500 } }),
+      });
+
+      await handleSubscribe(validBody, client, segmentId);
+
+      expect(errorSpy).toHaveBeenCalled();
+      for (const call of errorSpy.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain(validBody.email);
+      }
+    });
   });
 });

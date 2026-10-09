@@ -10,6 +10,7 @@ vi.mock("resend", () => ({
 }));
 
 const { POST } = await import("./route");
+const { Resend } = await import("resend");
 
 const jsonRequest = (body: unknown) =>
   new Request("http://localhost/api/subscribe", {
@@ -25,21 +26,26 @@ describe("POST /api/subscribe", () => {
     process.env.RESEND_API_KEY = "test-key";
     process.env.RESEND_SEGMENT_ID = "seg_test";
     create.mockClear();
+    (Resend as unknown as ReturnType<typeof vi.fn>).mockClear();
   });
 
   afterEach(() => {
     process.env = { ...originalEnv };
   });
 
-  it("wires a valid signup through to Resend and responds ok:true", async () => {
+  it("constructs Resend with the API key and calls create with the segment, both from env", async () => {
     const res = await POST(
       jsonRequest({ email: "visitor@example.com", consent: true, consentTextVersion: "2026-10-09", website: "" }),
     );
     expect(await res.json()).toEqual({ ok: true });
+    expect(Resend).toHaveBeenCalledWith("test-key");
     expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ segments: [{ id: "seg_test" }] }),
+    );
   });
 
-  it("honeypot short-circuits before Resend is ever constructed", async () => {
+  it("honeypot short-circuits before create is called (Resend is still constructed)", async () => {
     const res = await POST(
       jsonRequest({
         email: "visitor@example.com",

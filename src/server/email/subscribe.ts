@@ -27,6 +27,12 @@ export function createResendClient(apiKey: string): ResendContactsClient {
   return new Resend(apiKey);
 }
 
+/** Logs a provider failure by stage, never the email address (AD-13). */
+function logProviderError(stage: "create" | "get" | "segments.add" | "update" | "exception", error: unknown): void {
+  const e = error as { name?: unknown; statusCode?: unknown } | null | undefined;
+  console.error(`subscribe: Resend ${stage} failed`, { name: e?.name, statusCode: e?.statusCode });
+}
+
 /**
  * AD-14 signup contract. Never throws: every branch resolves a
  * `SubscribeResponse`, including when the client's promises reject.
@@ -44,12 +50,23 @@ export async function handleSubscribe(
     return { ok: true };
   }
 
+  // Email validity is checked on its own so a bad email always reports
+  // invalid_email regardless of what consent holds.
+  const emailResult = subscribeRequestSchema.shape.email.safeParse(body?.email);
+  if (!emailResult.success) {
+    return { ok: false, error: "invalid_email" };
+  }
+
+  // Consent is a value check (must be exactly `true`), not a type check, so
+  // missing/null/non-boolean consent all map to consent_required.
+  if (body?.consent !== true) {
+    return { ok: false, error: "consent_required" };
+  }
+
+  // Everything else (consentTextVersion, website shape) is validated last.
   const parsed = subscribeRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     return { ok: false, error: "invalid_email" };
-  }
-  if (parsed.data.consent !== true) {
-    return { ok: false, error: "consent_required" };
   }
 
   const { email, consentTextVersion } = parsed.data;
@@ -68,9 +85,11 @@ export async function handleSubscribe(
     if (!created.error) {
       return { ok: true };
     }
+    logProviderError("create", created.error);
 
     const existing = await client.contacts.get({ email });
     if (existing.error || !existing.data) {
+      if (existing.error) logProviderError("get", existing.error);
       return { ok: false, error: "unavailable" };
     }
 
@@ -78,11 +97,14 @@ export async function handleSubscribe(
       client.contacts.segments.add({ email, segmentId }),
       client.contacts.update({ email, properties }),
     ]);
+    if (added.error) logProviderError("segments.add", added.error);
+    if (updated.error) logProviderError("update", updated.error);
     if (added.error || updated.error) {
       return { ok: false, error: "unavailable" };
     }
     return { ok: true };
-  } catch {
+  } catch (err) {
+    logProviderError("exception", err);
     return { ok: false, error: "unavailable" };
   }
 }

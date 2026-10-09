@@ -2,7 +2,7 @@
 title: 'Subscribe endpoint with consent, honeypot, and Resend'
 type: 'feature' # feature | bugfix | refactor | chore
 created: '2026-10-09'
-status: 'in-progress' # draft | ready-for-dev | in-progress | in-review | done
+status: 'in-review' # draft | ready-for-dev | in-progress | in-review | done
 route: 'dispatch' # oneshot | dispatch
 review_loop_iteration: 0
 context: []
@@ -72,6 +72,25 @@ baseline_commit: '4518307a414e701c12864257206d9604c8495338'
 - No logging was added at all (not required by the AC), which trivially satisfies "no log line contains an email address."
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | verif-gap, edge | Missing/non-boolean `consent` returns `invalid_email`, not `consent_required` | medium | Code: schema failure short-circuits before the consent check; AC requires `consent !== true` → `consent_required` | patch |
+| 2 | blind | Response is a hand-written type, AC says one zod schema defines request and response | low | `src/shared/subscribe.ts` exports a TS union only | patch |
+| 3 | blind, edge | Deprecated `z.string().email()`; pasted email with spaces rejected; `consentTextVersion` unbounded | low | zod 4.6.5 deprecates the method; no trim; empty/huge version reaches Resend consent record | patch |
+| 4 | blind | Provider failures are silent | medium | Every error branch returns `unavailable` with no log; AD-13 only forbids logging the email, and Vercel logs are the sole operational signal (AD-20) | patch |
+| 5 | verif-gap, blind | `update` failure on existing-contact path untested | low | Pre-verified: reducing the check to `added.error` passes all tests | patch |
+| 6 | verif-gap, blind, edge | Route test doesn't assert env wiring; honeypot test title is wrong | low | Pre-verified: swapping key/segment still passes; `route.ts` constructs `Resend` before `handleSubscribe` | patch |
+| 7 | blind | `package-lock.json` missing | false | Orchestrator excluded the lockfile from the review diff; commit `e68d001` includes it (+50 lines) | reject |
+| 8 | edge | `rate_limited` never produced | false | AD-14: rate limiting is the Vercel WAF 429, mapped to `rate_limited` by the client; server never emits it | reject |
+| 9 | edge | Any `create` error falls into the existing-contact lookup | false | AD-14 prescribes exactly this because Resend documents no duplicate error | reject |
+| 10 | edge | Env check precedes honeypot | low | Only when Production env is missing; config failure, not user-facing | reject |
+| 11 | edge | `segments.add`/`update` run in parallel; partial success | low | Both failures already return `unavailable`; retry is idempotent | reject |
+| 12 | edge | Unbounded request body | low | Platform body limit plus WAF 5 req/60 s; adds guard complexity | reject |
+| 13 | edge | Non-string honeypot value returns `invalid_email` | low | Bots fill text fields with strings; unlikely | reject |
+| 14 | blind | All responses HTTP 200 | low | AD-14 contract is the JSON body; 503 is optional | reject |
+| 15 | blind | Env vars undocumented locally | low | Story 7.4 owns environments and the launch checklist | reject |
+| 16 | blind | Missing tests for non-JSON body, missing segment env, `get` null data | low | Covered by the same branches as patched tests; marginal | reject |
 
 ## Verification
 
