@@ -44,3 +44,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
   summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
   evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-practice-page-with-empty-and-storage-states.md`
+  summary: Give the store a history-only readiness signal (e.g. `historyStatus`) so /practice stops showing the loading placeholder as soon as the Repository is read, instead of waiting for the idle-scheduled library load.
+  evidence: `status` stays `loading` on a first visit until the library resolves and a default Setup is persisted; the Practice page never needs the library.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
-import { createMemoryRawStore } from "@/adapters/storage/raw";
+import { createMemoryRawStore, type RawStore } from "@/adapters/storage/raw";
 import { createRepository } from "@/adapters/storage";
 import { fakeClock, seededRandom } from "@/domain/test-doubles";
 import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
@@ -338,6 +338,67 @@ describe("createStore — cross-tab Setup", () => {
     expect(store.getState().setup).toEqual(otherTabSetup);
     const stored = repoB.load<Setup>("setup");
     expect(stored.ok && stored.value?.data).toEqual(otherTabSetup);
+  });
+});
+
+describe("createStore — hydrate, storageAvailable", () => {
+  it("is true with a probing memory store", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().storageAvailable).toBe(true);
+  });
+
+  it("is false when the repository reports unavailable", () => {
+    const brokenStorage: RawStore = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("storage blocked");
+      },
+      removeItem: () => {},
+      length: 0,
+      key: () => null,
+    };
+    const repository = createRepository({ storage: brokenStorage });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().storageAvailable).toBe(false);
+  });
+});
+
+describe("createStore — hydrate, migrationFailed", () => {
+  it("is false when nothing failed to migrate", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().migrationFailed).toBe(false);
+  });
+
+  it.each(["setup", "session", "history"] as const)("is true when the repository reports a failed %s migration", (failedKey) => {
+    const real = createRepository({ storage: createMemoryRawStore() });
+    const repository: Repository = { ...real, migrationFailed: (key) => key === failedKey };
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().migrationFailed).toBe(true);
+  });
+
+  it("is true when a real migration throws", () => {
+    const raw = createMemoryRawStore();
+    raw.setItem("impromptu:setup", JSON.stringify({ v: 1, rev: 1, data: concreteSetup }));
+    const repository = createRepository({
+      storage: raw,
+      schemaVersions: { ...config.storage.schemaVersions, setup: 2 },
+      migrations: {
+        setup: [
+          () => {
+            throw new Error("boom");
+          },
+        ],
+      },
+    });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().migrationFailed).toBe(true);
   });
 });
 
