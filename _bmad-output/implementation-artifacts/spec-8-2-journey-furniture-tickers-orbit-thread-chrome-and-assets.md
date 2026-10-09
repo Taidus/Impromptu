@@ -2,8 +2,8 @@
 title: 'Story 8.2: Journey furniture: tickers, orbit thread, chrome, and assets'
 type: 'feature'
 created: '2026-10-09'
-status: 'ready-for-dev'
-baseline_commit: ''
+status: 'in-progress'
+baseline_commit: '5dfd5a2'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
