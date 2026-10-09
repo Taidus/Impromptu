@@ -2,7 +2,7 @@
 title: 'Story 1.7: Library hard gate: reachability, coverage, repeat headroom, and the build step'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '4d2a92215be466b71a81725ed5143a3156cc6d2e'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -87,12 +87,25 @@ context:
 - One existing Story 1.6 test (`gate.test.ts`, "does not fail when a compatible combination's render fails") explicitly deferred reachability to this story in its own comment; updated it to assert the new expected behavior (a `reachability.min-combinations` failure, never a `brief.*` one) instead of `ok: true`.
 - Deferred to Story 1.9 (alongside the existing `validate.ts` subprocess-test deferral): a subprocess test of `build.ts`'s non-zero exit and an end-to-end check that `library.json` drops a draft batch's content and a retired entity, once real batches/retirements exist. `filterAccepted` (load.ts) and `retiredIds`/the three new gate rules (gate.ts) are unit-tested directly in the meantime.
 - Full verification chain run against the real `content/library` tree (anchors only, zero batches): `library:validate` → `PASS` (`ok:true`, 0 failures, 208 warnings — the full pre-Epic-2 coverage/headroom gap, all non-blocking since `coverage.enforce` is `false`), `npm run build` → `predev`/`prebuild` ran `build.ts` (`libraryVersion ba2fcbdc46c6ba85`, wrote `src/generated/library.json`) then `next build` compiled and prerendered all 5 routes.
+- **Review patch pass (2026-10-09):** (1) **AD-6 decision — retired entries are kept** in `library.json`, flagged `retired: true` (supersedes the "excludes retired entities" judgment call above): AD-6 says `compose()` skips retired entries but lookups (Variation, Practice) still resolve them, so only draft batches are excluded. (2) `build.ts` now exports a pure `buildPayload(lib, report)` plus a `runBuild(root)` entry (main-module guarded); a gate failure deletes any stale `src/generated/library.json` before exiting non-zero, the failure message says it failed on the accepted set, excluded draft batches are logged, warnings are printed (count + first 5) here and in `validate.ts`, and a `library:build` npm script plus a "re-run after content edits" note were added. (3) `filterAccepted(lib, root)` maps issue paths via `path.relative(<root>/content/library/batches, source)` and keeps issues for any batch folder with no successfully parsed manifest, so it fails the gate instead of vanishing. (4) Gate: batch sizing applies only to draft batches, skips retired Templates, and counts unique Mediums per Template; the reachability exemption covers only `anchors`-sourced Templates; reachability/headroom count a combination only after it passes every `brief.*` rule. New tests in `build.test.ts`, `load.test.ts`, `gate.test.ts` (160 total, all green); full verification chain re-run green.
 
 ## Spec Change Log
 
 _None._
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | orchestrator | `library.json` drops retired entities | medium | AD-6: "compose() skips retired entries. Lookups still resolve them"; Variation/Practice resolve ids against the library | patch |
+| 2 | verif-gap, blind | `build.ts` payload, draft exclusion, failure exit untested | medium | Pre-verified: removing `filterAccepted` or the exit code passes all 68 tests and CI | patch |
+| 3 | edge | Gate failure leaves a stale passing `library.json` | medium | Running `next dev` directly uses the old file | patch |
+| 4 | edge, blind | Batches with missing/invalid manifests vanish silently; `batchFolderOf` matches any `batches` path segment | medium | `filterAccepted` drops issues for folders not in `acceptedSources`; `indexOf("batches")` on the absolute path | patch |
+| 5 | blind, edge | Batch sizing covers accepted batches, counts retired Templates, double-counts duplicate Mediums | medium | AD-17: sizing is for the batch under review; accepted batches are immutable | patch |
+| 6 | edge | Any anchor-named Template is exempt from reachability | low | Exemption should be the anchors source only | patch |
+| 7 | edge | Reachability/headroom count Brief-failing combos | low | Counts increment after render ok, before brief lints | patch |
+| 8 | blind | Warnings never printed; build error points at a differently-scoped validator; no manual rebuild script | low | Neither CLI prints `warnings`; `validate.ts` includes drafts | patch |
+| 9 | blind | `filterAccepted` and gate edge-case tests missing; POSIX-only paths | low | Fixture only exercises templates; `/` separators | patch |
 
 _None — step-04 review is explicitly skipped for this session per orchestrator override._
 

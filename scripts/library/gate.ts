@@ -150,8 +150,10 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
 
   // --- Reachability exemption (Story 1.7, deferred decision): the three CL-5 anchor
   // Templates each admit only their own pinned fill, so they're exempt from the
-  // >=3-combinations rule below — the byte-for-byte anchor check pins them instead.
+  // >=3-combinations rule below — the byte-for-byte anchor check pins them instead. Only
+  // Templates sourced from anchors/ qualify; an anchor naming a batch Template exempts nothing.
   const anchorTemplateIds = new Set(lib.anchors.map((a) => a.templateId));
+  const isExemptAnchorTemplate = (ts: Sourced<Template>) => ts.source === "anchors" && anchorTemplateIds.has(ts.value.id);
 
   // --- Retired set: an entity's own `retired: true`, or any batch's manifest.retire[].
   // Reference checks use the full id set below, so a retired id stays resolvable. ---
@@ -296,13 +298,7 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
             }
 
             const { brief } = result;
-
-            validComboCountByTemplate.set(template.id, (validComboCountByTemplate.get(template.id) ?? 0) + 1);
-            if (topic) {
-              const pairId = `${template.id}|${topic.id}`;
-              addToSetMap(pairsByCell, cellKey(template.skill, template.level, medium.id), pairId);
-              addToSetMap(pairsByLevelMedium, levelMediumKey(template.level, medium.id), pairId);
-            }
+            const failuresBefore = failures.length;
 
             const fillSources: (Sourced<Fill> | null)[] = [topicS, styleS, constraintS];
             const culprit = (check: (text: string) => boolean) =>
@@ -348,6 +344,15 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
                 `Brief is ${brief.length} chars (max ${config.brief.maxChars}): "${brief}"`,
                 c?.source ?? ts.source,
               );
+            }
+
+            // Only a combination that passes every Brief rule counts toward reachability/headroom.
+            if (failures.length > failuresBefore) continue;
+            validComboCountByTemplate.set(template.id, (validComboCountByTemplate.get(template.id) ?? 0) + 1);
+            if (topic) {
+              const pairId = `${template.id}|${topic.id}`;
+              addToSetMap(pairsByCell, cellKey(template.skill, template.level, medium.id), pairId);
+              addToSetMap(pairsByLevelMedium, levelMediumKey(template.level, medium.id), pairId);
             }
           }
         }
@@ -441,7 +446,7 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
   // on `anchorTemplateIds` above). Always enforced — never gated by `coverage.enforce`. ---
   for (const ts of activeTemplates) {
     const template = ts.value;
-    if (anchorTemplateIds.has(template.id)) continue;
+    if (isExemptAnchorTemplate(ts)) continue;
     const count = validComboCountByTemplate.get(template.id) ?? 0;
     if (count < config.reachability.minCombinations)
       fail(
@@ -501,14 +506,15 @@ export function runGate(lib: GateInput, config: GateConfig): GateReport {
     }
   }
 
-  // --- Batch sizing (AD-17): always enforced for the batch under review, regardless of
-  // `coverage.enforce` — a Template batch must give each Medium it declares at least
-  // `batchSizing.minTemplatesPerMedium` of its own Templates. Anchors aren't a batch under
-  // review, so the "anchors" source is excluded. ---
+  // --- Batch sizing (AD-17): always enforced for the batches under review (draft batches),
+  // regardless of `coverage.enforce` — a Template batch must give each Medium it declares
+  // at least `batchSizing.minTemplatesPerMedium` of its own active Templates. Accepted
+  // batches are immutable (and anchors aren't a batch), so neither is re-sized. ---
+  const draftSources = new Set(lib.manifests.filter((m) => m.value.status === "draft").map((m) => m.source));
   const templateCountByBatchMedium = new Map<string, number>(); // "<source>|<mediumId>" -> count
   for (const { value: t, source } of lib.templates) {
-    if (source === "anchors") continue;
-    for (const mediumId of t.mediums) {
+    if (!draftSources.has(source) || retiredIds.has(t.id)) continue;
+    for (const mediumId of new Set(t.mediums)) {
       const key = `${source}|${mediumId}`;
       templateCountByBatchMedium.set(key, (templateCountByBatchMedium.get(key) ?? 0) + 1);
     }

@@ -312,6 +312,24 @@ describe("runGate — reachability", () => {
     const report = runGate(baseLib({ anchors: [], topics }), gateConfig);
     expect(rulesOf(report)).not.toContain("reachability.min-combinations");
   });
+
+  it("does not exempt a batch-sourced Template even when an anchor names its id", () => {
+    const report = runGate(baseLib({ templates: [sourced(template(), "batch-1")] }), gateConfig);
+    const failure = report.failures.find((f) => f.rule === "reachability.min-combinations");
+    expect(failure?.id).toBe("tpl.observation.explore.x");
+  });
+
+  it("does not count a combination whose Brief fails a brief.* rule", () => {
+    const topics = [
+      sourced(fillEntry("top.a", ["t"], { briefText: "a" })),
+      sourced(fillEntry("top.b", ["t"], { briefText: "b" })),
+      sourced(fillEntry("top.c", ["t"], { briefText: "a {ruined} c" })),
+    ];
+    const report = runGate(baseLib({ anchors: [], topics }), gateConfig);
+    expect(rulesOf(report)).toContain("brief.braces");
+    const failure = report.failures.find((f) => f.rule === "reachability.min-combinations");
+    expect(failure?.message).toContain("only 2");
+  });
 });
 
 describe("runGate — coverage and repeat headroom", () => {
@@ -344,15 +362,18 @@ describe("runGate — batch sizing (AD-17)", () => {
     status: "accepted",
     review: { judge: "m", founderSample: 1, rejectedIds: [], date: "2026-10-09" },
   });
+  const twoTemplates = (over: Partial<Template> = {}) =>
+    ["a", "b"].map((slug) => sourced(template({ id: `tpl.observation.explore.${slug}`, ...over }), "batch-1"));
+  const sizingFailures = (lib: GateInput) => runGate(lib, gateConfig).failures.filter((f) => f.rule === "batch.sizing");
 
-  it("fails a batch whose Templates give one of its own Mediums fewer than 3 Templates", () => {
+  it("fails a draft batch whose Templates give one of its own Mediums fewer than 3 Templates", () => {
     const t1 = template({ id: "tpl.observation.explore.a" });
     const t2 = template({ id: "tpl.observation.explore.b" });
     const report = runGate(
       baseLib({
         anchors: [],
         templates: [sourced(t1, "batch-1"), sourced(t2, "batch-1")],
-        manifests: [sourced(acceptedManifest, "batch-1")],
+        manifests: [sourced(draftManifest(), "batch-1")],
       }),
       gateConfig,
     );
@@ -363,10 +384,33 @@ describe("runGate — batch sizing (AD-17)", () => {
   it("passes a batch with >=3 Templates for every Medium it declares", () => {
     const templates = ["a", "b", "c"].map((slug) => sourced(template({ id: `tpl.observation.explore.${slug}` }), "batch-1"));
     const report = runGate(
-      baseLib({ anchors: [], templates, manifests: [sourced(acceptedManifest, "batch-1")] }),
+      baseLib({ anchors: [], templates, manifests: [sourced(draftManifest(), "batch-1")] }),
       gateConfig,
     );
     expect(rulesOf(report)).not.toContain("batch.sizing");
+  });
+
+  it("does not size an accepted (immutable) batch", () => {
+    const lib = baseLib({ anchors: [], templates: twoTemplates(), manifests: [sourced(acceptedManifest, "batch-1")] });
+    expect(sizingFailures(lib)).toEqual([]);
+  });
+
+  it("does not count a retired Template toward a draft batch's sizing", () => {
+    const templates = [
+      ...twoTemplates(),
+      sourced(template({ id: "tpl.observation.explore.c", retired: true }), "batch-1"),
+    ];
+    const lib = baseLib({ anchors: [], templates, manifests: [sourced(draftManifest(), "batch-1")] });
+    expect(sizingFailures(lib)[0]?.message).toContain("only 2");
+  });
+
+  it("counts a Template that lists a Medium twice only once for that Medium", () => {
+    const lib = baseLib({
+      anchors: [],
+      templates: twoTemplates({ mediums: ["med.alpha", "med.alpha"] }),
+      manifests: [sourced(draftManifest(), "batch-1")],
+    });
+    expect(sizingFailures(lib)[0]?.message).toContain("only 2");
   });
 
   it("never checks the anchors source for batch sizing", () => {

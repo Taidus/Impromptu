@@ -156,20 +156,23 @@ export function loadLibrary(root: string): LoadedLibrary {
 }
 
 /** Restricts a loaded library to anchors plus batches whose manifest status is "accepted" —
- * used by build.ts so a Vercel build never ships an unreviewed draft batch. Pure (no fs). */
-export function filterAccepted(lib: LoadedLibrary): LoadedLibrary {
+ * used by build.ts so a Vercel build never ships an unreviewed draft batch. Pure (no fs);
+ * `root` is the repo root `loadLibrary` was called with, used only to map issue paths back
+ * to their batch folder. */
+export function filterAccepted(lib: LoadedLibrary, root: string): LoadedLibrary {
   const acceptedSources = new Set(lib.manifests.filter((m) => m.value.status === "accepted").map((m) => m.source));
+  const parsedSources = new Set(lib.manifests.map((m) => m.source));
   const keep = <T>(items: Sourced<T>[]): Sourced<T>[] =>
     items.filter((i) => i.source === "anchors" || acceptedSources.has(i.source));
 
-  // An issue's `source` is a filesystem path; pull the batch folder name (the segment right
-  // after "batches") back out so a draft/invalid batch's issues don't block an unrelated
-  // accepted batch's build. An issue with no "batches" segment is a base-file issue and
-  // always counts.
+  // An issue's `source` is a filesystem path; map it back to its batch folder so a draft
+  // batch's issues don't block an unrelated accepted batch's build. A path outside
+  // content/library/batches is a base-file issue and always counts.
+  const batchesDir = path.join(root, "content", "library", "batches");
   const batchFolderOf = (source: string): string | undefined => {
-    const parts = source.split(path.sep);
-    const idx = parts.indexOf("batches");
-    return idx >= 0 ? parts[idx + 1] : undefined;
+    const rel = path.relative(batchesDir, source);
+    if (!rel || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return undefined;
+    return rel.split(path.sep)[0];
   };
 
   return {
@@ -179,9 +182,11 @@ export function filterAccepted(lib: LoadedLibrary): LoadedLibrary {
     styles: keep(lib.styles),
     constraints: keep(lib.constraints),
     manifests: lib.manifests.filter((m) => m.value.status === "accepted"),
+    // Only a parsed draft manifest excludes a folder's issues; a folder whose manifest is
+    // missing/unparseable/invalid keeps them, so it fails the gate instead of vanishing.
     issues: lib.issues.filter((i) => {
       const folder = batchFolderOf(i.source);
-      return folder === undefined || acceptedSources.has(folder);
+      return folder === undefined || acceptedSources.has(folder) || !parsedSources.has(folder);
     }),
   };
 }

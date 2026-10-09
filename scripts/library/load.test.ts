@@ -156,56 +156,72 @@ describe("loadLibrary — batch folders", () => {
 describe("filterAccepted", () => {
   // Minimal fixture: filterAccepted only inspects `.source` and `.status`, never parses or
   // validates, so loosely-shaped stand-ins are fine here.
+  const root = path.join(path.sep, "repo");
+  const batchFile = (folder: string, file: string) => path.join(root, "content", "library", "batches", folder, file);
+  const DRAFT = "2026-01-01-topics-draft";
+  const ACCEPTED = "2026-01-01-topics-accepted";
+  const fill = (id: string, source: string) => ({ value: { id } as never, source });
+
   function fixture(): LoadedLibrary {
     return {
       tags: [],
       skills: [],
       mediums: [],
-      templates: [
-        { value: { id: "tpl.draft" } as never, source: "2026-01-01-topics-draft" },
-        { value: { id: "tpl.accepted" } as never, source: "2026-01-01-topics-accepted" },
-        { value: { id: "tpl.anchor" } as never, source: "anchors" },
-      ],
-      topics: [],
-      styles: [],
-      constraints: [],
+      templates: [fill("tpl.draft", DRAFT), fill("tpl.accepted", ACCEPTED), fill("tpl.anchor", "anchors")],
+      topics: [fill("top.draft", DRAFT), fill("top.accepted", ACCEPTED), fill("top.anchor", "anchors")],
+      styles: [fill("sty.draft", DRAFT), fill("sty.accepted", ACCEPTED)],
+      constraints: [fill("con.draft", DRAFT), fill("con.accepted", ACCEPTED)],
       anchors: [],
       manifests: [
-        { value: { status: "draft" } as never, source: "2026-01-01-topics-draft" },
-        { value: { status: "accepted" } as never, source: "2026-01-01-topics-accepted" },
+        { value: { status: "draft" } as never, source: DRAFT },
+        { value: { status: "accepted" } as never, source: ACCEPTED },
       ],
       issues: [
-        { source: "/repo/content/library/tags.json", message: "base file issue" },
-        {
-          source: "/repo/content/library/batches/2026-01-01-topics-draft/topics.json",
-          message: "draft batch issue",
-        },
-        {
-          source: "/repo/content/library/batches/2026-01-01-topics-accepted/topics.json",
-          message: "accepted batch issue",
-        },
+        { source: path.join(root, "content", "library", "tags.json"), message: "base file issue" },
+        { source: batchFile(DRAFT, "topics.json"), message: "draft batch issue" },
+        { source: batchFile(ACCEPTED, "topics.json"), message: "accepted batch issue" },
       ],
     };
   }
 
   it("keeps anchors-sourced and accepted-batch-sourced entities, drops draft-sourced ones", () => {
-    const filtered = filterAccepted(fixture());
+    const filtered = filterAccepted(fixture(), root);
     expect(filtered.templates.map((t) => t.value.id)).toEqual(["tpl.accepted", "tpl.anchor"]);
   });
 
+  it("filters fills (topics, styles, constraints) the same way", () => {
+    const filtered = filterAccepted(fixture(), root);
+    expect(filtered.topics.map((t) => t.value.id)).toEqual(["top.accepted", "top.anchor"]);
+    expect(filtered.styles.map((t) => t.value.id)).toEqual(["sty.accepted"]);
+    expect(filtered.constraints.map((t) => t.value.id)).toEqual(["con.accepted"]);
+  });
+
   it("keeps only accepted manifests", () => {
-    const filtered = filterAccepted(fixture());
-    expect(filtered.manifests.map((m) => m.source)).toEqual(["2026-01-01-topics-accepted"]);
+    const filtered = filterAccepted(fixture(), root);
+    expect(filtered.manifests.map((m) => m.source)).toEqual([ACCEPTED]);
   });
 
   it("keeps base-file issues and accepted-batch issues, drops draft-batch issues", () => {
-    const filtered = filterAccepted(fixture());
+    const filtered = filterAccepted(fixture(), root);
     expect(filtered.issues.map((i) => i.message)).toEqual(["base file issue", "accepted batch issue"]);
   });
 
+  it("keeps the issue of a batch folder with no successfully parsed manifest", () => {
+    const lib = fixture();
+    lib.issues.push({ source: path.join(root, "content", "library", "batches", "2026-01-02-orphan"), message: "no manifest" });
+    const filtered = filterAccepted(lib, root);
+    expect(filtered.issues.map((i) => i.message)).toContain("no manifest");
+  });
+
+  it("treats a path with a 'batches' segment outside content/library/batches as a base-file issue", () => {
+    const outside = path.join(path.sep, "home", "batches", DRAFT, "x.json");
+    const lib = { ...fixture(), issues: [{ source: outside, message: "outside" }] };
+    expect(filterAccepted(lib, root).issues.map((i) => i.message)).toEqual(["outside"]);
+  });
+
   it("is a no-op shape-wise on a library with no batches at all (anchors only)", () => {
-    const anchorsOnly: LoadedLibrary = { ...fixture(), templates: [{ value: { id: "tpl.anchor" } as never, source: "anchors" }], manifests: [], issues: [] };
-    const filtered = filterAccepted(anchorsOnly);
+    const anchorsOnly: LoadedLibrary = { ...fixture(), templates: [fill("tpl.anchor", "anchors")], manifests: [], issues: [] };
+    const filtered = filterAccepted(anchorsOnly, root);
     expect(filtered.templates).toHaveLength(1);
   });
 });

@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "check:static": "node scripts/check-static.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
-    "library:validate": "tsx scripts/library/validate.ts"
+    "library:validate": "tsx scripts/library/validate.ts",
+    "library:build": "tsx scripts/library/build.ts"
   },
   "dependencies": {
     "next": "16.4.0",
