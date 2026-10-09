@@ -18,11 +18,33 @@ export const copy = {
     revision: "Change it on purpose.",
   },
   stage: {
+    // Visually hidden h1 (EXPERIENCE.md -> Accessibility Floor: Stage's h1 is
+    // "Challenge"); the Stage mark itself is decorative (aria-hidden), not a
+    // heading.
+    h1: "Challenge",
+    mark: "impromptu",
     back: "Back to setup",
     soundOffCaption: "SOUND OFF",
     soundOnCaption: "SOUND ON",
     soundOffAnnounced: "Sound, off",
     soundOnAnnounced: "Sound, on",
+    // Level/mode meta line (DESIGN.md -> Layout, "the Level and mode meta").
+    // Keyed by src/domain/library/schema's Level enum; "mode" is derived from
+    // a held Challenge's timeLimitSec (Perform's Timed/Untimed/Either setup
+    // choice resolves to one or the other per generated Challenge).
+    levelName: {
+      explore: "Explore",
+      experiment: "Experiment",
+      develop: "Develop",
+      perform: "Perform",
+    },
+    mode: {
+      timed: "TIMED",
+      untimed: "UNTIMED",
+    },
+    // Short, cause-naming, no-penalty-language message (EXPERIENCE.md ->
+    // Voice and Tone) for when the store or library fails to load.
+    loadError: "Couldn't load a challenge right now. Try reloading the page.",
   },
   button: {
     getAChallenge: "Get a challenge",

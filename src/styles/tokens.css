@@ -358,6 +358,17 @@
   letter-spacing: var(--typography-button-sun-tracking);
 }
 
+/* Story 3.9: the Stage mark ("impromptu", DESIGN.md -> Components -> Stage
+   mark). The var already existed (Story 3.1 transcribed the whole ramp);
+   this is its first consumer. */
+@utility text-stage-mark {
+  font-family: var(--typography-stage-mark-family);
+  font-size: var(--typography-stage-mark-size);
+  font-weight: var(--typography-stage-mark-weight);
+  line-height: var(--typography-stage-mark-leading);
+  letter-spacing: var(--typography-stage-mark-tracking);
+}
+
 /* Story 8.1: the journey's own headline/title roles — var already existed,
    no utility yet. Same `@utility` form as the roles above. */
 @utility text-display {

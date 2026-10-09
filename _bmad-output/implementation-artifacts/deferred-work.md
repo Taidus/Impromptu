@@ -44,3 +44,5 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
   summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
   evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
+  status: resolved
+  resolved_by: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md` — `e2e/stage.spec.ts`'s "opening /stage composes a held Challenge from the production library" test runs against `npm run build`'s real `src/generated/library.json`.
