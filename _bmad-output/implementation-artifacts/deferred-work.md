@@ -27,6 +27,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors.md`
   summary: Add a subprocess test that `npm run library:validate` exits non-zero on a failing library, when the first real batches land (Story 1.9).
   evidence: `process.exitCode = report.ok ? 0 : 1` is the only thing making the CI step block merges; nothing exercises the failure exit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-library-hard-gate-reachability-coverage-repeat-headroom-and.md`
+  summary: Add a subprocess test that `npm run build`'s `prebuild` hook exits non-zero and does not touch `src/generated/library.json` when the gate fails, and an end-to-end check that `library.json` excludes a draft batch's content and a retired entity's data, once real batches exist (Story 1.9).
+  evidence: `scripts/library/build.ts`'s `process.exitCode = 1` path and its use of `filterAccepted`/`report.retiredIds` are covered unit-wise (`load.test.ts`, `gate.test.ts`) but not through the actual script file — same gap as `validate.ts`'s deferred subprocess test above, for the same reason (no real batches yet to fail/retire against).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft.md`
   summary: After 1.6 and 1.8 both merge, make `scripts/library/sample.ts` reuse 1.6's `load.ts` instead of its own `loadActiveLibrary` file reading.
   evidence: The two stories were built in parallel and each wrote its own library loader.

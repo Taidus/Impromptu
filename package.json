@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "tsx scripts/library/build.ts",
     "dev": "next dev",
+    "prebuild": "tsx scripts/library/build.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -13,6 +15,7 @@
     "check:static": "node scripts/check-static.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
     "library:validate": "tsx scripts/library/validate.ts",
+    "library:build": "tsx scripts/library/build.ts",
     "library:new-batch": "tsx scripts/library/new-batch.ts",
     "library:sample": "tsx scripts/library/sample.ts"
   },

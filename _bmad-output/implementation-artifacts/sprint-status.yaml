@@ -42,7 +42,7 @@ development_status:
   1-4-one-compatibility-function-and-one-brief-renderer: review
   1-5-transcribe-the-three-cl-5-anchors-verbatim: review
   1-6-library-hard-gate-integrity-brief-rules-time-limits-anchors: done
-  1-7-library-hard-gate-reachability-coverage-repeat-headroom-and: backlog
+  1-7-library-hard-gate-reachability-coverage-repeat-headroom-and: done
   1-8-generation-pipeline-kit-prompt-rubric-batch-folders-and-soft: done
   1-9-pilot-batches-through-the-full-lifecycle: backlog
   epic-1-retrospective: optional
@@ -61,7 +61,7 @@ development_status:
   epic-3: in-progress
   3-1-design-tokens-fonts-and-base-action-components: done
   3-2-setup-and-session-schemas-and-the-setup-reducer: review
-  3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: review
+  3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: done
   3-4-session-reducer-for-commits-and-reveal-progress: done
   3-5-versioned-browser-storage-with-a-memory-fallback: done
   3-6-the-app-store-and-the-library-loader: in-progress
