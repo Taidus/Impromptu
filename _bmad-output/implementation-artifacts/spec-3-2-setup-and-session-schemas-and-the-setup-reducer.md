@@ -2,7 +2,7 @@
 title: 'Setup and session schemas and the setup reducer'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7bf85e9b3db7ea126e4da03bb927ce2510ec9232'
@@ -82,12 +82,28 @@ context:
 - Used `z.partialRecord` (not `z.record`) for `Locks`: zod v4's `z.record` with an enum key schema produces an *exhaustive* record requiring every enum key present, which is wrong for a Locks map that is usually empty or partial.
 - Reused the single `Reflection` schema for both `Rep.reflection` and `Session.reflectionDraft` (both are `{worked, change}` bounded by `config.reflection.maxChars`) rather than declaring a near-duplicate type.
 - All four commands (`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`) pass; `npm test` shows 117/117 passing (12 test files), including the two new suites.
+- **Review loopback fixes:** `Setup` gained a `superRefine` rejecting duplicate `enabledMediums` ids and a `medium` that is neither `"random"` nor enabled (FR-2); `choose_medium` and `toggle_medium`'s last-Medium guard now enforce/respect that (guard uses the distinct-id count, not raw length). Added `set_ambient_motion` to `SetupEvent` plus a `default` branch in the reducer. `Session.recent` now trims to the newest `config.generator.recentWindow` entries via `.transform()` instead of rejecting on `.max()`, and `Reflection` dropped its `maxChars` cap (moved to a new `ReflectionInput` schema for UI-time validation only) so a later-lowered `config.reflection.maxChars` never breaks parsing of already-persisted data. `Origin` is now a discriminated union (`new`/`reroll` force `fromRepId: null`; `retry`/`variation` require a uuid); `Locks` is a partial strict object keyed by each Input kind's real id schema (was `z.partialRecord(InputKind, z.string())`); `Session` gained a `superRefine` tying `state` to `challenge`/`attempt` presence (`none`/`held`/`attempt`) and rejecting duplicate `revealed` kinds; `Export` rejects duplicate Rep ids. Added `src/domain/session/setup-fixture.ts` (one shared `baseSetup` built from `config.setup.defaults`) used by both test files, plus a deep-frozen-input purity check over every event and a `scripts/boundaries.test.ts` case pinning the widened domain-submodule ESLint allowance.
 
 ## Design Notes
 
 - **Session schema shape (conservative, pending Story 3.4):** AD-9 describes the `impromptu:session` key's content by prose ("the held Challenge, reveal progress, Locks, the Attempt, the Finished reflection draft, `lastRepId`, `lastComposeError`, and the recent ring") rather than an exact field list. This story's `Session` schema is the most direct, literal translation of that prose plus the AD-7 state names (`none|held|attempt|finished|saved`) and AD-18's `revealed` set — e.g. `{ state, challenge: Challenge|null, revealed: RevealedKind[], locks: Partial<Record<InputKind,string>>, attempt: Attempt|null, reflectionDraft: {worked,change}|null, lastRepId: string|null, lastComposeError: {reason,blockingLock}|null, recent: string[] }`. Story 3.4 (the session reducer) is the one that exercises this shape through real transitions; if it finds a field missing or shaped wrong, it amends this schema rather than working around it.
 - **`notice` over throwing or a separate event:** the AC says toggle_medium "returns a `last_medium` notice for the UI." Modeling the reducer's return as `{ setup, notice? }` (rather than a second dispatch, an exception, or a side channel) keeps it a single pure call the store can inspect synchronously, consistent with `render.ts`'s `{ok, ...}` pattern elsewhere in the domain.
 - **Repository binding deferred:** `Repository.load<T>`/`save<T>` stay generic in this story (`src/domain/ports.ts` is untouched). Once Story 3.5 lands its key-typed extension, `load('setup')`/`save('setup', ...)` etc. can bind to `Setup`/`Session`/`Export`-wrapped-history from this file — flagged here, not implemented here.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | `choose_medium` can select a disabled Medium | medium | Reducer sets `medium` unchecked; schema has no cross-field rule; FR-2 impossible state | patch |
+| 2 | blind, edge | Duplicate `enabledMediums` defeat the last-Medium guard | medium | `['med.a','med.a']` passes `min(1)`; guard sees length 2; `filter` empties the list | patch |
+| 3 | blind, edge | No event for `ambientMotion`; no default branch | low | `Setup` field unreachable by reducer; untyped dispatch returns undefined | patch |
+| 4 | blind, edge | Lowering `recentWindow`/`maxChars` breaks parsing of stored data | medium | `.max()` on persisted shapes rejects existing data → AD-9 memory fallback, AD-5 immutable Reps | patch |
+| 5 | blind, edge | `Origin`, `Locks`, `Session` state, `Export` accept inconsistent data | medium | State/payload contradictions load and the reducer will dereference null | patch |
+| 6 | verif-gap, blind | Single-Medium enable, required inputs, recent cap, booleans, purity untested | low | Pre-verified: removing `isEnabled &&` or making `skill` optional passes all tests | patch |
+| 7 | peer (1.2 owner) | Pin widened `src/domain` boundary with an allowed case | low | Requested by Story 1.2 owner | patch |
+| 8 | blind | Whole-layer `@/domain` allowance permits cycles | low | 1.2 owner approved whole-layer allowance; no cycle exists | reject |
+| 9 | blind | `Attempt.timeLimitSec` duplicates the Challenge's | false | AD-8 lists `timeLimitSec` as an Attempt field | reject |
+| 10 | edge | `pausedAt` may precede `startedAt` | low | Only reachable via corrupted storage; timer story (5.2) owns timing guards | reject |
 
 ## Verification
 

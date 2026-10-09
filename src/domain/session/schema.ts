@@ -3,7 +3,6 @@ import { config } from "@/config/app";
 import { ConstraintId, Level, MediumId, SkillId, StyleId, TemplateId, TopicId } from "@/domain/library/schema";
 
 const text = z.string().trim().min(1);
-const bounded = (maxChars: number) => z.string().max(maxChars);
 
 export const PerformTiming = z.enum(["timed", "untimed", "either"]);
 export type PerformTiming = z.infer<typeof PerformTiming>;
@@ -28,7 +27,15 @@ export const Setup = z
     sound: z.boolean(),
     ambientMotion: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((setup, ctx) => {
+    if (new Set(setup.enabledMediums).size !== setup.enabledMediums.length) {
+      ctx.addIssue({ code: "custom", path: ["enabledMediums"], message: "enabledMediums must not contain duplicate ids" });
+    }
+    if (setup.medium !== "random" && !setup.enabledMediums.includes(setup.medium)) {
+      ctx.addIssue({ code: "custom", path: ["medium"], message: "medium must be \"random\" or one of enabledMediums (FR-2)" });
+    }
+  });
 export type Setup = z.infer<typeof Setup>;
 
 // --- Challenge (AD-5) -------------------------------------------------------
@@ -47,12 +54,13 @@ export const ChallengeInputs = z
   .strict();
 export type ChallengeInputs = z.infer<typeof ChallengeInputs>;
 
-export const Origin = z
-  .object({
-    kind: z.enum(["new", "reroll", "retry", "variation"]),
-    fromRepId: z.uuid().nullable(),
-  })
-  .strict();
+/** new/reroll never reference a Rep; retry/variation always copy from one (AD-3). */
+export const Origin = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("new"), fromRepId: z.null() }).strict(),
+  z.object({ kind: z.literal("reroll"), fromRepId: z.null() }).strict(),
+  z.object({ kind: z.literal("retry"), fromRepId: z.uuid() }).strict(),
+  z.object({ kind: z.literal("variation"), fromRepId: z.uuid() }).strict(),
+]);
 export type Origin = z.infer<typeof Origin>;
 
 export const Challenge = z
@@ -85,13 +93,27 @@ export type Attempt = z.infer<typeof Attempt>;
 
 // --- Rep & Export (AD-5) -----------------------------------------------------
 
+/**
+ * Persisted Reflection has no length cap: `config.reflection.maxChars` may be
+ * lowered later (AD-19 tunable), and a stored Rep or draft must still parse
+ * even if its text now exceeds the current cap. Use `ReflectionInput` to
+ * enforce the cap at the point of entry (the UI form, Story 5.6).
+ */
 export const Reflection = z
   .object({
-    worked: bounded(config.reflection.maxChars),
-    change: bounded(config.reflection.maxChars),
+    worked: z.string(),
+    change: z.string(),
   })
   .strict();
 export type Reflection = z.infer<typeof Reflection>;
+
+export const ReflectionInput = z
+  .object({
+    worked: z.string().max(config.reflection.maxChars),
+    change: z.string().max(config.reflection.maxChars),
+  })
+  .strict();
+export type ReflectionInput = z.infer<typeof ReflectionInput>;
 
 export const Rep = z
   .object({
@@ -111,7 +133,11 @@ export const Export = z
     exportedAt: z.iso.datetime(),
     reps: z.array(Rep),
   })
-  .strict();
+  .strict()
+  .refine((e) => new Set(e.reps.map((r) => r.id)).size === e.reps.length, {
+    path: ["reps"],
+    message: "reps must have unique ids",
+  });
 export type Export = z.infer<typeof Export>;
 
 // --- Session (AD-7, AD-9, AD-11, AD-18) --------------------------------------
@@ -119,7 +145,17 @@ export type Export = z.infer<typeof Export>;
 export const SessionState = z.enum(["none", "held", "attempt", "finished", "saved"]);
 export type SessionState = z.infer<typeof SessionState>;
 
-export const Locks = z.partialRecord(InputKind, z.string());
+/** Locked value per Input kind; always a subset (none, one, or several kinds). */
+export const Locks = z
+  .object({
+    skill: SkillId,
+    medium: MediumId,
+    topic: TopicId,
+    style: StyleId,
+    constraint: ConstraintId,
+  })
+  .partial()
+  .strict();
 export type Locks = z.infer<typeof Locks>;
 
 export const ComposeError = z
@@ -140,7 +176,24 @@ export const Session = z
     reflectionDraft: Reflection.nullable(),
     lastRepId: z.uuid().nullable(),
     lastComposeError: ComposeError.nullable(),
-    recent: z.array(z.string()).max(config.generator.recentWindow),
+    // Keep only the newest entries: a transform (not a `.max()` rejection) so
+    // a lowered `config.generator.recentWindow` never fails to parse a
+    // previously-persisted session (AD-11, AD-19).
+    recent: z.array(z.string().min(1)).transform((entries) => entries.slice(-config.generator.recentWindow)),
   })
-  .strict();
+  .strict()
+  .superRefine((session, ctx) => {
+    if (new Set(session.revealed).size !== session.revealed.length) {
+      ctx.addIssue({ code: "custom", path: ["revealed"], message: "revealed must not contain duplicate kinds" });
+    }
+    if (session.state === "none" && (session.challenge !== null || session.attempt !== null)) {
+      ctx.addIssue({ code: "custom", path: ["state"], message: "none must have no challenge and no attempt" });
+    }
+    if (session.state === "held" && (session.challenge === null || session.attempt !== null)) {
+      ctx.addIssue({ code: "custom", path: ["state"], message: "held requires a challenge and no attempt" });
+    }
+    if (session.state === "attempt" && (session.challenge === null || session.attempt === null)) {
+      ctx.addIssue({ code: "custom", path: ["state"], message: "attempt requires both a challenge and an attempt" });
+    }
+  });
 export type Session = z.infer<typeof Session>;

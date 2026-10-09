@@ -8,7 +8,8 @@ export type SetupEvent =
   | { type: "choose_medium"; medium: MediumId | "random" }
   | { type: "set_skill_focus"; skillFocus: SkillId | "random" }
   | { type: "set_quick_reveal"; quickReveal: boolean }
-  | { type: "set_sound"; sound: boolean };
+  | { type: "set_sound"; sound: boolean }
+  | { type: "set_ambient_motion"; ambientMotion: boolean };
 
 export type SetupReducerResult = { setup: Setup; notice?: "last_medium" };
 
@@ -26,20 +27,27 @@ export function setupReducer(setup: Setup, event: SetupEvent): SetupReducerResul
     case "toggle_medium":
       return toggleMedium(setup, event.mediumId);
     case "choose_medium":
-      return { setup: { ...setup, medium: event.medium } };
+      return chooseMedium(setup, event.medium);
     case "set_skill_focus":
       return { setup: { ...setup, skillFocus: event.skillFocus } };
     case "set_quick_reveal":
       return { setup: { ...setup, quickReveal: event.quickReveal } };
     case "set_sound":
       return { setup: { ...setup, sound: event.sound } };
+    case "set_ambient_motion":
+      return { setup: { ...setup, ambientMotion: event.ambientMotion } };
+    default:
+      // Any (state, event) pair outside the known set is a no-op (AD-7);
+      // this also guards a runtime event the type system didn't catch.
+      return { setup };
   }
 }
 
 function toggleMedium(setup: Setup, mediumId: MediumId): SetupReducerResult {
   const isEnabled = setup.enabledMediums.includes(mediumId);
+  const distinctEnabledCount = new Set(setup.enabledMediums).size;
 
-  if (isEnabled && setup.enabledMediums.length === 1) {
+  if (isEnabled && distinctEnabledCount === 1) {
     return { setup, notice: "last_medium" };
   }
 
@@ -50,4 +58,12 @@ function toggleMedium(setup: Setup, mediumId: MediumId): SetupReducerResult {
   const medium = isEnabled && setup.medium === mediumId ? "random" : setup.medium;
 
   return { setup: { ...setup, enabledMediums, medium } };
+}
+
+function chooseMedium(setup: Setup, medium: MediumId | "random"): SetupReducerResult {
+  // Never let "This time" name a Medium that isn't enabled (FR-2).
+  if (medium !== "random" && !setup.enabledMediums.includes(medium)) {
+    return { setup };
+  }
+  return { setup: { ...setup, medium } };
 }
