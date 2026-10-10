@@ -40,6 +40,9 @@
   --color-vermilion-ink: #a8361f;
   --color-stamp: #a92e1c;
 
+  /* Story 6.5: the Dialog's night scrim (DESIGN.md -> dialog.scrim) -- night at 72% alpha. */
+  --color-scrim: rgb(18 16 16 / 0.72);
+
   /* Signatures */
   --color-grape: #7a2cff;
   --color-grape-deep: #5414c9;
@@ -669,6 +672,18 @@
   @media (forced-colors: active) {
     appearance: auto;
   }
+}
+
+/* Story 6.5: the Dialog's backdrop (DESIGN.md -> dialog.scrim), drawn on the
+   native <dialog>'s own ::backdrop pseudo-element rather than an app-level
+   overlay -- showModal() creates and removes it automatically. */
+dialog::backdrop {
+  background-color: var(--color-scrim);
+}
+
+/* Story 6.5: no page scroll behind the open modal's scrim. */
+body:has(dialog[open]) {
+  overflow: hidden;
 }
 
 /* Story 4.1: the Reveal's landing entrance, per material (UX-DR22). A

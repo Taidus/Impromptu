@@ -327,3 +327,84 @@ test("a repeating Escape is ignored, and holding Esc navigates once", async ({ p
   await expect(page).toHaveURL("/");
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
 });
+
+// Production defect: the Constraint stamp's -7° double rule ran through the
+// counter-rotated "CONSTRAINT" label and its rotated corner clipped the Topic
+// text above it. Seeds the reported held Challenge, every piece revealed.
+const stampChallenge = {
+  ...fullChallenge,
+  inputs: {
+    skill: { id: "skl.observation", revealText: "Observation" },
+    medium: { id: "med.drawing", revealText: "Drawing" },
+    topic: { id: "top.near-object", revealText: "A nearby object" },
+    constraint: { id: "con.three-details", revealText: "Three new details" },
+  },
+};
+
+for (const viewport of [
+  { width: 1528, height: 784 },
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test(`the Constraint stamp's rules frame its label and value and clear the Topic at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ challenge, session }) => {
+        const revealed = ["skill", "medium", "topic", "constraint", "brief"];
+        localStorage.setItem(
+          "impromptu:session",
+          JSON.stringify({ v: 1, rev: 1, data: { ...session, state: "held", challenge, revealed } }),
+        );
+      },
+      { challenge: stampChallenge, session: noneSession },
+    );
+    await page.setViewportSize(viewport);
+    await page.goto("/stage");
+    await expect(page.locator("p.text-stamp-stage-phone")).toContainText("Three new details");
+    await page.evaluate(() => document.fonts.ready);
+
+    const result = await page.locator("p.text-stamp-stage-phone").evaluate((value) => {
+      const label = value.previousElementSibling!;
+      const stamp = value.parentElement!.parentElement!;
+      const topic = document.querySelector("p.text-topic-stage-phone")!;
+      // Map a screen point into the stamp's own (un-tilted) frame, about its center.
+      const m = new DOMMatrix(getComputedStyle(stamp).transform);
+      const angle = Math.atan2(m.b, m.a);
+      const s = stamp.getBoundingClientRect();
+      const cx = s.left + s.width / 2;
+      const cy = s.top + s.height / 2;
+      const cs = getComputedStyle(stamp);
+      const halfW = stamp.offsetWidth / 2 - parseFloat(cs.borderLeftWidth);
+      const top = -stamp.offsetHeight / 2 + parseFloat(cs.borderTopWidth);
+      const bottom = stamp.offsetHeight / 2 - parseFloat(cs.borderBottomWidth);
+      const outside = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        const corners = [
+          [r.left, r.top],
+          [r.right, r.top],
+          [r.left, r.bottom],
+          [r.right, r.bottom],
+        ];
+        return corners
+          .map(([x, y]) => {
+            const dx = x - cx;
+            const dy = y - cy;
+            const lx = dx * Math.cos(-angle) - dy * Math.sin(-angle);
+            const ly = dx * Math.sin(-angle) + dy * Math.cos(-angle);
+            return Math.max(top - ly, ly - bottom, Math.abs(lx) - halfW, 0);
+          })
+          .reduce((a, b) => Math.max(a, b), 0);
+      };
+      const t = topic.getBoundingClientRect();
+      return {
+        labelOutsidePx: outside(label),
+        valueOutsidePx: outside(value),
+        stampTopicOverlapPx:
+          s.left < t.right && s.right > t.left ? Math.max(0, Math.min(s.bottom, t.bottom) - Math.max(s.top, t.top)) : 0,
+      };
+    });
+
+    expect(result).toEqual({ labelOutsidePx: 0, valueOutsidePx: 0, stampTopicOverlapPx: 0 });
+  });
+}

@@ -35,7 +35,8 @@ export type StoreCommand =
   | { type: "finish_rep" }
   | { type: "save_rep" }
   | { type: "retry"; fromRepId: string }
-  | { type: "reroll" };
+  | { type: "reroll" }
+  | { type: "clear_all_data" };
 
 export interface StoreDeps {
   repository: Repository;
