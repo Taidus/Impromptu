@@ -8,7 +8,7 @@
 // fallback (StagePage), so a press from either place sequences the same way.
 import { useEffect, useMemo, useState } from "react";
 import { config } from "@/config/app";
-import { prefersReducedMotion } from "@/components/motion";
+import { prefersReducedMotion, usePrefersReducedMotion } from "@/components/motion";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Challenge, RevealedKind, Setup } from "@/domain/session/schema";
 import { getAppStore } from "@/store";
@@ -21,6 +21,8 @@ export interface RevealMotion {
   flickText: string | null;
   /** Whether there's anything a press could do right now (starts a piece, or force-completes one in flight) -- lets callers decide whether to `preventDefault` a keyboard fallback. */
   canPress: boolean;
+  /** Story 4.2: while a piece is in flight, the reduced-motion value captured at its press (the same one its timer uses); when idle, the live `usePrefersReducedMotion()`. Callers pass it to `landingMotion`/`ScrapGroup`. */
+  reduced: boolean;
   /** Stable across renders. */
   press: () => void;
 }
@@ -37,9 +39,11 @@ export function useRevealMotion(
   library: ComposeLibrary | null,
   setup: Setup | null,
 ): RevealMotion {
-  const [snap, setSnap] = useState<{ state: MotionState; challengeId: string | null }>({
+  const liveReduced = usePrefersReducedMotion();
+  const [snap, setSnap] = useState<{ state: MotionState; challengeId: string | null; reduced: boolean }>({
     state: idleMotion,
     challengeId: null,
+    reduced: false,
   });
   const [driver] = useState(() =>
     createMotionDriver({
@@ -54,7 +58,7 @@ export function useRevealMotion(
         };
       },
       commit: () => getAppStore().dispatchSession({ type: "reveal_next" }),
-      onState: (state, challengeId) => setSnap({ state, challengeId }),
+      onState: (state, challengeId, reduced) => setSnap({ state, challengeId, reduced }),
     }),
   );
 
@@ -62,6 +66,7 @@ export function useRevealMotion(
   // (another tab, a restore), renders as idle at once; the effect cancels its timer.
   const state =
     snap.state.status !== "idle" && isStillNext(snap.state.kind, snap.challengeId, challenge, revealed) ? snap.state : idleMotion;
+  const reduced = state.status === "idle" ? liveReduced : snap.reduced;
   const challengeId = challenge?.id ?? null;
   useEffect(() => driver.reconcile(), [driver, challengeId, revealed]);
   useEffect(() => () => driver.dispose(), [driver]);
@@ -89,5 +94,8 @@ export function useRevealMotion(
   const flickText = pool !== null && pool.length > 0 ? pool[tick % pool.length] : null;
   const canPress = (challenge !== null && nextKind(challenge, revealed) !== null) || state.status !== "idle";
 
-  return useMemo(() => ({ state, flickText, canPress, press: driver.press }), [state, flickText, canPress, driver]);
+  return useMemo(
+    () => ({ state, flickText, canPress, reduced, press: driver.press }),
+    [state, flickText, canPress, reduced, driver],
+  );
 }

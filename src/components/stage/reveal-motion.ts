@@ -157,7 +157,8 @@ export interface MotionDriverDeps {
   read: () => MotionSnapshot;
   /** Dispatches `reveal_next` -- only ever called for the kind that is still `nextKind`. */
   commit: () => void;
-  onState: (state: MotionState, challengeId: string | null) => void;
+  /** `reduced` is the value captured at the press that started the current piece -- one source for its timer and its entrance class. */
+  onState: (state: MotionState, challengeId: string | null, reduced: boolean) => void;
 }
 
 /** A motion started for `kind` on `challengeId` is still the live next step (no other tab, restore, or new Challenge moved past it). */
@@ -184,6 +185,7 @@ export function phaseMs(state: Exclude<MotionState, { status: "idle" }>, reduced
 export function createMotionDriver(deps: MotionDriverDeps) {
   let state: MotionState = idleMotion;
   let challengeId: string | null = null;
+  let reduced = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   function stillNext(kind: RevealedKind): boolean {
@@ -195,8 +197,8 @@ export function createMotionDriver(deps: MotionDriverDeps) {
     clearTimeout(timer);
     timer = undefined;
     state = next;
-    if (next.status !== "idle") timer = setTimeout(elapse, phaseMs(next, deps.read().reduced));
-    deps.onState(state, challengeId);
+    if (next.status !== "idle") timer = setTimeout(elapse, phaseMs(next, reduced));
+    deps.onState(state, challengeId, reduced);
   }
 
   function settle(result: PressResult) {
@@ -212,8 +214,12 @@ export function createMotionDriver(deps: MotionDriverDeps) {
 
   return {
     press() {
-      const { challenge, revealed, library, setup, reduced } = deps.read();
-      if (state.status === "idle") challengeId = challenge?.id ?? null;
+      const snapshot = deps.read();
+      const { challenge, revealed, library, setup } = snapshot;
+      if (state.status === "idle") {
+        challengeId = challenge?.id ?? null;
+        reduced = snapshot.reduced;
+      }
       const next = challenge !== null ? nextKind(challenge, revealed) : null;
       const shuffle =
         next !== null && next !== "brief" && challenge !== null && library !== null && setup !== null && !reduced

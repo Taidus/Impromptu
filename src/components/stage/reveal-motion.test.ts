@@ -5,8 +5,10 @@ import { config } from "@/config/app";
 import type { Constraint, Medium, Skill, Style, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import { baseChallenge, fullChallenge } from "@/domain/session/session-fixture";
-import type { Challenge, Setup } from "@/domain/session/schema";
-import { ScrapGroup } from "./pieces";
+import type { Challenge, RevealedKind, Setup } from "@/domain/session/schema";
+import { landingMotion, REVEALED_MOTION, ScrapGroup } from "./pieces";
+import { RevealComposition } from "./RevealComposition";
+import type { RevealMotion } from "./useRevealMotion";
 import { emptySlotLabel, nextKind } from "./reveal-logic";
 import {
   createMotionDriver,
@@ -247,9 +249,17 @@ describe("createMotionDriver", () => {
       const next = world.challenge && nextKind(world.challenge, world.revealed);
       if (next) world.revealed = [...world.revealed, next];
     });
-    const driver = createMotionDriver({ read: () => world, commit, onState: (s) => states.push(s) });
+    const reducedSeen: boolean[] = [];
+    const driver = createMotionDriver({
+      read: () => world,
+      commit,
+      onState: (s, _id, reduced) => {
+        states.push(s);
+        reducedSeen.push(reduced);
+      },
+    });
     const last = () => states.at(-1) ?? idleMotion;
-    return { world, driver, commit, last };
+    return { world, driver, commit, last, reducedSeen };
   }
 
   it("shuffles, lands, then commits once when the landing elapses", () => {
@@ -311,6 +321,15 @@ describe("createMotionDriver", () => {
     expect(h.commit).toHaveBeenCalledTimes(1);
   });
 
+  it("the setting flipping mid-landing keeps the value captured at the press for the timer and onState", () => {
+    const h = harness({ reduced: true });
+    h.driver.press();
+    h.world.reduced = false; // OS toggle mid-landing
+    vi.advanceTimersByTime(config.reveal.motion.reducedLandMs);
+    expect(h.commit).toHaveBeenCalledTimes(1);
+    expect(h.reducedSeen).toEqual([true, true]);
+  });
+
   it("unmounting mid-landing commits the shown piece; mid-shuffle it doesn't", () => {
     const landing = harness({ revealed: ["skill"], setup: setup({ enabledMediums: ["med.drawing"] }) }); // medium: single value, lands straight away
     landing.driver.press();
@@ -340,19 +359,94 @@ describe("ScrapGroup (shuffling)", () => {
   const render = (props: Parameters<typeof ScrapGroup>[0]) => renderToStaticMarkup(createElement(ScrapGroup, props));
 
   it("hides the flick from assistive tech, keeps the empty label, and shimmers the foil only while shuffling", () => {
-    const html = render({ topic: piece(), style: piece({ shufflingText: "Flick" }), constraint: piece() });
+    const html = render({ topic: piece(), style: piece({ shufflingText: "Flick" }), constraint: piece(), reduced: false });
     expect(html).toMatch(/<div aria-hidden="true">(?:(?!<\/div><\/div><\/div>).)*Flick/);
     expect(html).toContain(`<span class="sr-only">${emptySlotLabel("style")}</span>`);
     expect(html).toContain("animate-foil-shimmer");
     expect(html).toContain(`--motion-ms:${config.reveal.motion.shuffleMs}ms`);
 
-    const landed = render({ topic: piece(), style: piece({ revealed: true }), constraint: piece() });
+    const landed = render({ topic: piece(), style: piece({ revealed: true }), constraint: piece(), reduced: false });
     expect(landed).not.toContain("animate-foil-shimmer");
   });
 
   it("landing pieces keep their tilt and take their duration from config", () => {
-    const html = render({ topic: piece(), style: piece({ landing: true }), constraint: piece({ landing: true }) });
+    const html = render({ topic: piece(), style: piece({ landing: true }), constraint: piece({ landing: true }), reduced: false });
     expect(html).toContain(`--motion-ms:${config.reveal.motion.landMs.style}ms;transform:rotate(4deg)`);
     expect(html).toContain(`--motion-ms:${config.reveal.motion.landMs.constraint}ms;transform:rotate(-7deg)`);
+  });
+
+  // Story 4.2: reduced motion fades over `reducedLandMs`, not the material's
+  // own (longer) duration, whether the piece is mid-`landing` or already
+  // revealed outside it (Quick reveal's instant full landing).
+  it("reduced motion: a landing piece fades over reducedLandMs, not its material duration", () => {
+    const html = render({
+      topic: piece(),
+      style: piece({ landing: true }),
+      constraint: piece({ landing: true }),
+      reduced: true,
+    });
+    expect(html).toContain("animate-reduced-fade");
+    expect(html).not.toContain("animate-land-");
+    expect(html).toContain(`--motion-ms:${config.reveal.motion.reducedLandMs}ms`);
+    expect(html).not.toContain(`--motion-ms:${config.reveal.motion.landMs.style}ms`);
+  });
+
+  it("an already-revealed piece (Quick reveal's instant landing) fades only under reduced motion", () => {
+    const revealed = { topic: piece({ revealed: true }), style: piece({ revealed: true }), constraint: piece({ revealed: true }) };
+    expect(render({ ...revealed, reduced: true }).match(/animate-reduced-fade/g)).toHaveLength(3);
+    expect(render({ ...revealed, reduced: false })).not.toContain("animate-");
+  });
+});
+
+describe("landingMotion / REVEALED_MOTION (Story 4.2)", () => {
+  it("picks reducedLandMs under reduced motion, the material's own duration otherwise", () => {
+    expect(landingMotion("constraint", false).style).toEqual({ "--motion-ms": `${config.reveal.motion.landMs.constraint}ms` });
+    expect(landingMotion("constraint", true).style).toEqual({ "--motion-ms": `${config.reveal.motion.reducedLandMs}ms` });
+  });
+
+  it("the class is decided in JS: the material's entrance, or the plain fade under reduced motion, never animate-none", () => {
+    for (const reduced of [false, true]) {
+      for (const kind of ["skill", "medium", "topic", "style", "constraint", "brief"] as const) {
+        const { className } = landingMotion(kind, reduced);
+        expect(className).not.toContain("animate-none");
+        expect(className).not.toContain("motion-reduce:");
+        if (reduced) expect(className).toBe("animate-reduced-fade");
+        else expect(className).toMatch(/^animate-land-(tabs|foil|stamp|brief)$/);
+      }
+    }
+  });
+
+  it("REVEALED_MOTION is the plain fade at reducedLandMs", () => {
+    expect(REVEALED_MOTION.className).toBe("animate-reduced-fade");
+    expect(REVEALED_MOTION.style).toEqual({ "--motion-ms": `${config.reveal.motion.reducedLandMs}ms` });
+  });
+});
+
+describe("RevealComposition (Story 4.2, reduced landing)", () => {
+  const stubMotion = (kind: RevealedKind): RevealMotion => ({
+    state: { status: "landing", kind },
+    flickText: null,
+    canPress: true,
+    reduced: true,
+    press: () => {},
+  });
+  const ms = `--motion-ms:${config.reveal.motion.reducedLandMs}ms`;
+
+  it("the landing Skill tile gets reducedLandMs", () => {
+    const html = renderToStaticMarkup(
+      createElement(RevealComposition, { challenge: fullChallenge, revealed: [], motion: stubMotion("skill") }),
+    );
+    expect(html).toMatch(new RegExp(`data-kind="skill"[^>]*class="[^"]*animate-reduced-fade[^"]*"[^>]*style="${ms}`));
+  });
+
+  it("the landing Brief gets reducedLandMs", () => {
+    const html = renderToStaticMarkup(
+      createElement(RevealComposition, {
+        challenge: fullChallenge,
+        revealed: ["skill", "medium", "topic", "style", "constraint"],
+        motion: stubMotion("brief"),
+      }),
+    );
+    expect(html).toMatch(new RegExp(`data-kind="brief"[^>]*class="[^"]*animate-reduced-fade[^"]*"[^>]*style="${ms}`));
   });
 });
