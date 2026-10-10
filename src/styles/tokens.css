@@ -447,6 +447,13 @@
   animation: ticker-scroll var(--dur-ticker) linear infinite;
 }
 
+/* Story 8.3: the Motion toggle's single kill switch (WCAG 2.2.2 /
+   UX-DR10). Every ambient-motion utility added later (chrome bob, orbit
+   thread draw, poster tilt, ...) must be listed here too. */
+:root[data-motion="off"] .animate-ticker {
+  animation: none;
+}
+
 /* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
    voice). Added by Story 7.3 for the Privacy note, which uses display-setup /
    display-phone for its headline (an overseer decision recorded in the 7.3

@@ -2,7 +2,7 @@
 title: 'Story 8.3: Motion toggle and ambient motion control'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'ce44c36'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -49,16 +49,16 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/components/copy.ts` -- `copy.motion`.
-- [ ] `src/components/motion.ts` -- `effectiveMotion`, `usePrefersReducedMotion`, `useAmbientMotion` (sets `data-motion`).
-- [ ] `src/components/MotionToggle.tsx` -- the button.
-- [ ] `src/components/journey/SetupHeader.tsx` -- header band with mark, Practice link, toggle.
-- [ ] `src/components/setup/SetupHero.tsx` -- remove `Header`, adjust top padding.
-- [ ] `src/app/page.tsx` -- render `SetupHeader` above `SetupHero`.
-- [ ] `src/components/practice/PracticeHeader.tsx` -- add the toggle.
-- [ ] `src/styles/tokens.css` -- `:root[data-motion="off"]` rule.
-- [ ] `src/components/motion.test.ts` -- `effectiveMotion` and toggle markup cases.
-- [ ] `e2e/motion.spec.ts` -- the scenarios above; update any existing spec that counted Practice links or the header.
+- [x] `src/components/copy.ts` -- `copy.motion`.
+- [x] `src/components/motion.ts` -- `effectiveMotion`, `usePrefersReducedMotion`, `useAmbientMotion` (sets `data-motion`).
+- [x] `src/components/MotionToggle.tsx` -- the button.
+- [x] `src/components/journey/SetupHeader.tsx` -- header band with mark, Practice link, toggle.
+- [x] `src/components/setup/SetupHero.tsx` -- remove `Header`, adjust top padding.
+- [x] `src/app/page.tsx` -- render `SetupHeader` above `SetupHero`.
+- [x] `src/components/practice/PracticeHeader.tsx` -- add the toggle.
+- [x] `src/styles/tokens.css` -- `:root[data-motion="off"]` rule.
+- [x] `src/components/motion.test.ts` -- `effectiveMotion` and toggle markup cases.
+- [x] `e2e/motion.spec.ts` -- the scenarios above; update any existing spec that counted Practice links or the header.
 
 **Acceptance Criteria:**
 - Given `/` or `/practice`, then the header shows a MOTION ON/OFF button with a play or pause glyph and `aria-pressed`, defaulting on unless the system requests reduced motion.
@@ -69,9 +69,29 @@ context:
 
 ## Implementation Notes
 
+- Implemented by a Sonnet agent; review fixes by an Opus agent. `MotionSync` is mounted once in the root layout so every page (including /stage) mirrors `data-motion`; `BrandMark` is shared by SetupHeader and PracticeHeader; `lineButtonTone` is exported from LineButton; SetupHeader renders before `<main>` so `/` has a banner landmark. Verification after patches: lint, typecheck, 560 unit tests, build (static), check:static, 132 e2e all pass. Checked in Chrome at 1280×800: header band with mark, Practice link and MOTION ON toggle above the hero.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | Reduced-motion explanation unreachable (disabled + pointer-events-none, title only) | medium | Tooltip never fires; button unfocusable | patch |
+| 2 | blind | `MotionToggleButton` copies LineButton's tone strings | low | Drift risk; export the tone helper | patch |
+| 3 | blind | `/` has no banner landmark (SetupHeader inside `<main>`) | medium | `/practice` exposes one; e2e scoping inconsistent | patch |
+| 4 | blind | Duplicate "ready" logic and a second `useAppStore()` | low | Cleanup | patch |
+| 5 | blind, edge, verif-gap | e2e gaps: pre-ready state passes, reduced motion never checks `data-motion`/track, only first ticker checked | medium | Pre-verified by mutating the derivation | patch |
+| 6 | blind, edge | PracticeHeader lacks the grape star; deferral note deleted | low | Shared `BrandMark` | patch |
+| 7 | blind, edge | `data-motion` only mirrored where a toggle mounts (Stage ignores a persisted OFF) | medium | Kill switch must be page-independent | patch |
+| 8 | blind | `"use client"` unnecessary on SetupHeader | low | Remove | patch |
+| 9 | blind | `matchMedia` allocated per render | low | Lazy singleton | patch |
+| 10 | edge | `addListener` fallback for Safari ≤ 13 | false | Browser support is current and previous versions only | reject |
+| 11 | edge | Attribute stays `off` if the store leaves ready | low | Delete attribute when not ready | patch |
+| 12 | edge | One frame of motion before the effect commits | low | `useLayoutEffect` warns in SSR; reduced-motion users are covered by the CSS media query | reject |
+| 13 | edge | `status === "error"` leaves the toggle disabled ON with no explanation | low | Error state already shows the load-error copy; nothing to persist to | reject |
+| 14 | verif-gap | Pre-ready derivation of `MotionToggle` untested | medium | Pre-verified | patch |
+| 15 | verif-gap | Returning OFF users see a frame of motion before ready | low | Inherent to AD-10 hydration; reduced-motion users unaffected | reject |
 
 ## Verification
 

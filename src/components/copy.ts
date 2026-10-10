@@ -172,6 +172,12 @@ export const copy = {
       wordmark: "impromptu",
     },
   },
+  // Story 8.3: the Motion toggle (WCAG 2.2.2 / UX-DR10).
+  motion: {
+    on: "MOTION ON",
+    off: "MOTION OFF",
+    reducedTitle: "Your system asks for reduced motion, so ambient motion stays off.",
+  },
   signup: {
     emailLabel: "Email",
     // This is the consent text whose version is config.signup.consentTextVersion: bump that when this line changes.
