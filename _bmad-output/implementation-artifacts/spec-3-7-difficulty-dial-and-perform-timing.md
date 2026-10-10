@@ -2,7 +2,7 @@
 title: 'Difficulty Dial and Perform timing'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6a1b526148210a846b8997d93b9d4734ab2cb283'

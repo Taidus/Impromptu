@@ -44,3 +44,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
   summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
   evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-7-difficulty-dial-and-perform-timing.md`
+  summary: Design polish for the Difficulty Dial in Story 9.5 sign-off — phone thumb ink border is 1px (DESIGN asks 1.5px; needs a border-width token), the wrapped Perform timing control at 320px reads as a tall pill, and adjacent arc-label hit areas overlap ~6px.
+  evidence: Recorded by the 3.7 review-fix pass after visual checks at 1280/390/320.
