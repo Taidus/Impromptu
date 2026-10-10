@@ -1,8 +1,7 @@
-import type { Level } from "@/domain/library/schema";
+import { Level } from "@/domain/library/schema";
 
-// The Difficulty Dial's four stops (DESIGN.md -> Components -> Difficulty
-// Dial), in the same order copy.ts and FourLevels.tsx use.
-export const LEVELS: readonly Level[] = ["explore", "experiment", "develop", "perform"];
+// The Difficulty Dial's four stops, in the schema's canonical order.
+export const LEVELS = Level.options;
 
 export function levelIndex(level: Level): number {
   return LEVELS.indexOf(level);
@@ -26,6 +25,8 @@ const STEP_KEYS: Record<string, 1 | -1> = {
   ArrowUp: 1,
   ArrowLeft: -1,
   ArrowDown: -1,
+  PageUp: 1,
+  PageDown: -1,
 };
 
 /**
@@ -52,4 +53,22 @@ export function levelFromPointerRatio(ratio: number): Level {
   const clamped = Math.min(Math.max(ratio, 0), 1);
   const index = Math.round(clamped * (LEVELS.length - 1));
   return LEVELS[index];
+}
+
+// Desktop disc: the four stops sit on its upper arc, measured in degrees
+// clockwise from 12 o'clock (Explore at -ARC, Perform at +ARC).
+const ARC = 60;
+
+export function levelAngle(level: Level): number {
+  return -ARC + (levelIndex(level) * 2 * ARC) / (LEVELS.length - 1);
+}
+
+/**
+ * A pointer angle around the disc (degrees clockwise from 12 o'clock, any
+ * range) snaps to the nearest stop; angles past either end of the arc,
+ * including the lower half, clamp to that side's end.
+ */
+export function levelFromAngle(degrees: number): Level {
+  const normalized = degrees - 360 * Math.ceil((degrees - 180) / 360); // -> (-180, 180]
+  return levelFromPointerRatio((normalized + ARC) / (2 * ARC));
 }

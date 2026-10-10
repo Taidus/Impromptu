@@ -2,7 +2,7 @@
 title: 'Difficulty Dial and Perform timing'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6a1b526148210a846b8997d93b9d4734ab2cb283'
@@ -105,11 +105,25 @@ context:
   - `PerformTimingControl`'s visible `<span>` had `pointer-events-none` (defensive, unneeded): a real click still toggles the radio via native label-forwarding, but Playwright's actionability check saw the ancestor `<label>` "intercept" every click attempt and retried until timeout. Removed `pointer-events-none`; the span is itself inside the label, so clicking it directly still toggles the wrapped `<input>`.
   - The dial's four pointer-only labels (`justify-between`, no wrap) overflowed horizontally at 320px in WebKit specifically (`scrollWidth` 412 vs the 320 budget from the Accessibility Floor's reflow requirement). Added `flex-wrap` so they drop to a second line instead of forcing page-wide horizontal scroll.
 - `getByRole("radio", { name: "Timed" })` in the new e2e spec needed `exact: true` — Playwright's default substring name matching made "Timed" match "Untimed" too (`"Untimed".includes("Timed")`).
+- Review patch pass (triage #1–#8): the desktop dial is now built per DESIGN.md — a 160px sun-gradient disc with a grape-deep notch, the four cream labels on its upper arc (active: cream underline + leading grape star), the Level description and (at Perform) the timing control to its right — while phones keep the four-stop track; both forms live inside the one `role="slider"` element, so ARIA/keyboard are unchanged (this supersedes founder decision 2's track-everywhere simplification). The one-line explanation now uses PRD §6 working copy ("Get a creative challenge. Make your version. Build your skills.") instead of invented text (supersedes founder decision 1). Pointer handling moved onto the slider with `touch-none`, ignores non-primary buttons and Alt/Meta/Ctrl, bails on a zero-width rect, focuses the slider on press, and only calls `onChange` when the Level actually changes; added PageUp/PageDown, pure `levelFromAngle`/`levelAngle` (unit-tested), and `LEVELS`/FourLevels now read `Level.options`. Perform timing wraps at 320px (inner `flex-wrap` box, `min-w-0` fieldset) and hands focus to the visible slider if it unmounts while focused. The controls slot reserves its real height (`min-h-52 desktop:min-h-56`) and the hero gets `pb-28` for 8.2's seam ticker. New e2e: label click, phone track drag (390×844), timing absent until Perform, Timed survives reload. lint/typecheck/test (472)/build/check:static/e2e (39/39) pass.
 
 ## Design Notes
 
 - **Why the dial's visual labels are `aria-hidden` and non-focusable:** EXPERIENCE.md's Difficulty Dial is "one ARIA slider" (singular) with labels that are a secondary, pointer-only activation path ("a click on a label... sets the value"). Making each label a separate focusable control would add four extra Tab stops that duplicate the slider's own keyboard interface. The labels are `aria-hidden="true"` spans that call the same `onChange` via `onPointerDown` (covers mouse, touch, and pen); the one `role="slider"` div remains the sole keyboard/AT entry point.
 - **Why Perform-timing uses real `<input type="radio">`, visually hidden with `sr-only` + `peer-*`:** native same-`name` radios already give arrow-key-moves-selection and single-Tab-stop-in/out for free (EXPERIENCE.md → Component Patterns → Segmented control), so no custom `onKeyDown` is needed there, unlike the dial.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | orchestrator | Desktop disc dial replaced by the phone track | medium | DESIGN.md → Difficulty Dial specifies a 160px sun disc on desktop; founder-visible design deviation | patch |
+| 2 | orchestrator | One-line explanation copy invented | low | PRD §6 working copy: "Get a creative challenge. Make your version. Build your skills." | patch |
+| 3 | blind, edge, verif-gap | Touch drag pans (no `touch-action`); 4px hit area; non-primary buttons and modifier keys change Level; zero-width rect resets; unchanged values re-dispatched | medium | Handlers on the `h-1` track; no `touch-none` anywhere in `src`; every move/key persists Setup | patch |
+| 4 | blind, edge | Timing control doesn't wrap at 320px, isn't beside the dial, loses focus on unmount | low | EXPERIENCE: segmented controls wrap at 320px; focus never lost | patch |
+| 5 | blind | Placeholder height causes layout shift | low | `h-14`/`desktop:h-24` vs real stack | patch |
+| 6 | blind | `LEVELS` third copy of level order; PageUp/PageDown unhandled | low | `Level` enum in schema.ts; APG slider pattern | patch |
+| 7 | verif-gap, blind, edge | Pointer paths, timing hidden at other Levels, timing persistence untested | low | Pre-verified: removing the label handler or the Perform guard passes CI | patch |
+| 8 | peer (8.2 owner) | Hero needs bottom clearance for the night/lilac sun ticker | low | 8.2 places a ticker at the seam with `pb-28` on the placeholder | patch |
 
 ## Verification
 

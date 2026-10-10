@@ -22,7 +22,7 @@ export const copy = {
   // add their own strings here later.
   setup: {
     headline: "Make something unexpected.",
-    explanation: "Set a level, then get a challenge you can start right away.",
+    explanation: "Get a creative challenge. Make your version. Build your skills.",
     dialLabel: "Level",
     performTimingLegend: "Perform timing",
     loadError: "Setup couldn't load. Reload the page to try again.",
