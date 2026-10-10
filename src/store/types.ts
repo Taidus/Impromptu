@@ -25,8 +25,16 @@ export interface StoreState {
   migrationFailed: boolean;
 }
 
-/** The command layer (AD-7): calls into `compose()`. Later stories add `reroll`, `retry`, `vary`. */
-export type StoreCommand = { type: "new_challenge" };
+/**
+ * The command layer (AD-7): calls into `compose()`, or otherwise needs more
+ * than one storage slice (session + history) in one transition. `vary` is
+ * phase 2 (Story 5.8); `reroll` is a later story.
+ */
+export type StoreCommand =
+  | { type: "new_challenge" }
+  | { type: "finish_rep" }
+  | { type: "save_rep" }
+  | { type: "retry"; fromRepId: string };
 
 export interface StoreDeps {
   repository: Repository;
