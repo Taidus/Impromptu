@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:57
-last_updated: 10-10-2026 01:28
+last_updated: 10-10-2026 01:18
 project: Impromptu
 project_key: NOKEY
 tracking_system: file-system
@@ -69,7 +69,7 @@ development_status:
   3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: review
   3-9-the-challenge-stage-page-shell: done
   3-10-challenge-composition-and-stepping-through-the-reveal: done
-  3-11-a-stable-challenge-across-navigation-and-reload: backlog
+  3-11-a-stable-challenge-across-navigation-and-reload: done
   epic-3-retrospective: optional
 
   epic-4: backlog
@@ -82,9 +82,9 @@ development_status:
   4-7-filming-contract-fit-rule-and-automated-legibility-checks: backlog
   epic-4-retrospective: optional
 
-  epic-5: in-progress
-  5-1-start-creating-and-the-untimed-creating-view: in-progress
-  5-2-countdown-for-timed-challenges: in-progress
+  epic-5: backlog
+  5-1-start-creating-and-the-untimed-creating-view: backlog
+  5-2-countdown-for-timed-challenges: backlog
   5-3-pause-resume-and-time-s-up-without-failure: backlog
   5-4-resume-or-discard-an-attempt-from-setup: backlog
   5-5-finish-rep-and-the-rep-done-moment: backlog
@@ -96,8 +96,8 @@ development_status:
   epic-6: in-progress
   6-1-practice-page-with-empty-and-storage-states: review
   6-2-practice-history-rep-cards: review
-  6-3-practice-map: backlog
-  6-4-export-practice-history-as-json: backlog
+  6-3-practice-map: done
+  6-4-export-practice-history-as-json: review
   6-5-clear-all-data-with-confirmation: backlog
   epic-6-retrospective: optional
 

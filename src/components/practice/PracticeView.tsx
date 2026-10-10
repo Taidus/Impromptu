@@ -1,28 +1,34 @@
 import type { ReactNode } from "react";
 import { copy } from "@/components/copy";
+import type { practiceMap } from "@/domain/practice/practice-map";
 import type { Rep } from "@/domain/session/schema";
 import type { Status } from "@/store";
 import { PracticeHistory } from "./PracticeHistory";
+import { PracticeMap } from "./PracticeMap";
 
 export interface PracticeViewProps {
   status: Status;
   storageAvailable: boolean;
   /** Rendered newest first below the storage note once Reps exist (Story 6.2, FR-25). */
   reps: Rep[];
+  /** The Story 6.3 Practice Map; `null` while the library hasn't loaded yet (hidden, not a placeholder). */
+  map: ReturnType<typeof practiceMap> | null;
   /** The Get a challenge / Resume control (a client `GetAChallengeButton`); rendered in the empty and unavailable states. */
   action: ReactNode;
+  /** Story 6.4: the Export control (a client `ExportButton`); right-aligned above the history, with-Reps only. */
+  exportControl: ReactNode;
 }
 
 /**
  * Pure presentational: no store, no hooks -- unit-testable with
  * `renderToStaticMarkup`. Four states (AD-10, FR-27, FR-29): loading (neutral
  * placeholder, pre-hydration), storage unavailable, empty (no Reps), and with
- * Reps (storage note plus the Rep history, Story 6.2; the Practice Map is
- * Story 6.3).
+ * Reps (storage note, the Practice Map (Story 6.3), then the Rep history
+ * (Story 6.2)).
  * `status === "error"` renders like `ready`: history is already loaded by then,
  * and compose failures are the Stage's to handle.
  */
-export function PracticeView({ status, storageAvailable, reps, action }: PracticeViewProps) {
+export function PracticeView({ status, storageAvailable, reps, map, action, exportControl }: PracticeViewProps) {
   const repCount = reps.length;
   if (status === "loading") {
     return (
@@ -42,7 +48,13 @@ export function PracticeView({ status, storageAvailable, reps, action }: Practic
     <div className="flex flex-col gap-6">
       <p className="text-body">{message}</p>
       {(!storageAvailable || repCount === 0) && action}
-      {storageAvailable && repCount > 0 && <PracticeHistory reps={reps} />}
+      {storageAvailable && repCount > 0 && (
+        <>
+          {map && <PracticeMap map={map} />}
+          <div className="flex justify-end">{exportControl}</div>
+          <PracticeHistory reps={reps} />
+        </>
+      )}
     </div>
   );
 }

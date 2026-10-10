@@ -10,7 +10,7 @@ import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
 import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 import { RevealComposition } from "./RevealComposition";
-import { liveAnnouncement, nextKind } from "./reveal-logic";
+import { liveAnnouncement, nextKind, restoreAnnouncement } from "./reveal-logic";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -85,22 +85,36 @@ export function StagePage() {
   // with React's "store information from previous renders" pattern (a
   // guarded setState during render; the lint config forbids setState in an
   // effect body and ref reads during render). The first hydrated render
-  // seeds it silently with whatever was restored -- the reload/restore
-  // announcement is Story 3.11's.
+  // seeds it -- Story 3.11: a fresh mount (reload, resume, or a Setup round
+  // trip) that already finds a Challenge held with some progress queues
+  // `restoreAnnouncement` as `restore`, and the effect below moves it into
+  // the region a commit later: a region that mounts already holding its text
+  // (a client-side return) is usually not spoken. Only `held` is restored --
+  // a reload during an Attempt stays silent until Story 5.x owns that state.
   const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
-  const [live, setLive] = useState<{ seeded: boolean; challengeId: string | null; revealed: readonly RevealedKind[]; text: string }>({
-    seeded: false,
-    challengeId: null,
-    revealed: [],
-    text: "",
-  });
+  const quickReveal = store.setup?.quickReveal ?? false;
+  const [live, setLive] = useState<{
+    seeded: boolean;
+    challengeId: string | null;
+    revealed: readonly RevealedKind[];
+    text: string;
+    restore: string | null;
+  }>({ seeded: false, challengeId: null, revealed: [], text: "", restore: null });
   const heldId = heldChallenge?.id ?? null;
   if (!live.seeded) {
-    if (store.status !== "loading") setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: "" });
+    if (store.status !== "loading") {
+      const restore = heldChallenge !== null ? restoreAnnouncement(heldChallenge, store.session.revealed, quickReveal) : null;
+      setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: "", restore });
+    }
   } else if (heldId !== live.challengeId || store.session.revealed !== live.revealed) {
-    const text = liveAnnouncement(live.challengeId, live.revealed, heldChallenge, store.session.revealed, store.setup?.quickReveal ?? false);
-    setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: text ?? live.text });
+    const text = liveAnnouncement(live.challengeId, live.revealed, heldChallenge, store.session.revealed, quickReveal);
+    setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: text ?? live.text, restore: null });
   }
+  useEffect(() => {
+    if (live.restore === null) return;
+    const id = setTimeout(() => setLive((prev) => ({ ...prev, text: prev.restore ?? prev.text, restore: null })));
+    return () => clearTimeout(id);
+  }, [live.restore]);
 
   const sound = store.setup?.sound ?? false;
   const meta = stageMeta(store.session.challenge);

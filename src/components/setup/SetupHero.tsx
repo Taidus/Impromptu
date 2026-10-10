@@ -9,6 +9,7 @@ import { getAppStore, useAppStore, type StoreState } from "@/store";
 import { DifficultyDial } from "./DifficultyDial";
 import { MediumsRow } from "./MediumsRow";
 import { InlineStatus } from "./InlineStatus";
+import { NoticeBanners } from "./NoticeBanners";
 import { mediumSelectOptions, optionOrRandom, skillSelectOptions } from "./options";
 import { PerformTimingControl } from "./PerformTiming";
 import { QuickRevealSwitch } from "./QuickRevealSwitch";
@@ -33,7 +34,8 @@ export function SetupHero() {
       {/* Story 8.2 wraps the page in decorative layers (Ticker, ChromePiece,
           OrbitThread, Grain) behind a `relative` ancestor; this column must stay on top.
           The header band itself is journey/SetupHeader (Story 8.3), rendered above. */}
-      <div className="relative z-10 mx-auto flex max-w-content-max flex-col gap-10">
+      <div className="relative z-10 mx-auto flex max-w-content-max flex-col">
+        <NoticeBanners state={state} />
         <div className="flex flex-col gap-6">
           <h1 className="text-display-phone [overflow-wrap:anywhere] desktop:text-display-setup">
             {setupCopy.headline}

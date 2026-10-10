@@ -10,6 +10,7 @@ import {
   liveAnnouncement,
   nextKind,
   quickRevealAnnouncement,
+  restoreAnnouncement,
 } from "./reveal-logic";
 
 describe("presentKinds", () => {
@@ -118,6 +119,39 @@ describe("liveAnnouncement", () => {
     expect(text).toBe(quickRevealAnnouncement(fullChallenge));
     expect(text?.startsWith(copy.stage.challengeReady)).toBe(true);
     expect(liveAnnouncement("old", [], fullChallenge, all, false)).not.toContain(copy.stage.challengeReady);
+  });
+});
+
+describe("restoreAnnouncement", () => {
+  const all = presentKinds(fullChallenge);
+
+  it("is null when nothing present has landed", () => {
+    expect(restoreAnnouncement(baseChallenge, [], false)).toBeNull();
+    expect(restoreAnnouncement(baseChallenge, [], true)).toBeNull();
+    // baseChallenge has no Style: a stray "style" is not a landed piece.
+    expect(restoreAnnouncement(baseChallenge, ["style"], false)).toBeNull();
+  });
+
+  it("announces only the already-landed part, in reveal order, while mid-Reveal", () => {
+    expect(restoreAnnouncement(baseChallenge, ["medium", "skill"], false)).toBe(
+      `${announcementFor("skill", baseChallenge)} ${announcementFor("medium", baseChallenge)}`,
+    );
+  });
+
+  it("announces every landed piece and the Brief, without \"Challenge ready.\", once fully revealed", () => {
+    const text = restoreAnnouncement(fullChallenge, all, false);
+    expect(text).toBe(all.map((kind) => announcementFor(kind, fullChallenge)).join(" "));
+    expect(text).not.toContain(copy.stage.challengeReady);
+  });
+
+  it("uses the Quick-reveal wording only when Quick reveal landed it all", () => {
+    expect(restoreAnnouncement(fullChallenge, all, true)).toBe(quickRevealAnnouncement(fullChallenge));
+  });
+
+  it("matches liveAnnouncement for the same state seen as new", () => {
+    expect(restoreAnnouncement(fullChallenge, ["topic", "skill"], false)).toBe(
+      liveAnnouncement(null, [], fullChallenge, ["topic", "skill"], false),
+    );
   });
 });
 

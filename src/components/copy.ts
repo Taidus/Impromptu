@@ -149,6 +149,8 @@ export const copy = {
     backToYourChallenge: "Back to your challenge",
     keepMyData: "Keep my data",
     clearEverything: "Clear everything",
+    // Story 6.4: the Practice History export control.
+    export: "Export",
   },
   state: {
     repSaved: "Rep saved.",
@@ -160,6 +162,18 @@ export const copy = {
     challengeInProgress: "You have a challenge in progress.",
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
+    // Story 6.4: announced after the export download fires.
+    exported: "Exported.",
+    exportFailed: "Export failed.",
+  },
+  // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
+  // banner). More than one can show at once -- see activeNoticeBanners.
+  notice: {
+    challengeWaiting: "Your challenge is waiting.",
+    storageUnavailable: "This browser isn't saving data, so your history won't be kept. Challenges still work.",
+    // Neutral on purpose: migrationFailed covers setup, session, and history, not just reps.
+    // Orchestrator placeholder -- final copy is the founder's.
+    migrationFailed: "Some older saved data couldn't be read. It's still stored.",
   },
   // Story 6.1: the Practice page shell (empty and storage-unavailable states).
   practice: {
@@ -168,6 +182,8 @@ export const copy = {
     storageUnavailable: "This browser isn't saving data, so there's no history to show.",
     // Story 6.2: visually hidden h2 above the Rep card list.
     historyTitle: "Practice history",
+    // Story 6.3: the Practice Map's three group labels (table captions).
+    mapGroups: { skill: "Skill", medium: "Medium", level: "Level" },
   },
   privacy: {
     title: "privacy.",

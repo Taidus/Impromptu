@@ -626,6 +626,16 @@
   letter-spacing: var(--typography-meta-tracking);
 }
 
+/* Story 6.3: Practice Map cell counts. Var already existed (Story 3.1
+   transcribed the whole ramp); this is its first consumer. */
+@utility text-index-number {
+  font-family: var(--typography-index-number-family);
+  font-size: var(--typography-index-number-size);
+  font-weight: var(--typography-index-number-weight);
+  line-height: var(--typography-index-number-leading);
+  letter-spacing: var(--typography-index-number-tracking);
+}
+
 
 /* Form label role (DESIGN.md → Text field). Added by Story 7.2. */
 @utility text-label {
