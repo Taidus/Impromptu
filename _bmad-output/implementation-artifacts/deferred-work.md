@@ -36,3 +36,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-3-compose-a-challenge-from-setup-locks-and-the-recent-window.md`
   summary: Measure `compose()` against the launch-size generated library (Story 2.8) and switch to lazy per-Template sampling if a click exceeds ~50 ms.
   evidence: After review fixes, candidates are still enumerated (pre-filtered by slot tags) and every compatible combo is rendered before picking; cost scales with fills per Template.
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets.md`
+  summary: Route the orbit thread through margins and gutters (crossing sides inside the text-free seams) and draw it on scroll under the 8.3 motion gate, instead of the current near-vertical left-edge line.
+  evidence: DESIGN → Orbit thread wants it to wind around the page; the current path satisfies 'never crosses text' by hugging x≈1% of the viewport.

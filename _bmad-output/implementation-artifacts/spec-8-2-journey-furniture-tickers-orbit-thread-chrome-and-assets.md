@@ -2,7 +2,7 @@
 title: 'Story 8.2: Journey furniture: tickers, orbit thread, chrome, and assets'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '5dfd5a2'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -48,17 +48,17 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `public/decor/**` + `public/decor/manifest.json` -- copy assets, write manifest.
-- [ ] `src/styles/tokens.css` -- `text-style-italic` utility, `--dur-ticker`.
-- [ ] `src/components/journey/ticker-fragments.ts` -- build-time reader returning `string[]` of Topic/Style revealText from anchors and accepted batches.
-- [ ] `src/components/journey/Ticker.tsx` -- `variant: "sun" | "grape"`, tilt, loop, pause rules, `aria-hidden`, `data-decor`.
-- [ ] `src/components/journey/OrbitThread.tsx` -- SVG path, `data-decor`.
-- [ ] `src/components/journey/ChromePiece.tsx` -- image piece with `data-decor`.
-- [ ] `src/components/journey/PosterCard.tsx` -- `src`/`alt` props, `next/image`.
-- [ ] `src/components/journey/Grain.tsx` -- overlay.
-- [ ] `src/app/page.tsx` -- place tickers at the two seams, four chrome pieces, the orbit thread, grain; pass poster sources.
-- [ ] `src/components/journey/ticker-fragments.test.ts` -- anchors yield at least the three anchor topics and "Horror"; duplicates removed.
-- [ ] `e2e/journey-overlap.spec.ts` -- the overlap assertion at four viewports; tickers hidden from the accessibility tree; posters have alt text.
+- [x] `public/decor/**` + `public/decor/manifest.json` -- copy assets, write manifest.
+- [x] `src/styles/tokens.css` -- `text-style-italic` utility, `--dur-ticker`.
+- [x] `src/components/journey/ticker-fragments.ts` -- build-time reader returning `string[]` of Topic/Style revealText from anchors and accepted batches.
+- [x] `src/components/journey/Ticker.tsx` -- `variant: "sun" | "grape"`, tilt, loop, pause rules, `aria-hidden`, `data-decor`.
+- [x] `src/components/journey/OrbitThread.tsx` -- SVG path, `data-decor`.
+- [x] `src/components/journey/ChromePiece.tsx` -- image piece with `data-decor`.
+- [x] `src/components/journey/PosterCard.tsx` -- `src`/`alt` props, `next/image`.
+- [x] `src/components/journey/Grain.tsx` -- overlay.
+- [x] `src/app/page.tsx` -- place tickers at the two seams, four chrome pieces, the orbit thread, grain; pass poster sources.
+- [x] `src/components/journey/ticker-fragments.test.ts` -- anchors yield at least the three anchor topics and "Horror"; duplicates removed.
+- [x] `e2e/journey-overlap.spec.ts` -- the overlap assertion at four viewports; tickers hidden from the accessibility tree; posters have alt text.
 
 **Acceptance Criteria:**
 - Given `/` at 1280×800, then a sun ticker crosses the night/lilac seam at -2.4° and a grape-deep ticker crosses the paper/sun seam at 2°, each carrying library fragments in style-italic and separated by chrome bursts, and neither is in the accessibility tree.
@@ -70,9 +70,44 @@ context:
 
 ## Implementation Notes
 
+- Implemented by a Sonnet agent; review fixes by an Opus agent. The 37 assets came from the Cutout design-system artifact's asset store (the founder's Higgsfield originals), not regenerated. Verification after patches: lint, typecheck, 428 unit tests, build (static), check:static, 57 e2e (19 × 3 browsers, including the overlap sweep at four viewports, reduced motion, hover pause, phone-hidden decor and a real click under the overlays) all pass. Checked in Chrome at 1280×800: tickers, posters, chrome with drop-shadows, orbit thread, grain.
+
+- Four chrome pieces total are placed, per this spec's list (drip, tribal, sparkle, ring); DESIGN's "2–4 per screen" is left for 8.4's hero and later furniture.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | all three, overseer | Ticker hover pause is dead (`pointer-events-none` on the group) | medium | AC requires pause on hover; seen in code and in Chrome | patch |
+| 2 | verif-gap, blind | No e2e for reduced motion, hover pause, decor hidden on phones, or a real interaction under the overlays | medium | Pre-verified by deleting classes | patch |
+| 3 | edge, blind | Poster wrapper has no width; figures collapse to caption width | medium | Visible in Chrome (posters ≈190px, not 256px) | patch |
+| 4 | blind, overseer | `shadow-lift` box-shadow draws rectangular plates behind transparent chrome | medium | Visible in Chrome at every seam | patch |
+| 5 | blind | Grain and OrbitThread paint above content (no z-order) | low | Harmless today; one class per content column fixes it | patch |
+| 6 | blind, overseer | Orbit thread is a straight line at the left edge, not routed through margins and gutters | medium | DESIGN wants winding; safe routing needs seam-aware waypoints and 8.3's motion | defer |
+| 7 | blind | ChromePiece lacks `sizes` | low | Oversized srcset candidates | patch |
+| 8 | blind | Stale comment in Grain | low | Delete sentence | patch |
+| 9 | blind | Burst size duplicated | low | Export `CHROME_SIZE` | patch |
+| 10 | blind | `tickerFragments()` runs on every render | low | Hoist to module scope | patch |
+| 11 | blind | Fixed `--dur-ticker` while track grows | low | `ponytail:` note naming the ceiling | patch |
+| 12 | edge, blind | `alt` not enforced with `src` on PosterCard | low | Discriminated union | patch |
+| 13 | blind, edge | Four chrome pieces total vs "2–4 per screen" | low | Spec listed four; record in notes | patch |
+| 14 | edge | Loop boundary jumps by half a gap | low | Put the gap inside each item | patch |
+| 15 | edge | Track shorter than 2× viewport with four fragments | low | Repeat to a minimum count | patch |
+| 16 | edge | Empty fragments renders an empty band | low | Return null | patch |
+| 17 | edge | Burst images lazy-load mid-scroll | low | `loading="eager"` | patch |
+| 18 | edge | Missing anchor files silently empty the ticker | low | Throw for the anchors dir | patch |
+| 19 | edge | Retired entries and `manifest.retire` ids still shown | low | Filter | patch |
+| 20 | edge | Malformed draft manifest breaks the build | low | `safeParse` | patch |
+| 21 | edge | Symlinked batch dirs skipped | low | Unlikely; adds complexity | reject |
+| 22 | edge | ChromePiece className optional | low | Make required | patch |
+| 23 | edge | Thread could cross hero text beyond ~2500px wide | low | Covered by the z-order fix; routing deferred (#6) | reject |
+| 24 | edge | Overlap selector misses li/dt/dd/figcaption | medium | Sample rows and captions unchecked | patch |
+| 25 | edge | Rects measured before fonts load | low | `document.fonts.ready` | patch |
+| 26 | edge | Opacity/overflow clipping not modelled in overlap check | low | Adds complexity; no current false result | reject |
+| 27 | edge | "Horror" aria assertion brittle | low | Assert the ticker's own snapshot is empty | patch |
+| 28 | verif-gap | Accepted/draft batch filtering untested | medium | Pre-verified; add root param + temp fixture | patch |
 
 ## Verification
 

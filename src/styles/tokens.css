@@ -93,6 +93,10 @@
 
   /* DESIGN.md → Typography: phone is ≤ 860px, so desktop starts at 861px. */
   --breakpoint-desktop: 861px;
+
+  /* Story 8.2: one loop of the Ticker's library-fragment marquee. */
+  /* ponytail: fixed duration while the track grows with the library, so ticker speed drifts with library size; scale duration by fragment count if it matters. */
+  --dur-ticker: 40s;
 }
 
 /*
@@ -391,6 +395,37 @@
   font-weight: var(--typography-brief-setup-weight);
   line-height: var(--typography-brief-setup-leading);
   letter-spacing: var(--typography-brief-setup-tracking);
+}
+
+/* Story 8.2: the Ticker's fragment text. */
+@utility text-style-italic {
+  font-family: var(--typography-style-italic-family);
+  font-size: var(--typography-style-italic-size);
+  font-weight: var(--typography-style-italic-weight);
+  line-height: var(--typography-style-italic-leading);
+  letter-spacing: var(--typography-style-italic-tracking);
+  font-style: italic;
+}
+
+/* Story 8.2: the Ticker's marquee loop. The track renders its fragment
+   sequence an even number of times, so scrolling exactly half its width loops
+   seamlessly. Pausing (hover/focus-within) and disabling (reduced motion)
+   are done by the component with Tailwind's own variants
+   (group-hover/group-focus-within + motion-reduce), not here. */
+@keyframes ticker-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Story 8.2: a lift that follows the artwork's alpha (chrome cutouts are
+   transparent webp — a box-shadow would draw a rectangular plate). */
+@utility drop-shadow-lift {
+  filter: drop-shadow(var(--shadow-lift));
+}
+
+@utility animate-ticker {
+  animation: ticker-scroll var(--dur-ticker) linear infinite;
 }
 
 /* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
