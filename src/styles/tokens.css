@@ -674,10 +674,8 @@
 /* Story 4.1: the Reveal's landing entrance, per material (UX-DR22). A
    soft settle for the ticket tabs and the Topic scrap; a punchier "thump"
    for the Constraint stamp; the foil reuses the soft settle (its own
-   shimmer, below, is the material cue). `motion-reduce:` pairs every one
-   of these at its call site (pieces.tsx), matching the SunButton/Ticker
-   precedent -- Story 4.2 owns the full reduced-motion fade, but a landing
-   transition still shouldn't play under it. */
+   shimmer, below, is the material cue). Under reduced motion pieces.tsx
+   picks `reduced-fade` (below) instead, never one of these. */
 @keyframes piece-land {
   from {
     opacity: 0;
@@ -741,10 +739,11 @@
 /* Story 4.2: the one entrance every piece gets under
    `prefers-reduced-motion: reduce` -- opacity only, so a piece's position
    and size never move during or after it (AC: identical to the motion
-   version). `motion-reduce:` at the call site (pieces.tsx) swaps this in for
-   the land/shimmer/thump animations above, whether a piece arrives through
-   a manual reveal or Quick reveal's instant full landing (which plays no
-   animation of its own under full motion -- out of scope here). */
+   version). pieces.tsx picks it in JS instead of the land/thump animations
+   above (from the reduced value captured at the press), and for a piece that
+   mounts already revealed (Quick reveal's instant landing, which plays no
+   animation of its own under full motion). The foil shimmer has no reduced
+   variant: it only plays mid-shuffle, and reduced motion never shuffles. */
 @keyframes reduced-fade {
   from {
     opacity: 0;

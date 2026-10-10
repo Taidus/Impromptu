@@ -5,7 +5,7 @@ import { copy } from "@/components/copy";
 import { SunButton } from "@/components/SunButton";
 import type { Challenge, RevealedKind } from "@/domain/session/schema";
 import type { RevealMotion } from "./useRevealMotion";
-import { BriefBlock, EmptySlot, landingMotion, REVEALED_MOTION, ScrapGroup, ShufflingPiece, TicketTab } from "./pieces";
+import { BriefBlock, EmptySlot, landingMotion, revealedMotion, ScrapGroup, ShufflingPiece, TicketTab } from "./pieces";
 import { nextKind } from "./reveal-logic";
 
 /** Native auto-repeat on a held Enter would click the focused button once per repeat -- one reveal per press only. */
@@ -64,10 +64,11 @@ export function RevealComposition({
     if (has(kind) || landingKind === kind) {
       return (
         <TicketTab
+          key={challenge.inputs[kind].revealText}
           kind={kind}
           value={challenge.inputs[kind].revealText}
           tiltDeg={tiltDeg}
-          motion={landingKind === kind ? landingMotion(kind, motion.reduced) : REVEALED_MOTION}
+          motion={landingKind === kind ? landingMotion(kind, motion.reduced) : revealedMotion(motion.reduced)}
         />
       );
     }
@@ -110,10 +111,11 @@ export function RevealComposition({
 
       {briefShowing ? (
         <BriefBlock
+          key={challenge.brief}
           ref={briefRef}
           brief={challenge.brief}
           guidance={challenge.guidance}
-          motion={landingKind === "brief" ? landingMotion("brief", motion.reduced) : REVEALED_MOTION}
+          motion={landingKind === "brief" ? landingMotion("brief", motion.reduced) : revealedMotion(motion.reduced)}
         />
       ) : null}
 

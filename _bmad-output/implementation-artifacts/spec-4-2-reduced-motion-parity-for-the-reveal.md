@@ -2,7 +2,7 @@
 title: 'Reduced-motion parity for the Reveal'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '05b19107ceb16410958bfdd1fc2f3c4d7f79db28'
@@ -55,6 +55,18 @@ context:
 - `landingMotion`'s and `REVEALED_MOTION`'s classes never include `animate-none`; `SHIMMER_MOTION` already carried `motion-reduce:animate-none` from Story 4.1 and needed no change (shimmer only renders mid-shuffle, which reduced motion already prevents).
 - The opacity-only `reduced-fade` keyframe guarantees the position/size-parity AC by construction -- nothing it animates affects layout.
 - `npm run lint`, `npm run typecheck`, `npm test` (856/856), `npm run build`, `npm run check:static`, and `E2E_PORT=3107 npm run test:e2e` (255/255 across chromium/webkit/firefox) all pass clean. One pre-existing, unrelated flake reproduced in isolation as a pass (`journey-overlap.spec.ts`'s webkit hover-pause ticker test, not touched by this story).
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | Toggling OS reduced motion re-fades every landed piece; only Topic remounts on a changed value | medium | `REVEALED_MOTION` class persists on all revealed pieces; only `TopicValue` is keyed | patch |
+| 2 | blind, edge | Duration (hook), class (CSS variant) and commit timer (press-time read) can disagree mid-landing | low | Three separate reduced-motion sources | patch |
+| 3 | verif-gap | `reduced` never verified to reach RevealComposition's landing pieces | medium | Pre-verified: passing `false` passes every test | patch |
+| 4 | blind, edge, verif-gap | e2e: attribute-only recorder, no positive control, unseeded fade test, no duration check, end-only announcement, missing label/Brief metrics, leaking init scripts, hard-coded storage key, xpath, fixed sleep, racy press loop, no Quick reveal under reduce | low | Tests pass without exercising their claims | patch |
+| 5 | blind, verif-gap | Unit class test never runs `reduced: true`; always-true assertion | low | `LAND_CLASS` entries all contain the variant | patch |
+| 6 | blind | tokens.css comment overstates shimmer replacement | low | `SHIMMER_MOTION` still `animate-none` | patch |
+- **Review patch pass:** the driver now captures `reduced` at press time (one value for its timer, `onState`, and `RevealMotion.reduced` while in flight; live value when idle); landing/revealed classes are decided in JS (`landingMotion`, `revealedMotion`, `REVEALED_MOTION` = plain `animate-reduced-fade`) instead of the `motion-reduce:` variant; each piece freezes its entrance at mount (`useMountMotion`) and revealed pieces (tabs, foil, stamp, Topic, Brief) are keyed on their value, so an OS toggle never re-fades landed pieces while a changed value remounts and fades; `ScrapGroup.reduced` is required; tokens.css comments corrected (shimmer has no reduced variant -- reduced motion never shuffles); pieces carry `data-kind`. Unit tests cover both `reduced` values, the press-time capture, and a `RevealComposition` render (`--motion-ms:120ms` on the landing Skill tile and Brief). `e2e/reduced-motion.spec.ts` rewritten: fresh context per pass, config storage version, paused clock with per-press landing measurement (positive control: motion pass plays each material at `landMs`; reduced pass plays `reduced-fade` at 120ms for every piece) and per-press announcements, childList-aware status recorder, label/value/Brief-container layout parity after `expect.poll` stability, plus a Quick-reveal-under-reduce parity test. lint/typecheck/859 unit/build/check:static/261 e2e all pass.
 
 ## Verification
 
