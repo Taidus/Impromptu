@@ -1,3 +1,4 @@
+import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Clock, Random, Repository } from "@/domain/ports";
 import type { Rep, Session, Setup } from "@/domain/session/schema";
 import type { SessionEvent } from "@/domain/session/session-reducer";
@@ -12,6 +13,8 @@ export interface StoreState {
   libraryStatus: Status;
   /** `null` until hydration resolves it -- either from storage, or (first visit) from the library. */
   setup: Setup | null;
+  /** The loaded library (Story 3.6 holds this internally for `compose()`); `null` until `libraryStatus` is `'ready'`. Story 3.8 reads `.mediums`/`.skills` for Medium/Skill names (NFR-6) -- never a hardcoded string. */
+  library: ComposeLibrary | null;
   session: Session;
   history: Rep[];
   /** True after a save failed for a reason other than a rev conflict (the change is held in memory only); cleared by the next successful save. */

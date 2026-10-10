@@ -20,6 +20,7 @@ export const initialState: StoreState = {
   status: "loading",
   libraryStatus: "loading",
   setup: null,
+  library: null,
   session: emptySession,
   history: [],
   saveFailed: false,
@@ -166,7 +167,7 @@ export function createStore(deps: StoreDeps): Store {
 
   function onLibraryReady(loaded: ComposeLibrary): void {
     if (state.setup === null) ensureSetup(loaded);
-    setState({ ...state, libraryStatus: "ready" });
+    setState({ ...state, libraryStatus: "ready", library: loaded });
     drainPending();
   }
 
