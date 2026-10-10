@@ -93,6 +93,9 @@ export function createStore(deps: StoreDeps): Store {
       if (result.ok) return { data: currentData, rev: result.value.rev, saved: true };
       if (result.reason !== "rev_conflict") return { data: currentData, rev: currentRev, saved: false }; // keep this in memory only
       const fresh: Envelope<unknown> | null = result.fresh;
+      // The key vanished under a write that expected rev > 0: another tab cleared all data (Story 6.5).
+      // Re-applying would resurrect the pre-clear slice, so keep it in memory only.
+      if (fresh === null && currentRev > 0) return { data: currentData, rev: 0, saved: false };
       const parsed = fresh ? schema.safeParse(fresh.data) : null;
       currentRev = fresh ? fresh.rev : 0;
       currentData = reapply(parsed?.success ? parsed.data : null);
@@ -208,9 +211,16 @@ export function createStore(deps: StoreDeps): Store {
     return state.status === "ready" && state.libraryStatus === "ready" && state.setup !== null && library !== null;
   }
 
-  /** Only `new_challenge` composes, so only it waits for the library; finish/save/retry need hydration alone. */
+  /**
+   * Only `new_challenge` composes, so only it waits for the library; finish/save/retry need
+   * hydration alone. `clear_all_data` doesn't read or depend on setup/session validity at all --
+   * it only needs the Repository hydrate() has already set up, so it runs as soon as that's done,
+   * even from `status: 'loading'` or `'error'`.
+   */
   function canRun(command: StoreCommand): boolean {
-    return command.type === "new_challenge" ? isReadyToCompose() : state.status === "ready";
+    if (command.type === "new_challenge") return isReadyToCompose();
+    if (command.type === "clear_all_data") return hydrated;
+    return state.status === "ready";
   }
 
   function dispatch(command: StoreCommand): void {
@@ -228,6 +238,38 @@ export function createStore(deps: StoreDeps): Store {
     else if (command.type === "finish_rep") runFinishRep();
     else if (command.type === "save_rep") runSaveRep();
     else if (command.type === "retry") runRetry(command.fromRepId);
+    else runClearAllData();
+  }
+
+  /**
+   * Clear all data (Story 6.5, FR-28): wipes every `impromptu:*` key, empties session/history,
+   * resets every slice rev to 0 (AD-9: the next write after a clear starts a fresh rev chain), and
+   * drops any queued `new_challenge` (it would otherwise compose against the just-cleared state
+   * the moment the library arrives). Setup goes back to the library default in memory only --
+   * nothing is persisted here -- when the library is ready; otherwise it goes to `null` and the
+   * existing first-visit path (`onLibraryReady` -> `ensureSetup`) builds and persists one once the
+   * library resolves, exactly as it would for a brand-new visitor.
+   */
+  function runClearAllData(): void {
+    // A failed clear changes nothing but the save-failed flag (the caller announces the failure).
+    if (!repository.clearAll().ok) {
+      setState({ ...state, saveFailed: true });
+      return;
+    }
+    removePending((c) => c.type === "new_challenge");
+    setupRev = 0;
+    sessionRev = 0;
+    historyRev = 0;
+    const setup = library !== null ? buildDefaultSetup(library) : null;
+    setState({
+      ...state,
+      setup,
+      status: setup !== null ? "ready" : state.libraryStatus === "error" ? "error" : "loading",
+      session: emptySession,
+      history: [],
+      saveFailed: false,
+      migrationFailed: false,
+    });
   }
 
   function runNewChallenge(): void {
