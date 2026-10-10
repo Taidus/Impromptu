@@ -16,6 +16,10 @@ export interface StoreState {
   history: Rep[];
   /** True after a save failed for a reason other than a rev conflict (the change is held in memory only); cleared by the next successful save. */
   saveFailed: boolean;
+  /** `deps.repository.storageAvailable`, read once during `hydrate()`. False drives the FR-29 "storage unavailable" copy and hides Export/Clear. */
+  storageAvailable: boolean;
+  /** True if `setup`, `session`, or `history` failed to migrate (OR-ed together after their loads in `hydrate()`). */
+  migrationFailed: boolean;
 }
 
 /** The command layer (AD-7): calls into `compose()`. Later stories add `reroll`, `retry`, `vary`. */

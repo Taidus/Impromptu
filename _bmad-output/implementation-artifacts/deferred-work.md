@@ -47,3 +47,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-7-difficulty-dial-and-perform-timing.md`
   summary: Design polish for the Difficulty Dial in Story 9.5 sign-off — phone thumb ink border is 1px (DESIGN asks 1.5px; needs a border-width token), the wrapped Perform timing control at 320px reads as a tall pill, and adjacent arc-label hit areas overlap ~6px.
   evidence: Recorded by the 3.7 review-fix pass after visual checks at 1280/390/320.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-practice-page-with-empty-and-storage-states.md`
+  summary: Give the store a history-only readiness signal (e.g. `historyStatus`) so /practice stops showing the loading placeholder as soon as the Repository is read, instead of waiting for the idle-scheduled library load.
+  evidence: `status` stays `loading` on a first visit until the library resolves and a default Setup is persisted; the Practice page never needs the library.
