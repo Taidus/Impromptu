@@ -14,7 +14,7 @@ function Group({ caption, rows }: { caption: string; rows: Row[] }) {
       <caption className="sr-only">{caption}</caption>
       <tbody className="grid grid-cols-2 gap-6 desktop:grid-cols-4">
         {rows.map((row) => (
-          <tr key={row.id} role="row" className="flex flex-col-reverse text-left">
+          <tr key={row.id} role="row" className="flex flex-col-reverse justify-end text-left">
             <th scope="row" className="text-meta text-ink-soft font-normal text-left">
               {row.label}
             </th>
