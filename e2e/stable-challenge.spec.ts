@@ -1,0 +1,195 @@
+import { expect, test, type Page } from "@playwright/test";
+import { copy } from "../src/components/copy";
+import { baseChallenge, noneSession } from "../src/domain/session/session-fixture";
+import { presentKinds } from "../src/domain/session/session-reducer";
+import { announcementFor } from "../src/components/stage/reveal-logic";
+
+const setupFixture = {
+  level: "explore",
+  performTiming: "either",
+  enabledMediums: ["med.drawing"],
+  medium: "random",
+  skillFocus: "random",
+  quickReveal: false,
+  sound: false,
+  ambientMotion: true,
+};
+
+const seedStage = (page: Page, revealed: string[]) =>
+  page.addInitScript(
+    ({ challenge, session, setup, revealed }) => {
+      localStorage.setItem("impromptu:setup", JSON.stringify({ v: 1, rev: 1, data: setup }));
+      localStorage.setItem(
+        "impromptu:session",
+        JSON.stringify({ v: 1, rev: 1, data: { ...session, state: "held", challenge, revealed } }),
+      );
+    },
+    { challenge: baseChallenge, session: noneSession, setup: setupFixture, revealed },
+  );
+
+const banner = (page: Page) => page.locator("[data-notice-banner]");
+
+const heldChallenge = (page: Page) =>
+  page.evaluate(() => JSON.parse(localStorage.getItem("impromptu:session") ?? "null")?.data?.challenge ?? null);
+
+// Story 3.11: a fresh /stage mount (reload, resume, or a round trip through
+// Setup) that already finds a held Challenge with some revealed progress
+// announces it once -- deferred from Story 3.10 (StagePage previously seeded
+// its live region silently).
+test("a reload mid-Reveal restores the pieces already landed and announces only that part, once", async ({ page }) => {
+  await seedStage(page, ["skill", "medium"]);
+  await page.goto("/stage");
+
+  await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
+  await expect(page.getByText("Medium: Drawing", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Topic, not revealed yet\./)).toBeAttached();
+
+  const live = page.locator('[aria-live="polite"]');
+  const landed = `${announcementFor("skill", baseChallenge)} ${announcementFor("medium", baseChallenge)}`;
+  await expect(live).toHaveText(landed);
+  await expect(page.getByRole("button", { name: copy.button.revealNext })).toBeVisible();
+
+  // Once: an unrelated interaction does not repeat or change it.
+  await page.getByRole("button", { name: copy.stage.soundOffAnnounced }).click();
+  await expect(page.getByRole("button", { name: copy.stage.soundOnAnnounced })).toBeVisible();
+  await expect(live).toHaveText(landed);
+});
+
+test("a reload of a fully-revealed Challenge announces every piece and the Brief, with no Reveal next button", async ({
+  page,
+}) => {
+  const revealed = presentKinds(baseChallenge);
+  await seedStage(page, revealed);
+  await page.goto("/stage");
+
+  await expect(page.locator("p.text-brief-stage-phone")).toBeVisible();
+  const live = page.locator('[aria-live="polite"]');
+  // Not a Quick reveal (setupFixture.quickReveal is false), so no "Challenge ready." lead-in.
+  await expect(live).toHaveText(revealed.map((kind) => announcementFor(kind, baseChallenge)).join(" "));
+  await expect(page.getByRole("button", { name: copy.button.revealNext })).toHaveCount(0);
+});
+
+test('Setup shows "Your challenge is waiting." with a "Back to your challenge" button that opens /stage', async ({
+  page,
+}) => {
+  // Hold a Challenge the ordinary way (nothing seeded): opening /stage with
+  // nothing held composes one.
+  await page.goto("/stage");
+  await expect.poll(() => heldChallenge(page), { timeout: 15_000 }).not.toBeNull();
+
+  await page.goto("/");
+  const banner = page.getByText(copy.notice.challengeWaiting);
+  await expect(banner).toBeVisible();
+  const backToChallenge = page.getByRole("link", { name: copy.button.backToYourChallenge });
+  await backToChallenge.click();
+  await expect(page).toHaveURL("/stage");
+});
+
+test("going back to Setup, changing setup, and returning via Back to your challenge keeps the held Challenge unchanged", async ({
+  page,
+}) => {
+  await page.goto("/stage");
+  await expect.poll(() => heldChallenge(page), { timeout: 15_000 }).not.toBeNull();
+  const before = await heldChallenge(page);
+
+  await page.getByRole("button", { name: copy.stage.back }).click();
+  await expect(page).toHaveURL("/");
+  // EXPERIENCE.md -> Focus targets: the shown Notice banner, not the h1.
+  await expect(banner(page).first()).toBeFocused();
+
+  // Change setup (not via Get a challenge) -- this must never touch the held Challenge.
+  const drawing = page.getByRole("button", { name: "Drawing", exact: true });
+  const pressedBefore = await drawing.getAttribute("aria-pressed");
+  await drawing.click();
+  await expect(drawing).not.toHaveAttribute("aria-pressed", pressedBefore ?? "");
+
+  await page.getByRole("link", { name: copy.button.backToYourChallenge }).click();
+  await expect(page).toHaveURL("/stage");
+  expect(await heldChallenge(page)).toEqual(before);
+});
+
+test('with "Your challenge is waiting." shown, Get a challenge replaces the held Challenge', async ({ page }) => {
+  await page.goto("/stage");
+  await expect.poll(() => heldChallenge(page), { timeout: 15_000 }).not.toBeNull();
+  const before = await heldChallenge(page);
+
+  await page.goto("/");
+  await expect(page.getByText(copy.notice.challengeWaiting)).toBeVisible();
+  await page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }).click();
+  await expect(page).toHaveURL("/stage");
+  await expect.poll(async () => (await heldChallenge(page))?.id).not.toBe(before.id);
+});
+
+test("a storage-unavailable browser shows the Notice banner and still generates a Challenge in memory", async ({ page }) => {
+  // Simulate a browser that blocks localStorage (e.g. Safari private mode):
+  // the Repository's probe never runs because window.localStorage itself throws.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get() {
+        throw new Error("blocked");
+      },
+    });
+  });
+
+  await page.goto("/");
+  await expect(page.getByText(copy.notice.storageUnavailable)).toBeVisible({ timeout: 15_000 });
+
+  await page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }).click();
+  await expect(page).toHaveURL("/stage");
+
+  // The in-memory Challenge is on the Stage and reveals.
+  const revealNext = page.getByRole("button", { name: copy.button.revealNext });
+  await expect(revealNext).toBeVisible();
+  await revealNext.click();
+  await expect(page.locator('[aria-live="polite"]')).toHaveText(new RegExp(`^${copy.stage.piece.skill}: `));
+});
+
+test("a migration failure on an older stored value shows its own Notice banner", async ({ page }) => {
+  // v:0 is below the only registered schema version (1) with no migration
+  // step registered, so the Repository's migrate() throws deterministically.
+  await page.addInitScript(() => {
+    localStorage.setItem("impromptu:history", JSON.stringify({ v: 0, rev: 1, data: [] }));
+  });
+
+  await page.goto("/");
+  await expect(page.getByText(copy.notice.migrationFailed)).toBeVisible({ timeout: 15_000 });
+});
+
+test("continuing a Reveal still works after the connection drops (NFR-4)", async ({ page, context }) => {
+  await page.goto("/stage");
+  await expect.poll(() => heldChallenge(page), { timeout: 15_000 }).not.toBeNull();
+  const revealNext = page.getByRole("button", { name: copy.button.revealNext });
+  await expect(revealNext).toBeVisible();
+
+  await context.setOffline(true);
+
+  // Pure client-side reducer state -- no network involved either way.
+  await revealNext.click();
+  await expect(page.locator('[aria-live="polite"]')).not.toHaveText("");
+});
+
+test("generating a new Challenge still works after the connection drops (NFR-4)", async ({ page, context }) => {
+  // Fresh context, Setup only: /stage is never visited, so the only way its
+  // RSC payload is in the client cache is Setup's own prefetch of it. Without
+  // it the offline `router.push("/stage")` falls back to a hard navigation
+  // and lands on the browser's offline error page.
+  await page.goto("/");
+  // The library is its own lazily loaded chunk (prefetched on idle, Story
+  // 3.6), so it must arrive while still online. The Mediums row and Get a
+  // challenge only render once it has (SetupHero's MediumsAndChallenge).
+  await expect(page.locator("#setup").getByRole("button", { name: "Drawing", exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  const getAChallenge = page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge });
+  await expect(getAChallenge).toBeVisible();
+  expect(await heldChallenge(page)).toBeNull();
+  // Let that prefetch (one or more /stage RSC requests) settle before going offline.
+  await page.waitForLoadState("networkidle");
+
+  await context.setOffline(true);
+
+  await getAChallenge.click();
+  await expect(page).toHaveURL("/stage");
+  await expect(page.getByRole("button", { name: copy.button.revealNext })).toBeVisible();
+  expect(await heldChallenge(page)).not.toBeNull();
+});

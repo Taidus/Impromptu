@@ -131,6 +131,15 @@ export const copy = {
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
   },
+  // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
+  // banner). More than one can show at once -- see activeNoticeBanners.
+  notice: {
+    challengeWaiting: "Your challenge is waiting.",
+    storageUnavailable: "This browser isn't saving data, so your history won't be kept. Challenges still work.",
+    // Neutral on purpose: migrationFailed covers setup, session, and history, not just reps.
+    // Orchestrator placeholder -- final copy is the founder's.
+    migrationFailed: "Some older saved data couldn't be read. It's still stored.",
+  },
   // Story 6.1: the Practice page shell (empty and storage-unavailable states).
   practice: {
     title: "Practice",

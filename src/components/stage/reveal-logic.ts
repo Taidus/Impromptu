@@ -34,11 +34,18 @@ export function quickRevealAnnouncement(challenge: Challenge): string {
   return [copy.stage.challengeReady, ...inputLines, challenge.brief].join(" ");
 }
 
+/** The given kinds' announcements, in reveal order; `null` when none of them is present. */
+function landedAnnouncement(challenge: Challenge, kinds: readonly RevealedKind[]): string | null {
+  const landed = presentKinds(challenge).filter((kind) => kinds.includes(kind));
+  return landed.length === 0 ? null : landed.map((kind) => announcementFor(kind, challenge)).join(" ");
+}
+
 /**
  * What the Stage's live region should say after a session change, or `null`
  * to leave it as is. `prevChallengeId`/`prevRevealed` are what the region
- * last saw; the caller seeds them with the restored state on hydration, so a
- * reload (Story 3.11 owns its announcement) never reaches here as "new".
+ * last saw; the caller seeds them with the restored state on its first
+ * hydrated render, so whatever a fresh mount already finds held is never
+ * "new" here -- `restoreAnnouncement` (below) speaks for it instead.
  * A new Challenge clears stale text, or -- Quick reveal on, fully landed --
  * announces "Challenge ready." plus the whole Challenge. Otherwise every
  * newly landed kind is announced, in reveal order (a multi-kind jump from
@@ -54,9 +61,26 @@ export function liveAnnouncement(
   if (challenge === null) return prevChallengeId === null ? null : "";
   const isNew = challenge.id !== prevChallengeId;
   if (isNew && quickReveal && isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
-  const landed = revealed.filter((kind) => isNew || !prevRevealed.includes(kind));
-  if (landed.length === 0) return isNew ? "" : null;
-  return landed.map((kind) => announcementFor(kind, challenge)).join(" ");
+  const text = landedAnnouncement(challenge, isNew ? revealed : revealed.filter((kind) => !prevRevealed.includes(kind)));
+  return text ?? (isNew ? "" : null);
+}
+
+/**
+ * Story 3.11 / EXPERIENCE.md -> State Patterns, "Reload or Resume in any
+ * state": the one-shot announcement for whatever a fresh `/stage` mount
+ * (reload, resume, or a Setup round trip) already finds held. `null` when
+ * nothing present has landed yet -- a held Challenge with nothing revealed
+ * reads the same whether it was just composed or just restored. Otherwise
+ * the landed pieces (and the Brief, once it has), in reveal order; the
+ * "Challenge ready." lead-in only when Quick reveal landed it all at once.
+ */
+export function restoreAnnouncement(
+  challenge: Challenge,
+  revealed: readonly RevealedKind[],
+  quickReveal: boolean,
+): string | null {
+  if (quickReveal && isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
+  return landedAnnouncement(challenge, revealed);
 }
 
 /** DESIGN.md -> Typography fit rule: the desktop Topic drops to `topic-stage-long` once it runs past two lines. */

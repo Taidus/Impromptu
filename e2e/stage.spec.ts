@@ -39,13 +39,15 @@ test("the sound control toggles its announced state and persists across reload",
   await expect(page.getByRole("button", { name: copy.stage.soundOnAnnounced })).toBeVisible();
 });
 
-test("after hydration, Esc returns to Setup and focuses its h1", async ({ page }) => {
+// A Challenge is held by then, so focus lands on Setup's "challenge waiting"
+// Notice banner rather than the h1 (EXPERIENCE.md -> Focus targets).
+test("after hydration, Esc returns to Setup and focuses its Notice banner", async ({ page }) => {
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(page.locator("[data-notice-banner]").first()).toBeFocused();
 });
 
 test("clicking Back returns to Setup, replacing /stage in history", async ({ page }) => {
@@ -55,7 +57,7 @@ test("clicking Back returns to Setup, replacing /stage in history", async ({ pag
 
   await page.getByRole("button", { name: copy.stage.back }).click();
   await expect(page).toHaveURL("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(page.locator("[data-notice-banner]").first()).toBeFocused();
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
 });
 
