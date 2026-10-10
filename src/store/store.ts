@@ -4,7 +4,7 @@ import { config } from "@/config/app";
 import { compose, recentKeyFor, type ComposeLibrary, type ComposeRequest } from "@/domain/compose/compose";
 import type { Envelope, StorageKey } from "@/domain/ports";
 import { Rep, Session, Setup, type Challenge, type Reflection } from "@/domain/session/schema";
-import { finishRep, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
+import { finishRep, isFullyRevealedHeld, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
 import { setupReducer, type SetupEvent, type SetupReducerResult } from "@/domain/session/setup-reducer";
 import { buildDefaultSetup, emptySession } from "./defaults";
 import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
@@ -170,8 +170,8 @@ export function createStore(deps: StoreDeps): Store {
         library = result.library;
         onLibraryReady(result.library);
       } catch {
-        // No retry this story: report it and drop what was waiting on the library (only new_challenge needs it).
-        removePending((c) => c.type === "new_challenge");
+        // No retry this story: report it and drop what was waiting on the library (new_challenge/reroll only).
+        removePending((c) => needsLibrary(c.type));
         setState({ ...state, libraryStatus: "error", status: state.setup === null ? "error" : state.status });
       }
     });
@@ -208,9 +208,13 @@ export function createStore(deps: StoreDeps): Store {
     return state.status === "ready" && state.libraryStatus === "ready" && state.setup !== null && library !== null;
   }
 
-  /** Only `new_challenge` composes, so only it waits for the library; finish/save/retry need hydration alone. */
+  /** `new_challenge` and `reroll` both call `compose()`, so only they wait for the library; finish/save/retry need hydration alone. */
+  function needsLibrary(type: StoreCommand["type"]): boolean {
+    return type === "new_challenge" || type === "reroll";
+  }
+
   function canRun(command: StoreCommand): boolean {
-    return command.type === "new_challenge" ? isReadyToCompose() : state.status === "ready";
+    return needsLibrary(command.type) ? isReadyToCompose() : state.status === "ready";
   }
 
   function dispatch(command: StoreCommand): void {
@@ -218,8 +222,8 @@ export function createStore(deps: StoreDeps): Store {
       runCommand(command);
       return;
     }
-    // A library error means nothing will ever drain a new_challenge; the others can still drain once a Setup arrives.
-    if (command.type === "new_challenge" && (state.status === "error" || state.libraryStatus === "error")) return;
+    // A library error means nothing will ever drain a composing command; the others can still drain once a Setup arrives.
+    if (needsLibrary(command.type) && (state.status === "error" || state.libraryStatus === "error")) return;
     if (!pendingCommands.some((c) => c.type === command.type)) pendingCommands.push(command); // at most one per type
   }
 
@@ -228,6 +232,7 @@ export function createStore(deps: StoreDeps): Store {
     else if (command.type === "finish_rep") runFinishRep();
     else if (command.type === "save_rep") runSaveRep();
     else if (command.type === "retry") runRetry(command.fromRepId);
+    else if (command.type === "reroll") runReroll();
   }
 
   function runNewChallenge(): void {
@@ -346,6 +351,40 @@ export function createStore(deps: StoreDeps): Store {
     if (fromRep === undefined) return;
     const challenge: Challenge = { ...fromRep.challenge, id: random.uuid(), origin: { kind: "retry", fromRepId } };
     applySessionEvent({ type: "challenge_committed", challenge, recentKey: null });
+  }
+
+  /**
+   * Reroll (Story 4.3): composes with every locked kind held fixed, same
+   * request shape as `runNewChallenge`, but `locks: session.locks` and
+   * `origin: {kind:'reroll'}`. Gated on `isFullyRevealedHeld` (AD-7:
+   * "toggle_lock/reroll are no-ops before the reveal completes") before
+   * composing, so a premature press never spends a Random draw or touches
+   * the recent ring.
+   */
+  function runReroll(): void {
+    if (!isFullyRevealedHeld(state.session) || state.session.challenge === null) return;
+    const setup = state.setup;
+    if (setup === null || library === null) return; // isReadyToCompose() guarantees this in practice
+    const session = state.session;
+    const request: ComposeRequest = {
+      level: setup.level,
+      performTiming: setup.performTiming,
+      enabledMediums: setup.enabledMediums,
+      medium: setup.medium,
+      skillFocus: setup.skillFocus,
+      locks: session.locks,
+      mustDiffer: {},
+      origin: { kind: "reroll", fromRepId: null },
+    };
+    const result = compose(request, library, session.recent, clock, random);
+    const event: SessionEvent = result.ok
+      ? {
+          type: "challenge_committed",
+          challenge: result.challenge,
+          recentKey: recentKeyFor(result.challenge.templateId, result.challenge.inputs.topic?.id ?? null),
+        }
+      : { type: "compose_failed", reason: result.reason, blockingLock: result.blockingLock };
+    applySessionEvent(event);
   }
 
   function dispatchSetup(event: SetupEvent): SetupReducerResult["notice"] {

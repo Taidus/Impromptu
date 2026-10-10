@@ -5,8 +5,8 @@ import { fakeClock, seededRandom } from "@/domain/test-doubles";
 import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
-import type { Rep, Session, Setup } from "@/domain/session/schema";
-import { attemptSession, baseChallenge } from "@/domain/session/session-fixture";
+import type { Rep, RevealedKind, Session, Setup } from "@/domain/session/schema";
+import { attemptSession, baseChallenge, heldSession } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
 import { config } from "@/config/app";
 import { buildDefaultSetup } from "./defaults";
@@ -601,6 +601,58 @@ describe("createStore — retry command", () => {
     store.dispatch({ type: "retry", fromRepId: "does-not-exist" });
 
     expect(store.getState().session).toBe(before);
+  });
+});
+
+describe("createStore — reroll command", () => {
+  /** A Held session seeded straight into storage (no need to run new_challenge/reveal first) -- `baseChallenge`'s own ids (skl.observation, med.drawing, top.near-object) only need to exist in `workingLibrary` for the kind a test locks. */
+  function heldStore(quickReveal: boolean, revealed: RevealedKind[]) {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal } });
+    const session: Session = { ...heldSession, challenge: baseChallenge, revealed };
+    repository.save("session", { v: 1, rev: 1, data: session });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    return store;
+  }
+
+  it("composes with locks for every locked kind, keeps them identical, and pushes the recent key", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    await vi.runAllTimersAsync();
+    store.dispatchSession({ type: "toggle_lock", kind: "skill" });
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.state).toBe("held");
+    expect(session.challenge?.id).not.toBe(baseChallenge.id);
+    expect(session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+    expect(session.challenge?.inputs.skill.id).toBe("skl.observation");
+    expect(session.recent).toHaveLength(1);
+  });
+
+  it("is a no-op before the reveal completes (AD-7)", async () => {
+    const store = heldStore(false, ["skill"]); // partially revealed
+    await vi.runAllTimersAsync();
+    const before = store.getState().session;
+
+    store.dispatch({ type: "reroll" });
+
+    expect(store.getState().session).toBe(before);
+  });
+
+  it("sets compose_failed and keeps the held Challenge when Locks leave nothing composable", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    await vi.runAllTimersAsync();
+    store.dispatchSession({ type: "toggle_lock", kind: "medium" }); // "med.drawing" isn't in workingLibrary's mediums
+    const before = store.getState().session.challenge;
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.challenge).toBe(before);
+    expect(session.state).toBe("held");
+    expect(session.lastComposeError).not.toBeNull();
   });
 });
 

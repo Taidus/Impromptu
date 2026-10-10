@@ -1,11 +1,12 @@
 import { config } from "@/config/app";
 import { timeUsedSec as timerTimeUsedSec } from "@/domain/timer/timer";
-import type { Challenge, ComposeError, Reflection, Rep, RevealedKind, Session, Setup } from "./schema";
+import type { Challenge, ComposeError, InputKind, Locks, Reflection, Rep, RevealedKind, Session, Setup } from "./schema";
 
 export type SessionEvent =
   | { type: "challenge_committed"; challenge: Challenge; recentKey: string | null }
   | ({ type: "compose_failed" } & ComposeError)
   | { type: "reveal_next" }
+  | { type: "toggle_lock"; kind: InputKind }
   | { type: "start"; nowMs: number }
   | { type: "pause"; nowMs: number }
   | { type: "resume"; nowMs: number }
@@ -31,6 +32,8 @@ export function sessionReducer(session: Session, event: SessionEvent, setup: Pic
         : session;
     case "reveal_next":
       return session.state === "held" ? revealNext(session) : session;
+    case "toggle_lock":
+      return isFullyRevealedHeld(session) ? toggleLock(session, event.kind) : session;
     case "start":
       return canStart(session) ? startAttempt(session, event.nowMs) : session;
     case "pause": {
@@ -64,9 +67,29 @@ function canCommit(session: Session): boolean {
   return session.state === "none" || session.state === "held" || session.state === "saved";
 }
 
+/** Held, with a Challenge, and every present kind already landed -- the AD-7 gate shared by Start, toggle_lock, and reroll (Story 4.3: "only when held, every kind landed, before start"). */
+export function isFullyRevealedHeld(session: Session): boolean {
+  return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
+}
+
 /** Held -> Attempt only once every present kind of the held Challenge has landed. */
 function canStart(session: Session): boolean {
-  return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
+  return isFullyRevealedHeld(session);
+}
+
+/** Toggles a Lock for `kind` to the held Challenge's own current value for it (or releases it); a no-op kind the Challenge doesn't have. Gated by `isFullyRevealedHeld` in the reducer above. */
+function toggleLock(session: Session, kind: InputKind): Session {
+  const challenge = session.challenge;
+  if (challenge === null) return session;
+  if (session.locks[kind] !== undefined) {
+    const nextLocks = { ...session.locks };
+    delete nextLocks[kind];
+    return { ...session, locks: nextLocks };
+  }
+  const input = challenge.inputs[kind];
+  if (input === undefined) return session;
+  const nextLocks: Locks = { ...session.locks, [kind]: input.id };
+  return { ...session, locks: nextLocks };
 }
 
 function startAttempt(session: Session, nowMs: number): Session {
@@ -90,15 +113,39 @@ function commitChallenge(
       : [...session.recent, event.recentKey].slice(-config.generator.recentWindow);
   // Retry never plays a Reveal (AD-3): every present kind lands at once, regardless of Quick reveal.
   const revealAll = quickReveal || event.challenge.origin.kind === "retry";
+  const revealed = revealAll
+    ? presentKinds(event.challenge)
+    : event.challenge.origin.kind === "reroll"
+      ? unchangedKinds(session, event.challenge)
+      : [];
 
   return {
     ...session,
     state: "held",
     challenge: event.challenge,
-    revealed: revealAll ? presentKinds(event.challenge) : [],
+    revealed,
     recent,
     lastComposeError: null,
   };
+}
+
+/**
+ * Reroll only (AD-18): the kinds the previous held Challenge had already
+ * landed whose value is identical in the new one -- these stay landed
+ * (locked kinds always qualify, since `compose()` holds them fixed; an
+ * unlocked kind that happens to redraw the same value qualifies too, with
+ * nothing to show either way). Everything else, including the Brief
+ * whenever its text changed, re-lands through the ordinary Reveal.
+ */
+function unchangedKinds(session: Session, next: Challenge): RevealedKind[] {
+  const prev = session.challenge;
+  if (prev === null) return [];
+  return presentKinds(next).filter((kind) => session.revealed.includes(kind) && sameValue(prev, next, kind));
+}
+
+function sameValue(prev: Challenge, next: Challenge, kind: RevealedKind): boolean {
+  if (kind === "brief") return prev.brief === next.brief;
+  return prev.inputs[kind]?.id === next.inputs[kind]?.id;
 }
 
 /**

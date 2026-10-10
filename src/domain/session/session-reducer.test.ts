@@ -222,6 +222,82 @@ describe("sessionReducer", () => {
     });
   });
 
+  describe("challenge_committed with a reroll origin (AD-18: un-land only what changed)", () => {
+    const prevRevealed = presentKinds(fullChallenge);
+    const rerollingHeld: Session = {
+      ...heldSession,
+      challenge: fullChallenge,
+      revealed: prevRevealed,
+      locks: { skill: fullChallenge.inputs.skill.id },
+    };
+
+    it("keeps unchanged kinds landed and re-lands only the kinds (and Brief) that changed", () => {
+      const rerolled: Challenge = {
+        ...fullChallenge,
+        id: "423e4567-e89b-42d3-a456-426614174000",
+        origin: { kind: "reroll", fromRepId: null },
+        inputs: { ...fullChallenge.inputs, topic: { id: "top.other", revealText: "Something else" } },
+        brief: "A different brief.",
+      };
+      const result = sessionReducer(rerollingHeld, { type: "challenge_committed", challenge: rerolled, recentKey: "k-reroll" }, quickOff);
+      expect(result.state).toBe("held");
+      expect(result.challenge).toBe(rerolled);
+      expect(result.revealed).toEqual(["skill", "medium", "style", "constraint"]);
+      expect(result.recent).toEqual(["k-reroll"]);
+      expect(result.locks).toEqual({ skill: fullChallenge.inputs.skill.id }); // untouched by the commit itself
+    });
+
+    it("stays fully revealed when the reroll happens to redraw identical values everywhere", () => {
+      const rerolled: Challenge = { ...fullChallenge, id: "523e4567-e89b-42d3-a456-426614174000", origin: { kind: "reroll", fromRepId: null } };
+      const result = sessionReducer(rerollingHeld, { type: "challenge_committed", challenge: rerolled, recentKey: "k-same" }, quickOff);
+      expect(result.revealed).toEqual(presentKinds(rerolled));
+    });
+
+    it("Quick reveal on lands everything at once, same as any other commit", () => {
+      const rerolled: Challenge = {
+        ...fullChallenge,
+        id: "623e4567-e89b-42d3-a456-426614174000",
+        origin: { kind: "reroll", fromRepId: null },
+        inputs: { ...fullChallenge.inputs, style: { id: "sty.other", revealText: "Other" } },
+      };
+      const result = sessionReducer(rerollingHeld, { type: "challenge_committed", challenge: rerolled, recentKey: "k" }, quickOn);
+      expect(result.revealed).toEqual(presentKinds(rerolled));
+    });
+  });
+
+  describe("toggle_lock", () => {
+    const fullyRevealed: Session = { ...heldSession, revealed: presentKinds(baseChallenge) };
+
+    it("locks a present kind to its current value", () => {
+      const result = sessionReducer(fullyRevealed, { type: "toggle_lock", kind: "skill" }, quickOff);
+      expect(result.locks).toEqual({ skill: baseChallenge.inputs.skill.id });
+    });
+
+    it("unlocks an already-locked kind", () => {
+      const locked: Session = { ...fullyRevealed, locks: { skill: baseChallenge.inputs.skill.id } };
+      const result = sessionReducer(locked, { type: "toggle_lock", kind: "skill" }, quickOff);
+      expect(result.locks).toEqual({});
+    });
+
+    it("is a no-op for a kind the Challenge doesn't have", () => {
+      const result = sessionReducer(fullyRevealed, { type: "toggle_lock", kind: "style" }, quickOff);
+      expect(result).toBe(fullyRevealed);
+    });
+
+    it("is a no-op before every present kind has landed", () => {
+      const partial: Session = { ...heldSession, revealed: ["skill"] };
+      const result = sessionReducer(partial, { type: "toggle_lock", kind: "skill" }, quickOff);
+      expect(result).toBe(partial);
+    });
+
+    it("is a no-op outside Held", () => {
+      for (const session of [noneSession, attemptSession, finishedSession, savedSession]) {
+        const result = sessionReducer(session, { type: "toggle_lock", kind: "skill" }, quickOff);
+        expect(result).toBe(session);
+      }
+    });
+  });
+
   describe("reveal_next", () => {
     it("lands the next present kind in config.reveal.order", () => {
       const result = sessionReducer(heldSession, { type: "reveal_next" }, quickOff);
@@ -408,6 +484,7 @@ describe("sessionReducer", () => {
     { type: "challenge_committed", challenge: baseChallenge, recentKey: "k-cross" },
     { type: "compose_failed", reason: "no_compatible", blockingLock: null },
     { type: "reveal_next" },
+    { type: "toggle_lock", kind: "skill" },
     { type: "start", nowMs: 1_000 },
     { type: "pause", nowMs: 1_000 },
     { type: "resume", nowMs: 1_000 },
@@ -424,6 +501,10 @@ describe("sessionReducer", () => {
       case "reveal_next":
       case "start":
         return stateLabel === "Held";
+      case "toggle_lock":
+        // The generic "Held" fixture here (`heldSession`) isn't fully revealed -- see the
+        // dedicated describe("toggle_lock") block above for the real, fully-revealed gate.
+        return false;
       case "pause":
       case "resume":
       case "discard":
@@ -452,7 +533,6 @@ describe("sessionReducer", () => {
   // never models -- a future story's event, or garbage -- is a no-op
   // everywhere.
   const notYetImplemented: SessionEvent[] = [
-    { type: "toggle_lock" } as unknown as SessionEvent,
     { type: "finish" } as unknown as SessionEvent, // deliberately not a dispatchable event -- see finishRep
     { type: "vary" } as unknown as SessionEvent, // Story 5.8 phase 2
     { type: "not_a_real_event" } as unknown as SessionEvent,

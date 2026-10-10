@@ -41,6 +41,20 @@ function landedAnnouncement(challenge: Challenge, kinds: readonly RevealedKind[]
 }
 
 /**
+ * Reroll's own live-region lead-in (EXPERIENCE.md -> Rerolling; Story 4.3).
+ * While the commit left changed kinds un-landed (Quick reveal off), there is
+ * nothing yet to add -- each one is announced on its own as it lands, same
+ * as any other Reveal step. When the commit already landed everything
+ * (nothing changed, or Quick reveal is on), it reads out together with the
+ * full current Challenge, the same shape `quickRevealAnnouncement` uses.
+ */
+function rerollAnnouncement(challenge: Challenge, revealed: readonly RevealedKind[]): string {
+  if (!isFullyRevealed(challenge, revealed)) return copy.stage.rerolled;
+  const landed = landedAnnouncement(challenge, revealed);
+  return landed === null ? copy.stage.rerolled : `${copy.stage.rerolled} ${landed}`;
+}
+
+/**
  * What the Stage's live region should say after a session change, or `null`
  * to leave it as is. `prevChallengeId`/`prevRevealed` are what the region
  * last saw; the caller seeds them with the restored state on its first
@@ -60,6 +74,7 @@ export function liveAnnouncement(
 ): string | null {
   if (challenge === null) return prevChallengeId === null ? null : "";
   const isNew = challenge.id !== prevChallengeId;
+  if (isNew && challenge.origin.kind === "reroll") return rerollAnnouncement(challenge, revealed);
   if (isNew && quickReveal && isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
   const text = landedAnnouncement(challenge, isNew ? revealed : revealed.filter((kind) => !prevRevealed.includes(kind)));
   return text ?? (isNew ? "" : null);

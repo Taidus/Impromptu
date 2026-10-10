@@ -55,6 +55,20 @@ export function SpeakerOffIcon() {
   );
 }
 
+/**
+ * Lock toggle glyph (DESIGN.md -> Lock toggle: "an outline padlock" unlocked,
+ * a "cream padlock" locked). One shape in `currentColor` for both states --
+ * the toggle's own border/background/text classes carry the color change.
+ */
+export function LockIcon() {
+  return (
+    <Glyph>
+      <rect x="5" y="11" width="14" height="9" rx="1.5" />
+      <path d="M8 11V8a4 4 0 1 1 8 0v3" />
+    </Glyph>
+  );
+}
+
 /** The Stage mark's 14px grape four-point star (DESIGN.md -> Stage mark). */
 export function StarIcon() {
   return (

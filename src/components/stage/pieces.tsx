@@ -15,6 +15,7 @@ import { config } from "@/config/app";
 import { copy } from "@/components/copy";
 import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import type { RevealedKind } from "@/domain/session/schema";
+import { LockIcon } from "./icons";
 import { emptySlotLabel, isPastTwoLines } from "./reveal-logic";
 
 type InputKind = Exclude<RevealedKind, "brief">;
@@ -125,6 +126,38 @@ export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: InputKind; 
     >
       {label}
     </div>
+  );
+}
+
+/**
+ * DESIGN.md -> Lock toggle: unlocked an outline plum-muted padlock disc;
+ * locked an ink disc with a cream padlock plus a "LOCKED" caption beside it.
+ * The accessible name is fixed (AC: "fixed name such as 'Lock Topic'") --
+ * only `aria-pressed` and the caption carry state. Shown only once a
+ * Challenge is fully revealed and held, before Start creating (Story 4.3 --
+ * RevealComposition decides when).
+ */
+export function LockToggle({ kind, locked, onToggle }: { kind: InputKind; locked: boolean; onToggle: () => void }) {
+  const tone = locked
+    ? "border-ink bg-ink text-cream"
+    : "border-plum-muted text-plum-muted hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]";
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        aria-pressed={locked}
+        aria-label={copy.stage.lock.toggleLabel(copy.stage.piece[kind])}
+        onClick={onToggle}
+        className={`flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${tone}`}
+      >
+        <LockIcon />
+      </button>
+      {locked ? (
+        <span aria-hidden="true" className="text-piece-label-phone uppercase text-plum desktop:text-piece-label">
+          {copy.stage.lock.lockedCaption}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
