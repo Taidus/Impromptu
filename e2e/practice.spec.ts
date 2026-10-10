@@ -1,0 +1,90 @@
+import { expect, test, type Page } from "@playwright/test";
+import { config } from "../src/config/app";
+import { copy } from "../src/components/copy";
+import { Rep, Session } from "../src/domain/session/schema";
+import { attemptSession, baseChallenge } from "../src/domain/session/session-fixture";
+
+// Story 6.1 AC: a fresh browser (no Reps yet) sees the empty state, the
+// night header's back link, and the shared footer's Practice link.
+test("/practice shows the empty state and header/footer links", async ({ page }) => {
+  await page.goto("/practice");
+
+  // First visit hydrates after the library loads; that can exceed the default 5 s.
+  await expect(page.getByText(copy.state.nothingHereYet)).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveTitle("Practice · Impromptu");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(copy.practice.title);
+  await expect(page.getByRole("link", { name: copy.button.getAChallenge })).toHaveAttribute("href", "/stage");
+  await expect(page.getByRole("link", { name: copy.stage.back })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("banner").getByRole("link", { name: copy.journey.footer.wordmark })).toHaveAttribute(
+    "href",
+    "/",
+  );
+
+  await expect(
+    page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: copy.journey.footer.practice }),
+  ).toHaveAttribute("href", "/practice");
+});
+
+test("/practice server-renders the neutral loading state", async ({ request }) => {
+  const html = await (await request.get("/practice")).text();
+  expect(html).toContain(copy.practice.loading);
+  expect(html).not.toContain(copy.state.nothingHereYet);
+});
+
+test("/practice shows the unavailable copy when storage is blocked", async ({ page }) => {
+  await page.addInitScript(() => {
+    const blocked = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {},
+      key: () => null,
+      length: 0,
+    };
+    Object.defineProperty(window, "localStorage", { configurable: true, get: () => blocked });
+  });
+  await page.goto("/practice");
+
+  await expect(page.getByText(copy.practice.storageUnavailable)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(copy.state.nothingHereYet)).toHaveCount(0);
+});
+
+async function seed(page: Page, entries: Record<string, unknown>) {
+  await page.addInitScript((items) => {
+    for (const [key, value] of Object.entries(items)) window.localStorage.setItem(key, value);
+  }, Object.fromEntries(Object.entries(entries).map(([key, value]) => [key, JSON.stringify(value)])));
+}
+
+test("/practice with Reps shows the storage note in the body", async ({ page }) => {
+  const rep = Rep.parse({
+    id: "323e4567-e89b-42d3-a456-426614174000",
+    challenge: baseChallenge,
+    finishedAt: "2026-10-09T12:30:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  await seed(page, { "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [rep] } });
+  await page.goto("/practice");
+
+  await expect(page.locator("main").getByText(copy.state.progressSavedInBrowserOnly)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(copy.state.nothingHereYet)).toHaveCount(0);
+});
+
+test("/practice with an active Attempt offers Resume", async ({ page }) => {
+  const session = Session.parse(attemptSession);
+  await seed(page, { "impromptu:session": { v: config.storage.schemaVersions.session, rev: 1, data: session } });
+  await page.goto("/practice");
+
+  await expect(page.locator("main").getByRole("link", { name: copy.button.resume })).toHaveAttribute("href", "/stage", {
+    timeout: 15_000,
+  });
+});
+
+test("/practice never scrolls horizontally at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/practice");
+  await expect(page.getByText(copy.state.nothingHereYet)).toBeVisible({ timeout: 15_000 });
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth).toBeLessThanOrEqual(320);
+});

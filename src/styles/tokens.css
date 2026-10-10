@@ -432,6 +432,16 @@
   letter-spacing: var(--typography-display-phone-tracking);
 }
 
+/* Stage mark role (DESIGN.md -> Components -> Stage mark). Added by Story 6.1
+   for the Practice page's night header band; the vars existed since Story 3.1. */
+@utility text-stage-mark {
+  font-family: var(--typography-stage-mark-family);
+  font-size: var(--typography-stage-mark-size);
+  font-weight: var(--typography-stage-mark-weight);
+  line-height: var(--typography-stage-mark-leading);
+  letter-spacing: var(--typography-stage-mark-tracking);
+}
+
 @utility text-lede {
   font-family: var(--typography-lede-family);
   font-size: var(--typography-lede-size);

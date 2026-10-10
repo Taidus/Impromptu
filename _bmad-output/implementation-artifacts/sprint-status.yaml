@@ -64,7 +64,7 @@ development_status:
   3-3-compose-a-challenge-from-setup-locks-and-the-recent-window: done
   3-4-session-reducer-for-commits-and-reveal-progress: done
   3-5-versioned-browser-storage-with-a-memory-fallback: done
-  3-6-the-app-store-and-the-library-loader: review
+  3-6-the-app-store-and-the-library-loader: done
   3-7-difficulty-dial-and-perform-timing: backlog
   3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: backlog
   3-9-the-challenge-stage-page-shell: review
@@ -93,8 +93,8 @@ development_status:
   5-8-try-another-version-variation: backlog
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-practice-page-with-empty-and-storage-states: backlog
+  epic-6: in-progress
+  6-1-practice-page-with-empty-and-storage-states: review
   6-2-practice-history-rep-cards: backlog
   6-3-practice-map: backlog
   6-4-export-practice-history-as-json: backlog
