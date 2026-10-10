@@ -6,7 +6,7 @@ import type { Constraint, Medium, Skill, Style, Template, Topic } from "@/domain
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import { baseChallenge, fullChallenge } from "@/domain/session/session-fixture";
 import type { Challenge, Setup } from "@/domain/session/schema";
-import { ScrapGroup } from "./pieces";
+import { landingMotion, REVEALED_MOTION, ScrapGroup } from "./pieces";
 import { emptySlotLabel, nextKind } from "./reveal-logic";
 import {
   createMotionDriver,
@@ -354,5 +354,44 @@ describe("ScrapGroup (shuffling)", () => {
     const html = render({ topic: piece(), style: piece({ landing: true }), constraint: piece({ landing: true }) });
     expect(html).toContain(`--motion-ms:${config.reveal.motion.landMs.style}ms;transform:rotate(4deg)`);
     expect(html).toContain(`--motion-ms:${config.reveal.motion.landMs.constraint}ms;transform:rotate(-7deg)`);
+  });
+
+  // Story 4.2: reduced motion fades over `reducedLandMs`, not the material's
+  // own (longer) duration, whether the piece is mid-`landing` or already
+  // revealed outside it (Quick reveal's instant full landing).
+  it("reduced motion: a landing piece fades over reducedLandMs, not its material duration", () => {
+    const html = render({
+      topic: piece(),
+      style: piece({ landing: true }),
+      constraint: piece({ landing: true }),
+      reduced: true,
+    });
+    expect(html).toContain("animate-reduced-fade");
+    expect(html).toContain(`--motion-ms:${config.reveal.motion.reducedLandMs}ms`);
+    expect(html).not.toContain(`--motion-ms:${config.reveal.motion.landMs.style}ms`);
+  });
+
+  it("an already-revealed piece (Quick reveal's instant landing) still carries the reduced-fade class", () => {
+    const html = render({ topic: piece(), style: piece({ revealed: true }), constraint: piece({ revealed: true }) });
+    expect(html).toContain("motion-reduce:animate-reduced-fade");
+  });
+});
+
+describe("landingMotion / REVEALED_MOTION (Story 4.2)", () => {
+  it("picks reducedLandMs under reduced motion, the material's own duration otherwise", () => {
+    expect(landingMotion("constraint", false).style).toEqual({ "--motion-ms": `${config.reveal.motion.landMs.constraint}ms` });
+    expect(landingMotion("constraint", true).style).toEqual({ "--motion-ms": `${config.reveal.motion.reducedLandMs}ms` });
+  });
+
+  it("every material's class swaps its reduced-motion variant for the plain fade, never animate-none", () => {
+    for (const kind of ["skill", "medium", "topic", "style", "constraint", "brief"] as const) {
+      expect(landingMotion(kind, false).className).toContain("motion-reduce:animate-reduced-fade");
+      expect(landingMotion(kind, false).className).not.toContain("animate-none");
+    }
+  });
+
+  it("REVEALED_MOTION carries only the reduced-fade variant, at reducedLandMs", () => {
+    expect(REVEALED_MOTION.className).toBe("motion-reduce:animate-reduced-fade");
+    expect(REVEALED_MOTION.style).toEqual({ "--motion-ms": `${config.reveal.motion.reducedLandMs}ms` });
   });
 });

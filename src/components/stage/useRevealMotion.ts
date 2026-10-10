@@ -8,7 +8,7 @@
 // fallback (StagePage), so a press from either place sequences the same way.
 import { useEffect, useMemo, useState } from "react";
 import { config } from "@/config/app";
-import { prefersReducedMotion } from "@/components/motion";
+import { prefersReducedMotion, usePrefersReducedMotion } from "@/components/motion";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Challenge, RevealedKind, Setup } from "@/domain/session/schema";
 import { getAppStore } from "@/store";
@@ -21,6 +21,8 @@ export interface RevealMotion {
   flickText: string | null;
   /** Whether there's anything a press could do right now (starts a piece, or force-completes one in flight) -- lets callers decide whether to `preventDefault` a keyboard fallback. */
   canPress: boolean;
+  /** Story 4.2: `usePrefersReducedMotion()`, reactive -- callers pass it to `landingMotion`/`ScrapGroup` so a piece's entrance fades instead of its full-motion material transition. */
+  reduced: boolean;
   /** Stable across renders. */
   press: () => void;
 }
@@ -37,6 +39,7 @@ export function useRevealMotion(
   library: ComposeLibrary | null,
   setup: Setup | null,
 ): RevealMotion {
+  const reduced = usePrefersReducedMotion();
   const [snap, setSnap] = useState<{ state: MotionState; challengeId: string | null }>({
     state: idleMotion,
     challengeId: null,
@@ -89,5 +92,8 @@ export function useRevealMotion(
   const flickText = pool !== null && pool.length > 0 ? pool[tick % pool.length] : null;
   const canPress = (challenge !== null && nextKind(challenge, revealed) !== null) || state.status !== "idle";
 
-  return useMemo(() => ({ state, flickText, canPress, press: driver.press }), [state, flickText, canPress, driver]);
+  return useMemo(
+    () => ({ state, flickText, canPress, reduced, press: driver.press }),
+    [state, flickText, canPress, reduced, driver],
+  );
 }

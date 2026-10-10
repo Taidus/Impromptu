@@ -38,21 +38,37 @@ const durationVar = (ms: number) => ({ "--motion-ms": `${ms}ms` }) as CSSPropert
  * Story 4.1 / UX-DR22: the landing entrance per material. Durations come
  * from `config.reveal.motion` (the same values `useRevealMotion`'s timers
  * use), never CSS literals. `motion-reduce:` mirrors this codebase's
- * per-animation guard (SunButton, Ticker) -- Story 4.2 owns the full
- * reduced-motion fade.
+ * per-animation guard (SunButton, Ticker) -- under `prefers-reduced-motion:
+ * reduce` every material (including the stamp's thump) swaps for the plain
+ * `reduced-fade` (Story 4.2), so no AC-banned transition plays.
  */
 const LAND_CLASS: Record<RevealedKind, string> = {
-  skill: "animate-land-tabs motion-reduce:animate-none",
-  medium: "animate-land-tabs motion-reduce:animate-none",
-  topic: "animate-land-tabs motion-reduce:animate-none",
-  style: "animate-land-foil motion-reduce:animate-none",
-  constraint: "animate-land-stamp motion-reduce:animate-none",
-  brief: "animate-land-brief motion-reduce:animate-none",
+  skill: "animate-land-tabs motion-reduce:animate-reduced-fade",
+  medium: "animate-land-tabs motion-reduce:animate-reduced-fade",
+  topic: "animate-land-tabs motion-reduce:animate-reduced-fade",
+  style: "animate-land-foil motion-reduce:animate-reduced-fade",
+  constraint: "animate-land-stamp motion-reduce:animate-reduced-fade",
+  brief: "animate-land-brief motion-reduce:animate-reduced-fade",
 };
 
-export function landingMotion(kind: RevealedKind): PieceMotion {
-  return { className: LAND_CLASS[kind], style: durationVar(config.reveal.motion.landMs[kind]) };
+/** Story 4.2: reduced motion fades in over `reducedLandMs` (120ms), not the material's own (longer) full-motion duration. */
+export function landingMotion(kind: RevealedKind, reduced: boolean): PieceMotion {
+  const ms = reduced ? config.reveal.motion.reducedLandMs : config.reveal.motion.landMs[kind];
+  return { className: LAND_CLASS[kind], style: durationVar(ms) };
 }
+
+/**
+ * Story 4.2: a piece that's already revealed outside its own `landing`
+ * window -- Quick reveal's instant full landing, or any later re-render
+ * once a manual reveal's own landing has committed -- still gets the one
+ * reduced-motion fade on its first mount ("Quick reveal uses the same
+ * fade"); a no-op class under full motion, matching today's untouched
+ * instant Quick-reveal landing.
+ */
+export const REVEALED_MOTION: PieceMotion = {
+  className: "motion-reduce:animate-reduced-fade",
+  style: durationVar(config.reveal.motion.reducedLandMs),
+};
 
 /** The foil's shimmer, only while it's actively shuffling: one pulse per shuffle. */
 export const SHIMMER_MOTION: PieceMotion = {
@@ -268,12 +284,23 @@ function hasMaterial(piece: ScrapPiece): boolean {
  * for it"). Style and Constraint still render on a Topic-less Challenge:
  * the scrap is then a plain paper band, since the stamp is always on paper.
  */
-export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; style: ScrapPiece; constraint: ScrapPiece }) {
+export function ScrapGroup({
+  topic,
+  style,
+  constraint,
+  reduced = false,
+}: {
+  topic: ScrapPiece;
+  style: ScrapPiece;
+  constraint: ScrapPiece;
+  /** Story 4.2: `usePrefersReducedMotion()`, forwarded by `RevealComposition`. */
+  reduced?: boolean;
+}) {
   const scrapTiltDeg = -1.2;
   const foil = !style.present
     ? null
     : style.revealed || style.landing
-      ? <FoilSlip value={style.value} tiltDeg={4} motion={style.landing ? landingMotion("style") : NO_MOTION} />
+      ? <FoilSlip value={style.value} tiltDeg={4} motion={style.landing ? landingMotion("style", reduced) : REVEALED_MOTION} />
       : style.shufflingText !== null
         ? (
             <ShufflingPiece kind="style">
@@ -291,7 +318,7 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
         {foil !== null ? <div className="float-right -mt-6 -mr-7 ml-3 w-2/5 max-w-40">{foil}</div> : null}
         {topic.present
           ? topic.revealed || topic.landing
-            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic") : NO_MOTION} />
+            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic", reduced) : REVEALED_MOTION} />
             : topic.shufflingText !== null
               ? (
                   <ShufflingPiece kind="topic">
@@ -303,7 +330,11 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
         {constraint.present ? (
           <div className="clear-both mt-2 flex min-h-14 items-center justify-end">
             {constraint.revealed || constraint.landing ? (
-              <InkStamp value={constraint.value} tiltDeg={-7} motion={constraint.landing ? landingMotion("constraint") : NO_MOTION} />
+              <InkStamp
+                value={constraint.value}
+                tiltDeg={-7}
+                motion={constraint.landing ? landingMotion("constraint", reduced) : REVEALED_MOTION}
+              />
             ) : constraint.shufflingText !== null ? (
               <ShufflingPiece kind="constraint">
                 <InkStamp value={constraint.shufflingText} tiltDeg={-7} />
