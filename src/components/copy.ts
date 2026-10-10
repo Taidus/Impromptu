@@ -138,6 +138,8 @@ export const copy = {
     storageUnavailable: "This browser isn't saving data, so there's no history to show.",
     // Story 6.2: visually hidden h2 above the Rep card list.
     historyTitle: "Practice history",
+    // Story 6.3: the Practice Map's three group labels (table captions).
+    mapGroups: { skill: "Skill", medium: "Medium", level: "Level" },
   },
   privacy: {
     title: "privacy.",

@@ -129,6 +129,90 @@ test("/practice's Get a challenge composes and opens the Stage", async ({ page }
   await expect(page).toHaveURL("/stage");
 });
 
+// Story 6.3 AC: three Reps across two Skills render the Practice Map's
+// counts, under the FR-26 caption, above the history, inside main.
+test("/practice Practice Map shows counts by Skill, Medium and Level", async ({ page }) => {
+  const makeRep = (id: string, overrides: Record<string, unknown>, finishedAt: string) =>
+    Rep.parse({
+      id,
+      challenge: { ...baseChallenge, ...overrides },
+      finishedAt,
+      timeUsedSec: null,
+      reflection: null,
+    });
+  const reps = [
+    makeRep(
+      "323e4567-e89b-42d3-a456-426614174000",
+      { level: "explore", inputs: { skill: { id: "skl.observation", revealText: "Observation" }, medium: { id: "med.drawing", revealText: "Drawing" } } },
+      "2026-10-01T09:00:00.000Z",
+    ),
+    makeRep(
+      "423e4567-e89b-42d3-a456-426614174000",
+      { level: "experiment", inputs: { skill: { id: "skl.observation", revealText: "Observation" }, medium: { id: "med.writing", revealText: "Writing" } } },
+      "2026-10-02T09:00:00.000Z",
+    ),
+    makeRep(
+      "523e4567-e89b-42d3-a456-426614174000",
+      { level: "perform", inputs: { skill: { id: "skl.connection", revealText: "Connection" }, medium: { id: "med.drawing", revealText: "Drawing" } } },
+      "2026-10-03T09:00:00.000Z",
+    ),
+  ];
+  await seed(page, { "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: reps } });
+  await page.goto("/practice");
+
+  const main = page.locator("main");
+  await expect(main.getByText(copy.state.practiceMapDisclaimer)).toBeVisible({ timeout: 15_000 });
+
+  const cellCount = async (tableName: string, label: string) => {
+    const table = main.getByRole("table", { name: tableName });
+    const headers = await table.locator("th").allTextContents();
+    expect(headers).toContain(label);
+    const counts = await table.locator("td").allTextContents();
+    return counts[headers.indexOf(label)];
+  };
+
+  expect(await cellCount(copy.practice.mapGroups.skill, "Observation")).toBe("2");
+  expect(await cellCount(copy.practice.mapGroups.skill, "Connection")).toBe("1");
+  expect(await cellCount(copy.practice.mapGroups.skill, "Perspective")).toBe("—0");
+  expect(await cellCount(copy.practice.mapGroups.medium, "Drawing")).toBe("2");
+  expect(await cellCount(copy.practice.mapGroups.medium, "Writing")).toBe("1");
+  expect(await cellCount(copy.practice.mapGroups.medium, "Photography")).toBe("—0");
+  expect(await cellCount(copy.practice.mapGroups.level, copy.levelName.explore)).toBe("1");
+  expect(await cellCount(copy.practice.mapGroups.level, copy.levelName.experiment)).toBe("1");
+  expect(await cellCount(copy.practice.mapGroups.level, copy.levelName.perform)).toBe("1");
+  expect(await cellCount(copy.practice.mapGroups.level, copy.levelName.develop)).toBe("—0");
+
+  // A label and its count share one row.
+  const observationRow = main.getByRole("table", { name: copy.practice.mapGroups.skill }).locator("tr").filter({ hasText: "Observation" });
+  await expect(observationRow.locator("td")).toHaveText("2");
+
+  // The Map sits above the history.
+  const mainHtml = await main.innerHTML();
+  expect(mainHtml.indexOf(copy.state.practiceMapDisclaimer)).toBeLessThan(mainHtml.indexOf(copy.practice.historyTitle));
+});
+
+// Story 6.3 AC: at 320px, a Map group's cells wrap two per row.
+test("/practice Practice Map cells wrap two per row at 320px", async ({ page }) => {
+  const rep = Rep.parse({
+    id: "323e4567-e89b-42d3-a456-426614174000",
+    challenge: baseChallenge,
+    finishedAt: "2026-10-09T12:00:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  await seed(page, { "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [rep] } });
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/practice");
+
+  const table = page.locator("main").getByRole("table", { name: copy.practice.mapGroups.skill });
+  const cells = table.locator("tbody td");
+  await expect(cells.first()).toBeVisible({ timeout: 15_000 });
+  const offsetTops = await cells.evaluateAll((els) => els.slice(0, 3).map((el) => (el as HTMLElement).offsetTop));
+  expect(offsetTops[0]).toBe(offsetTops[1]);
+  expect(offsetTops[2]).toBeGreaterThan(offsetTops[0]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
 test("/practice never scrolls horizontally at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/practice");
