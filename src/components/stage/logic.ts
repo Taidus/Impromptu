@@ -44,7 +44,7 @@ export function canHandleEscape(session: Pick<Session, "state">): boolean {
   return session.state !== "attempt";
 }
 
-type KeyLike = Pick<
+export type KeyLike = Pick<
   KeyboardEvent,
   "key" | "repeat" | "defaultPrevented" | "isComposing" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
 >;
@@ -58,6 +58,27 @@ type KeyLike = Pick<
 export function isPlainEscape(event: KeyLike): boolean {
   return (
     event.key === "Escape" &&
+    !event.repeat &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
+
+/**
+ * Story 3.10 / EXPERIENCE.md -> Interaction Primitives: "the Stage key
+ * handler (AD-7) handles only Esc, plus Space/Enter when no control has
+ * focus; with focus on a control, keys keep their native behavior." Focus
+ * normally sits on the sun button itself, whose native button activation
+ * already handles Space/Enter -- this guard is only for the no-control-
+ * focused fallback, with the same bare-first-press guards as isPlainEscape.
+ */
+export function isPlainActivationKey(event: KeyLike): boolean {
+  return (
+    (event.key === " " || event.key === "Enter") &&
     !event.repeat &&
     !event.defaultPrevented &&
     !event.isComposing &&

@@ -377,6 +377,117 @@
   letter-spacing: var(--typography-stage-mark-tracking);
 }
 
+/* Story 3.10: the Reveal pieces' type ramp (DESIGN.md -> Typography ->
+   "Stage ramp", FR-31 filming minimums). Vars already existed since Story
+   3.1 transcribed the whole ramp; these are their first consumers. */
+@utility text-brief-stage {
+  font-family: var(--typography-brief-stage-family);
+  font-size: var(--typography-brief-stage-size);
+  font-weight: var(--typography-brief-stage-weight);
+  line-height: var(--typography-brief-stage-leading);
+  letter-spacing: var(--typography-brief-stage-tracking);
+}
+
+@utility text-brief-stage-phone {
+  font-family: var(--typography-brief-stage-phone-family);
+  font-size: var(--typography-brief-stage-phone-size);
+  font-weight: var(--typography-brief-stage-phone-weight);
+  line-height: var(--typography-brief-stage-phone-leading);
+  letter-spacing: var(--typography-brief-stage-phone-tracking);
+}
+
+@utility text-topic-stage {
+  font-family: var(--typography-topic-stage-family);
+  font-size: var(--typography-topic-stage-size);
+  font-weight: var(--typography-topic-stage-weight);
+  line-height: var(--typography-topic-stage-leading);
+  letter-spacing: var(--typography-topic-stage-tracking);
+}
+
+/* Fit-rule step 2 (DESIGN.md -> Layout & Spacing -> Challenge Stage): the
+   Topic drops to this size when its value runs past two lines. Not wired to
+   an automatic line-count check this story (no visual mockup pins the exact
+   trigger) -- available for the component that first needs it. */
+@utility text-topic-stage-long {
+  font-family: var(--typography-topic-stage-long-family);
+  font-size: var(--typography-topic-stage-long-size);
+  font-weight: var(--typography-topic-stage-long-weight);
+  line-height: var(--typography-topic-stage-long-leading);
+  letter-spacing: var(--typography-topic-stage-long-tracking);
+}
+
+@utility text-topic-stage-phone {
+  font-family: var(--typography-topic-stage-phone-family);
+  font-size: var(--typography-topic-stage-phone-size);
+  font-weight: var(--typography-topic-stage-phone-weight);
+  line-height: var(--typography-topic-stage-phone-leading);
+  letter-spacing: var(--typography-topic-stage-phone-tracking);
+}
+
+@utility text-style-stage {
+  font-family: var(--typography-style-stage-family);
+  font-size: var(--typography-style-stage-size);
+  font-weight: var(--typography-style-stage-weight);
+  line-height: var(--typography-style-stage-leading);
+  letter-spacing: var(--typography-style-stage-tracking);
+}
+
+@utility text-style-stage-phone {
+  font-family: var(--typography-style-stage-phone-family);
+  font-size: var(--typography-style-stage-phone-size);
+  font-weight: var(--typography-style-stage-phone-weight);
+  line-height: var(--typography-style-stage-phone-leading);
+  letter-spacing: var(--typography-style-stage-phone-tracking);
+}
+
+@utility text-stamp-stage {
+  font-family: var(--typography-stamp-stage-family);
+  font-size: var(--typography-stamp-stage-size);
+  font-weight: var(--typography-stamp-stage-weight);
+  line-height: var(--typography-stamp-stage-leading);
+  letter-spacing: var(--typography-stamp-stage-tracking);
+}
+
+@utility text-stamp-stage-phone {
+  font-family: var(--typography-stamp-stage-phone-family);
+  font-size: var(--typography-stamp-stage-phone-size);
+  font-weight: var(--typography-stamp-stage-phone-weight);
+  line-height: var(--typography-stamp-stage-phone-leading);
+  letter-spacing: var(--typography-stamp-stage-phone-tracking);
+}
+
+@utility text-tab-value-stage {
+  font-family: var(--typography-tab-value-stage-family);
+  font-size: var(--typography-tab-value-stage-size);
+  font-weight: var(--typography-tab-value-stage-weight);
+  line-height: var(--typography-tab-value-stage-leading);
+  letter-spacing: var(--typography-tab-value-stage-tracking);
+}
+
+@utility text-tab-value-stage-phone {
+  font-family: var(--typography-tab-value-stage-phone-family);
+  font-size: var(--typography-tab-value-stage-phone-size);
+  font-weight: var(--typography-tab-value-stage-phone-weight);
+  line-height: var(--typography-tab-value-stage-phone-leading);
+  letter-spacing: var(--typography-tab-value-stage-phone-tracking);
+}
+
+@utility text-piece-label {
+  font-family: var(--typography-piece-label-family);
+  font-size: var(--typography-piece-label-size);
+  font-weight: var(--typography-piece-label-weight);
+  line-height: var(--typography-piece-label-leading);
+  letter-spacing: var(--typography-piece-label-tracking);
+}
+
+@utility text-piece-label-phone {
+  font-family: var(--typography-piece-label-phone-family);
+  font-size: var(--typography-piece-label-phone-size);
+  font-weight: var(--typography-piece-label-phone-weight);
+  line-height: var(--typography-piece-label-phone-leading);
+  letter-spacing: var(--typography-piece-label-phone-tracking);
+}
+
 /* Story 8.1: the journey's own headline/title roles — var already existed,
    no utility yet. Same `@utility` form as the roles above. */
 @utility text-display {

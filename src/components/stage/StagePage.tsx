@@ -7,19 +7,23 @@ import { LineButton } from "@/components/LineButton";
 import { StageIconButton } from "@/components/StageIconButton";
 import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
-import { canHandleEscape, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import { RevealComposition } from "./RevealComposition";
+import { nextKind } from "./reveal-logic";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
  * footer, setup controls, or signup; a visually hidden h1; a centered
  * safe-area column holding the Stage mark and the Level/mode meta; and the
  * back/sound corner controls outside it. This is also the one Stage-level
- * key handler (AD-7, Cross-Document Resolution 3) -- later stories add to
- * it, never add a second one.
+ * key handler (AD-7, Cross-Document Resolution 3) -- Story 3.10 extends it
+ * (Space/Enter) rather than adding a second one.
  *
- * The reveal composition itself (ticket tabs, paper scrap, foil slip, ink
- * stamp, Brief, action row) is Story 3.10's slot and is deliberately left
- * empty here.
+ * The reveal composition itself (Story 3.10: ticket tabs, paper scrap, foil
+ * slip, ink stamp, Brief, and the "Reveal next" sun button) renders via
+ * `RevealComposition` once a Challenge is held. Pieces land instantly --
+ * Epic 4 adds the shuffle/shimmer motion. With everything landed, the
+ * action row has no primary action yet (Reroll is 4.3, Start creating 5.1).
  */
 export function StagePage() {
   const store = useAppStore();
@@ -49,11 +53,25 @@ export function StagePage() {
     router.replace("/");
   }, [router]);
 
+  // AD-7 / EXPERIENCE.md -> Interaction Primitives: this stays the Stage's
+  // one keydown listener. Story 3.10 extends it with the Space/Enter
+  // "Reveal next" shortcut for when no control has focus -- normally the
+  // sun button itself has focus, so its native button activation already
+  // handles Space/Enter and this branch never fires.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (!isPlainEscape(event)) return;
-      if (!canHandleEscape(store.session)) return;
-      goToSetup();
+      if (isPlainEscape(event)) {
+        if (!canHandleEscape(store.session)) return;
+        goToSetup();
+        return;
+      }
+      if (!isPlainActivationKey(event)) return;
+      if (document.activeElement !== document.body) return;
+      const challenge = store.session.challenge;
+      if (store.session.state !== "held" || challenge === null) return;
+      if (nextKind(challenge, store.session.revealed) === null) return;
+      event.preventDefault();
+      getAppStore().dispatchSession({ type: "reveal_next" });
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -129,8 +147,13 @@ export function StagePage() {
             </LineButton>
           ) : null}
 
-          {/* Story 3.10 renders the reveal composition here: ticket tabs,
-              paper scrap, foil slip, ink stamp, and the Brief. */}
+          {store.session.state === "held" && store.session.challenge !== null ? (
+            <RevealComposition
+              challenge={store.session.challenge}
+              revealed={store.session.revealed}
+              onRevealNext={() => getAppStore().dispatchSession({ type: "reveal_next" })}
+            />
+          ) : null}
         </div>
       </div>
     </div>
