@@ -47,3 +47,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-1-practice-page-with-empty-and-storage-states.md`
   summary: Give the store a history-only readiness signal (e.g. `historyStatus`) so /practice stops showing the loading placeholder as soon as the Repository is read, instead of waiting for the idle-scheduled library load.
   evidence: `status` stays `loading` on a first visit until the library resolves and a default Setup is persisted; the Practice page never needs the library.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
+  summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
+  evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
+  status: resolved
+  resolved_by: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md` — `e2e/stage.spec.ts`'s "opening /stage composes a held Challenge from the production library" test runs against `npm run build`'s real `src/generated/library.json`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md`
+  summary: Add the page grain overlay (0.1 opacity, overlay blend) to the Stage, suppressed inside the safe area, once Story 8.2 ships `grain.png`.
+  evidence: DESIGN.md -> Colors asks for grain suppressed inside the Stage safe area; no grain asset exists yet. Story 3.9's patch pass added only the lilac-deep edge fade (CSS gradient, tokens only).
