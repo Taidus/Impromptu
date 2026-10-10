@@ -18,10 +18,10 @@ test("the journey sections, sample Brief, closing link and footer render on /", 
 
   // Scoped to 04 (sun): the setup hero (01) carries its own "Get a challenge".
   await expect(
-    page.locator("section.bg-sun").getByRole("link", { name: copy.button.getAChallenge }),
-  ).toHaveAttribute("href", "/stage");
+    page.locator("section.bg-sun").getByRole("button", { name: copy.button.getAChallenge }),
+  ).toBeVisible();
 
-  // Scoped to the footer nav: the setup hero's header (Story 3.7) has its own "Practice" link too.
+  // Scoped to the footer nav: SetupHeader (Story 8.3) has its own "Practice" link too.
   const footerNav = page.getByRole("navigation", { name: "Footer" });
   await expect(footerNav.getByRole("link", { name: copy.journey.footer.practice, exact: true })).toHaveAttribute(
     "href",
@@ -33,6 +33,14 @@ test("the journey sections, sample Brief, closing link and footer render on /", 
     "/privacy",
   );
   await expect(page.getByLabel(copy.signup.emailLabel, { exact: true })).toBeVisible();
+});
+
+test("the closing call's Get a challenge composes and opens the Stage", async ({ page }) => {
+  await page.goto("/");
+  const closingButton = page.locator("section.bg-sun").getByRole("button", { name: copy.button.getAChallenge });
+  await expect(closingButton).toBeEnabled({ timeout: 15_000 });
+  await closingButton.click();
+  await expect(page).toHaveURL("/stage");
 });
 
 test("the page never scrolls horizontally at 320px", async ({ page }) => {

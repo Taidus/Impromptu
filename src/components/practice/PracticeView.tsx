@@ -1,14 +1,13 @@
-import Link from "next/link";
+import type { ReactNode } from "react";
 import { copy } from "@/components/copy";
-import { inkButtonClassName } from "@/components/InkButton";
 import type { Status } from "@/store";
 
 export interface PracticeViewProps {
   status: Status;
   storageAvailable: boolean;
   repCount: number;
-  /** True when `session.state === "attempt"` -- the action reads Resume instead of Get a challenge. */
-  attemptActive: boolean;
+  /** The Get a challenge / Resume control (a client `GetAChallengeButton`); rendered in the empty and unavailable states. */
+  action: ReactNode;
 }
 
 /**
@@ -19,7 +18,7 @@ export interface PracticeViewProps {
  * `status === "error"` renders like `ready`: history is already loaded by then,
  * and compose failures are the Stage's to handle.
  */
-export function PracticeView({ status, storageAvailable, repCount, attemptActive }: PracticeViewProps) {
+export function PracticeView({ status, storageAvailable, repCount, action }: PracticeViewProps) {
   if (status === "loading") {
     return (
       <p aria-busy="true" className="text-body text-ink-soft">
@@ -37,12 +36,7 @@ export function PracticeView({ status, storageAvailable, repCount, attemptActive
   return (
     <div className="flex flex-col gap-6">
       <p className="text-body">{message}</p>
-      {(!storageAvailable || repCount === 0) && (
-        // Always to /stage (Story 6.1 boundary).
-        <Link href="/stage" className={`${inkButtonClassName("paper")} self-start`}>
-          {attemptActive ? copy.button.resume : copy.button.getAChallenge}
-        </Link>
-      )}
+      {(!storageAvailable || repCount === 0) && action}
     </div>
   );
 }

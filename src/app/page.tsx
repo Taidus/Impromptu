@@ -4,6 +4,7 @@ import { FourLevels } from "@/components/journey/FourLevels";
 import { Grain } from "@/components/journey/Grain";
 import { OrbitThread } from "@/components/journey/OrbitThread";
 import { Seam } from "@/components/journey/Seam";
+import { SetupHeader } from "@/components/journey/SetupHeader";
 import { SiteFooter } from "@/components/journey/SiteFooter";
 import { Ticker } from "@/components/journey/Ticker";
 import { WhatsInAChallenge } from "@/components/journey/WhatsInAChallenge";
@@ -16,6 +17,7 @@ import { SetupHero } from "@/components/setup/SetupHero";
 export default function Home() {
   return (
     <div className="relative">
+      <SetupHeader />
       <main>
         <SetupHero />
         <div className="relative">

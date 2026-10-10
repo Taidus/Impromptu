@@ -13,7 +13,8 @@ test("/practice shows the empty state and header/footer links", async ({ page })
   await expect(page.getByText(copy.state.nothingHereYet)).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveTitle("Practice · Impromptu");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(copy.practice.title);
-  await expect(page.getByRole("link", { name: copy.button.getAChallenge })).toHaveAttribute("href", "/stage");
+  const getAChallenge = page.getByRole("button", { name: copy.button.getAChallenge });
+  await expect(getAChallenge).toBeEnabled({ timeout: 15_000 });
   await expect(page.getByRole("link", { name: copy.stage.back })).toHaveAttribute("href", "/");
   await expect(page.getByRole("banner").getByRole("link", { name: copy.journey.footer.wordmark })).toHaveAttribute(
     "href",
@@ -76,9 +77,18 @@ test("/practice with an active Attempt offers Resume", async ({ page }) => {
   await seed(page, { "impromptu:session": { v: config.storage.schemaVersions.session, rev: 1, data: session } });
   await page.goto("/practice");
 
-  await expect(page.locator("main").getByRole("link", { name: copy.button.resume })).toHaveAttribute("href", "/stage", {
-    timeout: 15_000,
-  });
+  const resume = page.locator("main").getByRole("button", { name: copy.button.resume });
+  await expect(resume).toBeEnabled({ timeout: 15_000 });
+  await resume.click();
+  await expect(page).toHaveURL("/stage");
+});
+
+test("/practice's Get a challenge composes and opens the Stage", async ({ page }) => {
+  await page.goto("/practice");
+  const getAChallenge = page.getByRole("button", { name: copy.button.getAChallenge });
+  await expect(getAChallenge).toBeEnabled({ timeout: 15_000 });
+  await getAChallenge.click();
+  await expect(page).toHaveURL("/stage");
 });
 
 test("/practice never scrolls horizontally at 320px", async ({ page }) => {

@@ -117,7 +117,7 @@ test("Quick reveal switches on and the state survives a reload", async ({ page }
 
 test("Get a challenge dispatches a new Challenge and navigates to /stage", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: copy.button.getAChallenge }).click();
+  await page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }).click();
   await expect(page).toHaveURL("/stage");
 });
 
@@ -128,7 +128,7 @@ test("with a Challenge already held, Get a challenge on Setup replaces it with a
   const before = await heldChallenge(page);
 
   await page.goto("/");
-  await page.getByRole("button", { name: copy.button.getAChallenge }).click();
+  await page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }).click();
   await expect(page).toHaveURL("/stage");
   const after = await heldChallenge(page);
   expect(after).not.toBeNull();
@@ -141,7 +141,7 @@ test("a compose failure keeps the user on Setup with the inline message", async 
   for (const name of ["Writing", "Drawing", "Photography"]) {
     await page.getByRole("button", { name, exact: true }).click();
   }
-  const button = page.getByRole("button", { name: copy.button.getAChallenge });
+  const button = page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge });
   await button.click();
 
   const message = page.getByRole("status").filter({ hasText: copy.stage.composeError });
@@ -162,7 +162,7 @@ test.describe("1280x800", () => {
       page.getByLabel(copy.setup.skillLabel, { exact: true }),
       page.getByRole("button", { name: copy.setup.skillInfoLabel }),
       page.getByText(copy.setup.quickRevealLabel, { exact: true }),
-      page.getByRole("button", { name: copy.button.getAChallenge }),
+      page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }),
     ];
     for (const control of controls) {
       await expect(control).toBeInViewport({ ratio: 1 });

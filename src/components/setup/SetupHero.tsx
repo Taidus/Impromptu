@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId } from "react";
 import { copy } from "@/components/copy";
-import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import { SunButton } from "@/components/SunButton";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Setup } from "@/domain/session/schema";
@@ -19,23 +17,24 @@ import { SetupSelect } from "./SetupSelect";
 import { SkillInfo } from "./SkillInfo";
 import { useGetAChallenge } from "./useGetAChallenge";
 
-const { setup: setupCopy, journey } = copy;
-const linkClass = `${FOCUS_RING_BASE} ${focusRingClassName("night")} rounded-sm`;
+const { setup: setupCopy } = copy;
 
 /**
- * Setup page section 01 (night): header, headline, explanation, the
- * Difficulty Dial, and (at Perform) the Perform-timing control (Story 3.7).
+ * Setup page section 01 (night): headline, explanation, the Difficulty
+ * Dial, and (at Perform) the Perform-timing control (Story 3.7). The header
+ * band (wordmark, Practice link, Motion toggle) moved out to
+ * `SetupHeader` (Story 8.3), rendered by page.tsx just above this section.
  * EXPERIENCE.md -> Setup page sections.
  */
 export function SetupHero() {
   const state = useAppStore();
 
   return (
-    <section id="setup" className="bg-night px-gutter-phone pt-16 pb-28 text-cream desktop:px-14 desktop:pt-20">
-      {/* Story 8.2 (main) wraps the page in decorative layers (Ticker, ChromePiece,
-          OrbitThread, Grain) behind a `relative` ancestor; this column must stay on top. */}
+    <section id="setup" className="bg-night px-gutter-phone pt-6 pb-28 text-cream desktop:px-14 desktop:pt-8">
+      {/* Story 8.2 wraps the page in decorative layers (Ticker, ChromePiece,
+          OrbitThread, Grain) behind a `relative` ancestor; this column must stay on top.
+          The header band itself is journey/SetupHeader (Story 8.3), rendered above. */}
       <div className="relative z-10 mx-auto flex max-w-content-max flex-col gap-10">
-        <Header />
         <NoticeBanners state={state} />
         <div className="flex flex-col gap-6">
           <h1 className="text-display-phone [overflow-wrap:anywhere] desktop:text-display-setup">
@@ -49,22 +48,6 @@ export function SetupHero() {
         </div>
       </div>
     </section>
-  );
-}
-
-function Header() {
-  return (
-    <header className="flex items-center justify-between gap-4">
-      <Link href="/" className={`inline-flex items-center gap-2 text-stage-mark ${linkClass}`}>
-        {journey.footer.wordmark}
-        <span aria-hidden="true" className="text-sm text-grape">
-          ✦
-        </span>
-      </Link>
-      <Link href="/practice" className={`text-meta uppercase ${linkClass}`}>
-        {journey.footer.practice}
-      </Link>
-    </header>
   );
 }
 
