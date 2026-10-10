@@ -2,7 +2,7 @@
 title: 'Mediums, Skill focus, Quick reveal, and Get a challenge'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6a601f01c08885fa78491ca3374b304a3576ce50'
