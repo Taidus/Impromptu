@@ -159,12 +159,15 @@ export function RevealComposition({
           pieces keep the full column width. Phone has no margin, so pl-14
           keeps disc and caption on screen. gap-x-14: room for the Medium
           disc and caption between the tabs. Reserved from the start, so
-          nothing reflows when Held arrives. */}
+          nothing reflows when Held arrives. Desktop never wraps the tabs:
+          the widest pair shares the row, each value wrapping inside its own
+          tab, and the Skill Info button sits in the margin left of the Skill
+          disc so it costs the row no width. */}
       <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap desktop:pl-0 desktop:stage-short:gap-stage-gap-compact">
-        <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact">
-          <span className="relative inline-flex items-center gap-2">
+        <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact desktop:flex-nowrap">
+          <span className="relative inline-flex min-w-0 items-center gap-2">
             {tab("skill", 1.5)}
-            {skillInfo}
+            <span className="desktop:absolute desktop:right-full desktop:mr-13">{skillInfo}</span>
           </span>
           {tab("medium", -1.5)}
         </li>

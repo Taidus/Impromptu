@@ -15,21 +15,27 @@ const EXTRA_TOPIC = '{id:"top.window-view",revealText:"A window view",briefText:
 // The same Template's Brief stretched to DESIGN.md's 160-character fit-rule worst case.
 const BRIEF_MARKER = 'briefPattern:"Draw {topic}. {constraint}"';
 const LONG_BRIEF = 'briefPattern:"Draw {topic} from life, slowly, looking at it more than at the page and keep each line light. {constraint}"';
+// The widest real Skill and Medium values (content/library/skills.json, mediums.json), swapped onto this Template's own.
+const WIDEST_TABS: [string, string][] = [
+  ['{id:"skl.observation",revealText:"Observation"', '{id:"skl.observation",revealText:"Idea generation"'],
+  ['{id:"med.drawing",revealText:"Drawing"', '{id:"med.drawing",revealText:"Spoken storytelling"'],
+];
 
-/** Rewrites the library chunk in transit: `marker` -> `replacement`. */
-async function patchLibrary(page: Page, marker: string, replacement: string) {
+/** Rewrites the library chunk in transit: each `marker` -> its `replacement`; `done` once every marker was found. */
+async function patchLibrary(page: Page, swaps: [marker: string, replacement: string][]) {
   const patched = { done: false };
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {
     const response = await route.fetch();
-    const body = await response.text();
-    if (!body.includes(marker)) return route.fulfill({ response, body });
-    patched.done = true;
-    await route.fulfill({ response, body: body.replace(marker, replacement) });
+    let body = await response.text();
+    if (!body.includes(swaps[0][0])) return route.fulfill({ response, body });
+    patched.done = swaps.every(([marker]) => body.includes(marker));
+    for (const [marker, replacement] of swaps) body = body.replace(marker, replacement);
+    await route.fulfill({ response, body });
   });
   return patched;
 }
 
-const seedSecondTopic = (page: Page) => patchLibrary(page, TOPIC_MARKER, `topics:[${EXTRA_TOPIC}{id:"top.nearby-object"`);
+const seedSecondTopic = (page: Page) => patchLibrary(page, [[TOPIC_MARKER, `topics:[${EXTRA_TOPIC}{id:"top.nearby-object"`]]);
 
 async function seedSetup(page: Page, over: Partial<Setup>) {
   const envelope = JSON.stringify({ v: config.storage.schemaVersions.setup, rev: 1, data: Setup.parse({ ...baseSetup, ...over }) });
@@ -218,6 +224,7 @@ for (const viewport of [
 // DESIGN.md -> Challenge Stage fit rule: Held fits a desktop screen without
 // scrolling -- tabs side by side, the Brief and the action row on screen --
 // with or without Locks showing, and the Lock discs never cost the pieces width.
+// With the widest real Skill and Medium, so a wide pair can't wrap the tabs.
 for (const viewport of [
   { width: 1280, height: 800 },
   { width: 1528, height: 784 },
@@ -226,14 +233,16 @@ for (const viewport of [
     if (longBrief && viewport.height !== 800) continue;
     test(`the held Stage fits ${viewport.width}x${viewport.height}${longBrief ? " with a 160-character Brief" : ""}`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      const patched = longBrief ? await patchLibrary(page, BRIEF_MARKER, LONG_BRIEF) : null;
+      // The widest pair wraps each tab value to two lines; with the 160-character Brief on top that
+      // overruns 800px by ~14px (DESIGN.md fit rule step 2, Topic -> topic-stage-long, isn't built yet),
+      // so the worst-case Brief keeps this Template's own pair.
+      const patched = await patchLibrary(page, longBrief ? [[BRIEF_MARKER, LONG_BRIEF]] : WIDEST_TABS);
       await seedSetup(page, { level: "explore", quickReveal: true });
       await page.goto("/stage");
       await expect(reroll(page)).toBeVisible({ timeout: 15_000 });
-      if (patched !== null) {
-        expect(patched.done).toBe(true);
-        expect((await page.locator('[data-kind="brief"] p').first().innerText()).length).toBe(160);
-      }
+      expect(patched.done).toBe(true);
+      if (longBrief) expect((await page.locator('[data-kind="brief"] p').first().innerText()).length).toBe(160);
+      else await expect(page.locator('[data-kind="medium"]')).toContainText("Spoken storytelling");
 
       for (const locked of [false, true]) {
         if (locked) await lockEverything(page);

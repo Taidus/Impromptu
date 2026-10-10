@@ -33,17 +33,18 @@ export interface SkillInfoProps {
 // like every other Stage icon button (StageIconButton, LockToggle) -- a
 // plum-muted ring and plum glyph, no color transition (the Held Stage stays
 // still). Its root is not `relative`, so the panel anchors to the caller's
-// positioned wrapper (the Stage's Skill row, starting at the Skill tab's
-// left edge) rather than to the button, which can sit too far left of a
-// short Skill name to fit the panel. The Stage panel is capped at a fraction
-// of the viewport and scrolls, so on short phones it stays above the fixed
-// bottom action bar.
+// positioned wrapper (phone: the Stage's Skill row, starting at the Skill
+// tab's left edge; desktop: the button's own slot in the margin) rather than
+// to the button, which can sit too far left of a short Skill name to fit the
+// panel. The Stage panel is capped at a fraction of the viewport and
+// scrolls, so it stays above the action row (phone's fixed bottom bar, and
+// desktop's in-flow row on a compact 800px-tall Stage).
 const GROUND_STYLES = {
   night: { root: "relative", tone: "border-cream", panel: "right-0" },
   lilac: {
     root: undefined,
     tone: "border-plum-muted text-plum hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]",
-    panel: "left-0 max-h-[45dvh] overflow-y-auto desktop:max-h-none",
+    panel: "left-0 max-h-[45dvh] overflow-y-auto",
   },
 } as const;
 export function SkillInfo({ skills, ground = "night" }: SkillInfoProps) {

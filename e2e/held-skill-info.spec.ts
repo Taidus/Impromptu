@@ -25,6 +25,16 @@ const retryRevisionChallenge: Challenge = {
   origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" },
 };
 
+/** The widest real Skill and Medium (content/library), so the tab row is at its widest. */
+const widestChallenge: Challenge = {
+  ...fullChallenge,
+  inputs: {
+    ...fullChallenge.inputs,
+    skill: { id: "skl.idea-generation", revealText: "Idea generation" },
+    medium: { id: "med.spoken-storytelling", revealText: "Spoken storytelling" },
+  },
+};
+
 async function waitForPieceToLand(page: Page) {
   await page.waitForFunction(() => {
     const row = document.querySelector('[data-testid="stage-action-row"]');
@@ -101,7 +111,8 @@ test("the Skill Info button is absent mid-Reveal and appears beside the Skill ta
 
   const infoBox = (await infoButton(page).boundingBox())!;
   expect(Math.abs(infoBox.y + infoBox.height / 2 - (skillAfter.y + skillAfter.height / 2))).toBeLessThan(skillAfter.height / 2 + 4);
-  expect(infoBox.x).toBeGreaterThanOrEqual(skillAfter.x + skillAfter.width - 1);
+  // Desktop: in the margin left of the Skill tab, past its Lock disc, so it costs the tab row no width.
+  expect(infoBox.x + infoBox.width).toBeLessThanOrEqual(skillAfter.x - 44);
 });
 
 test("the Skill Info button also appears once Held on a Retry Challenge (no Lock/Reroll)", async ({ page }) => {
@@ -174,7 +185,7 @@ for (const viewport of [
   { width: 390, height: 844 },
   { width: 375, height: 667 },
 ]) {
-  for (const challenge of [fullChallenge, retryRevisionChallenge]) {
+  for (const challenge of [fullChallenge, retryRevisionChallenge, widestChallenge]) {
     const skill = challenge.inputs.skill.revealText;
     test(`the open Skill info popover (${skill}) stays within the viewport and above the action bar at ${viewport.width}x${viewport.height}`, async ({
       page,
