@@ -151,6 +151,8 @@ export const copy = {
     clearEverything: "Clear everything",
     // Story 6.4: the Practice History export control.
     export: "Export",
+    // Story 6.5: the Practice History Clear all data opener.
+    clearAllData: "Clear all data",
   },
   state: {
     repSaved: "Rep saved.",
@@ -165,6 +167,9 @@ export const copy = {
     // Story 6.4: announced after the export download fires.
     exported: "Exported.",
     exportFailed: "Export failed.",
+    // Story 6.5: announced after Clear all data is confirmed.
+    allDataCleared: "All data cleared.",
+    clearFailed: "Couldn't clear this browser's data.",
   },
   // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
   // banner). More than one can show at once -- see activeNoticeBanners.
@@ -184,6 +189,9 @@ export const copy = {
     historyTitle: "Practice history",
     // Story 6.3: the Practice Map's three group labels (table captions).
     mapGroups: { skill: "Skill", medium: "Medium", level: "Level" },
+    // Story 6.5: the Clear all data confirmation Dialog's title and body.
+    clearAllTitle: "Clear everything in this browser?",
+    clearAllBody: "Practice history, your setup and any challenge in progress will be removed from this browser.",
   },
   privacy: {
     title: "privacy.",

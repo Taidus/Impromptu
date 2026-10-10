@@ -6,7 +6,7 @@ import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
 import type { Rep, Session, Setup } from "@/domain/session/schema";
-import { attemptSession, baseChallenge } from "@/domain/session/session-fixture";
+import { attemptSession, baseChallenge, noneSession } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
 import { config } from "@/config/app";
 import { buildDefaultSetup } from "./defaults";
@@ -284,7 +284,9 @@ describe("createStore — setup events, rev conflict", () => {
 });
 
 describe("createStore — setup events, fresh === null conflict", () => {
-  it("re-applies the event once to the pre-event base, saving at rev 1", () => {
+  // Story 6.5: a null reread under a rev > 0 write means another tab cleared all data --
+  // the write stays in memory only so the cleared slice is never resurrected.
+  it("applies the event once in memory and does not write the cleared key back", () => {
     const storage = createMemoryRawStore();
     const repository = createRepository({ storage });
     repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
@@ -297,7 +299,8 @@ describe("createStore — setup events, fresh === null conflict", () => {
 
     const expected = { ...concreteSetup, enabledMediums: ["med.a"] };
     expect(store.getState().setup).toEqual(expected); // applied once, not toggled back on
-    expect(repository.load("setup")).toEqual({ ok: true, value: { v: 1, rev: 1, data: expected } });
+    expect(repository.load("setup")).toEqual({ ok: true, value: null });
+    expect(store.getState().saveFailed).toBe(true);
   });
 });
 
@@ -761,5 +764,214 @@ describe("createStore — retry outside Saved", () => {
     store.dispatch({ type: "retry", fromRepId: before.lastRepId as string });
 
     expect(store.getState().session).toBe(before);
+  });
+});
+
+/** A minimal persisted Rep for seeding history. */
+const rep = (id: string): Rep => ({
+  id: `${id}-e89b-42d3-a456-426614174000`,
+  challenge: baseChallenge,
+  finishedAt: "2026-10-09T12:00:00.000Z",
+  timeUsedSec: null,
+  reflection: null,
+});
+
+describe("createStore — clear_all_data command", () => {
+  it("empties setup/session/history and removes every impromptu:* key", async () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+    expect(store.getState().session.state).toBe("held");
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().session).toEqual(noneSession);
+    expect(store.getState().history).toEqual([]);
+    expect(storage.length).toBe(0);
+  });
+
+  it("runs synchronously once hydrated, before any timer advances", () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repository.save("session", { v: config.storage.schemaVersions.session, rev: 1, data: attemptSession });
+    repository.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().history).toHaveLength(1);
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(storage.length).toBe(0);
+    expect(store.getState().session).toEqual(noneSession);
+    expect(store.getState().history).toEqual([]);
+  });
+
+  it("resets every slice rev to 0 -- the next write to each slice after a clear lands at rev 1", async () => {
+    const { store, repository } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    expect(store.getState().history).toHaveLength(1);
+
+    store.dispatch({ type: "clear_all_data" });
+    store.dispatchSetup({ type: "set_quick_reveal", quickReveal: true });
+    store.dispatch({ type: "new_challenge" });
+    store.dispatchSession({ type: "start", nowMs: 0 });
+    store.dispatch({ type: "finish_rep" });
+
+    const revOf = (key: "setup" | "session" | "history") => {
+      const stored = repository.load<unknown>(key);
+      return stored.ok ? stored.value?.rev : undefined;
+    };
+    expect(revOf("setup")).toBe(1);
+    expect(revOf("history")).toBe(1);
+    // new_challenge, start and finish_rep each write the session once.
+    expect(revOf("session")).toBe(3);
+    expect(store.getState().history).toHaveLength(1);
+  });
+
+  it("lands in status 'error' with setup null after a library failure, even with a persisted setup", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    const store = createStore(makeDeps({ repository, library: "reject" }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().status).toBe("ready");
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup).toBeNull();
+    expect(store.getState().status).toBe("error");
+  });
+
+  it("resets migrationFailed", () => {
+    const real = createRepository({ storage: createMemoryRawStore() });
+    const repository: Repository = { ...real, migrationFailed: () => true };
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().migrationFailed).toBe(true);
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().migrationFailed).toBe(false);
+  });
+
+  it("sets saveFailed and changes nothing else when the wipe fails", () => {
+    const memory = createMemoryRawStore();
+    const storage: RawStore = {
+      ...memory,
+      get length() {
+        return memory.length;
+      },
+      removeItem: (key) => {
+        if (key.startsWith("impromptu:")) throw new Error("denied");
+        memory.removeItem(key);
+      },
+    };
+    const repository = createRepository({ storage });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repository.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    const before = store.getState();
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState()).toEqual({ ...before, saveFailed: true });
+    expect(memory.length).toBe(2);
+  });
+
+  it("does not resurrect cleared data when another tab writes from its pre-clear state", () => {
+    const storage = createMemoryRawStore();
+    const repoA = createRepository({ storage });
+    const repoB = createRepository({ storage });
+    repoA.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repoA.save("session", { v: config.storage.schemaVersions.session, rev: 1, data: attemptSession });
+    repoA.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const storeA = createStore(makeDeps({ repository: repoA }));
+    const storeB = createStore(makeDeps({ repository: repoB }));
+    storeA.hydrate();
+    storeB.hydrate();
+
+    storeA.dispatch({ type: "clear_all_data" });
+    storeB.dispatchSession({ type: "compose_failed", reason: "no_compatible", blockingLock: "topic" });
+    storeB.dispatchSetup({ type: "set_sound", sound: true });
+
+    const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter((k) => k?.startsWith("impromptu:"));
+    expect(keys).toEqual([]);
+    expect(storeB.getState().saveFailed).toBe(true);
+  });
+
+  it("rebuilds setup from the library default once the library is ready", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup?.enabledMediums).toEqual(["med.a", "med.b"]);
+    expect(store.getState().status).toBe("ready");
+    // Persisted nothing: a clear's rebuilt default lives in memory only.
+    expect(repository.load("setup")).toEqual({ ok: true, value: null });
+  });
+
+  it("leaves setup null (status loading) when the library hasn't resolved yet", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate(); // library load kicked off but pending -- fake timers not advanced
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup).toBeNull();
+    expect(store.getState().status).toBe("loading");
+  });
+
+  it("persists a fresh default setup at rev 1 when the library resolves after a clear", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, sound: true } });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    store.dispatch({ type: "clear_all_data" });
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().status).toBe("ready");
+    expect(store.getState().setup?.sound).toBe(false);
+    const stored = repository.load<unknown>("setup");
+    expect(stored.ok && stored.value?.rev).toBe(1);
+  });
+
+  it("drops a queued new_challenge so it never runs once the library arrives", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    store.dispatch({ type: "new_challenge" }); // library still loading -> queued
+
+    store.dispatch({ type: "clear_all_data" }); // hydrated -> runs immediately, drops the queued command
+
+    await vi.runAllTimersAsync();
+    expect(store.getState().session.state).toBe("none");
+  });
+
+  it("still treats a cross-tab reread of a missing key as a first visit after clearing", async () => {
+    const storage = createMemoryRawStore();
+    const target = fakeEventTarget();
+    const repository = createRepository({ storage, eventTarget: target });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+
+    store.dispatch({ type: "clear_all_data" });
+    target.fire("impromptu:setup", storage); // another tab's (or this repository's own) notification arrives
+
+    expect(store.getState().setup).not.toBeNull();
+    expect(store.getState().status).toBe("ready");
+    const stored = repository.load<unknown>("setup");
+    expect(stored.ok && stored.value?.rev).toBe(1); // the first-visit path (ensureSetup) persisted it
   });
 });

@@ -34,7 +34,8 @@ export type StoreCommand =
   | { type: "new_challenge" }
   | { type: "finish_rep" }
   | { type: "save_rep" }
-  | { type: "retry"; fromRepId: string };
+  | { type: "retry"; fromRepId: string }
+  | { type: "clear_all_data" };
 
 export interface StoreDeps {
   repository: Repository;
