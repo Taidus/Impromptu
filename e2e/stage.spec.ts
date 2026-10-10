@@ -81,6 +81,22 @@ test("a held Challenge survives reload unchanged", async ({ page }) => {
 // production-library e2e test relies on (see its Implementation Notes).
 const revealNext = (page: Page) => page.getByRole("button", { name: copy.button.revealNext });
 
+/**
+ * Story 4.1: waits out a just-pressed piece's full shuffle-then-land cycle
+ * -- either the action row settles back to `idle` (more pieces left) or it
+ * unmounts entirely (the Brief just landed, no action row anymore). Its
+ * candidate flicks live in an `aria-hidden` layer and may coincidentally
+ * echo the real value (e.g. Skill focus "random" flicks through every real
+ * Skill name, including the one that will land), so a plain text assertion
+ * right after a press can otherwise race a shuffle still in flight.
+ */
+async function waitForPieceToLand(page: Page) {
+  await page.waitForFunction(() => {
+    const row = document.querySelector('[data-testid="stage-action-row"]');
+    return row === null || row.getAttribute("data-motion-status") === "idle";
+  });
+}
+
 test("the Stage shows empty slots and focuses Reveal next on entry", async ({ page }) => {
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
@@ -96,18 +112,23 @@ test("keyboard stepping lands each labelled piece in order, with the Brief last"
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Medium: Drawing", { exact: true })).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-topic-stage-phone")).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-stamp-stage-phone")).toBeVisible();
 
   await page.keyboard.press(" ");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-brief-stage-phone")).toBeVisible();
   // Nothing landed is unrevealed anymore, and Reroll/Start creating aren't
   // built yet -- the action row has no primary action.
@@ -144,10 +165,12 @@ test("Space/Enter with focus on the body lands the next piece", async ({ page })
 
   await blur();
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
 
   await blur();
   await page.keyboard.press(" ");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Medium: Drawing", { exact: true })).toBeVisible();
 });
 
@@ -155,7 +178,10 @@ test("focus moves to the Brief when the last piece lands", async ({ page }) => {
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
-  while ((await revealNext(page).count()) > 0) await page.keyboard.press("Enter");
+  while ((await revealNext(page).count()) > 0) {
+    await page.keyboard.press("Enter");
+    await waitForPieceToLand(page);
+  }
   await expect(page.locator("p.text-brief-stage-phone").locator("..")).toBeFocused();
 });
 
@@ -169,6 +195,7 @@ test("holding Enter on Reveal next lands only one piece", async ({ page }) => {
   await page.keyboard.down("Enter");
   await page.keyboard.down("Enter");
   await page.keyboard.up("Enter");
+  await waitForPieceToLand(page);
 
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
   await expect(page.getByText(emptySlotLabel("medium"))).toBeAttached();
@@ -206,7 +233,10 @@ test("desktop type minimums at 1280x800: Brief at least 32px, Inputs at least 24
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
-  while ((await revealNext(page).count()) > 0) await revealNext(page).click();
+  while ((await revealNext(page).count()) > 0) {
+    await revealNext(page).click();
+    await waitForPieceToLand(page);
+  }
   await expect(page.locator("p.text-brief-stage-phone")).toBeVisible();
 
   const fontSizePx = async (locator: ReturnType<Page["locator"]>) =>
@@ -258,10 +288,14 @@ test("phone layout at 390x844: the Constraint stamp lands below Topic, and the a
   await expect(page.getByTestId("stage-action-row")).toHaveCSS("position", "fixed");
 
   await revealNext(page).click(); // skill
+  await waitForPieceToLand(page);
   await revealNext(page).click(); // medium
+  await waitForPieceToLand(page);
   await revealNext(page).click(); // topic
+  await waitForPieceToLand(page);
   const topicBox = await page.locator("p.text-topic-stage-phone").boundingBox();
   await revealNext(page).click(); // constraint
+  await waitForPieceToLand(page);
   const stampBox = await page.locator("p.text-stamp-stage-phone").boundingBox();
 
   expect(topicBox).not.toBeNull();

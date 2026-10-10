@@ -4,7 +4,8 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { copy } from "@/components/copy";
 import { SunButton } from "@/components/SunButton";
 import type { Challenge, RevealedKind } from "@/domain/session/schema";
-import { BriefBlock, EmptySlot, ScrapGroup, TicketTab } from "./pieces";
+import type { RevealMotion } from "./useRevealMotion";
+import { BriefBlock, EmptySlot, MOTION_CLASS, ScrapGroup, ShufflingPiece, TicketTab } from "./pieces";
 import { nextKind } from "./reveal-logic";
 
 /** Native auto-repeat on a held Enter would click the focused button once per repeat -- one reveal per press only. */
@@ -13,9 +14,13 @@ function ignoreRepeatedActivation(event: KeyboardEvent<HTMLButtonElement>) {
 }
 
 /**
- * The Reveal composition (Story 3.10): the empty slots, the five pieces as
- * they land, the Brief, and the "Reveal next" sun button. Instant landing
- * only -- no shuffle, no shimmer, no fade (Epic 4 adds motion). Mounted by
+ * The Reveal composition (Story 3.10, motion added in Story 4.1): the empty
+ * slots, the five pieces as they land, the Brief, and the "Reveal next" sun
+ * button. `motion` (from `useRevealMotion`, owned by `StagePage` so its
+ * keyboard fallback shares it) drives each piece through empty -> shuffling
+ * (an aria-hidden flick layer) -> landing (the real value, with its entrance
+ * animation) -> landed (gated on the store's `revealed`, via `has`). A
+ * single-value Input or the Brief skips straight to landing. Mounted by
  * StagePage only once a Challenge is held; the Stage's one keydown handler
  * and its aria-live region stay in StagePage (AD-7), so this component adds
  * no listener of its own.
@@ -23,19 +28,21 @@ function ignoreRepeatedActivation(event: KeyboardEvent<HTMLButtonElement>) {
 export function RevealComposition({
   challenge,
   revealed,
-  onRevealNext,
+  motion,
 }: {
   challenge: Challenge;
   revealed: RevealedKind[];
-  onRevealNext: () => void;
+  motion: RevealMotion;
 }) {
   // SunButton's own prop type (Story 3.1, reused as-is) doesn't expose
   // `ref`, so focus is grabbed through a plain wrapper instead.
   const actionRowRef = useRef<HTMLDivElement>(null);
   const briefRef = useRef<HTMLDivElement>(null);
   const has = (kind: RevealedKind) => revealed.includes(kind);
-  const briefLanded = has("brief");
-  const briefLandedBefore = useRef(briefLanded);
+  const landingKind = motion.state.status === "landing" ? motion.state.kind : null;
+  const shufflingKind = motion.state.status === "shuffling" ? motion.state.kind : null;
+  const briefTrulyLanded = has("brief");
+  const briefLandedBefore = useRef(briefTrulyLanded);
 
   // EXPERIENCE.md -> Focus targets: "Stage opens (any entry) -> Sun button".
   // Re-runs for every new Challenge, not just on mount.
@@ -43,35 +50,56 @@ export function RevealComposition({
     actionRowRef.current?.querySelector("button")?.focus();
   }, [challenge.id]);
 
-  // "Focus is never lost when a control disappears": when the Brief lands,
-  // the Reveal next button unmounts, so focus moves to the Brief.
+  // "Focus is never lost when a control disappears": when the Brief truly
+  // lands (the store commit, not its landing-preview fade), the Reveal next
+  // button unmounts, so focus moves to the Brief.
   useEffect(() => {
-    if (briefLanded && !briefLandedBefore.current) briefRef.current?.focus();
-    briefLandedBefore.current = briefLanded;
-  }, [briefLanded]);
+    if (briefTrulyLanded && !briefLandedBefore.current) briefRef.current?.focus();
+    briefLandedBefore.current = briefTrulyLanded;
+  }, [briefTrulyLanded]);
 
   const next = nextKind(challenge, revealed);
-  const piece = (kind: "topic" | "style" | "constraint") => ({
-    present: challenge.inputs[kind] !== undefined,
-    revealed: has(kind),
-    value: challenge.inputs[kind]?.revealText ?? "",
-  });
-  const scrap = { topic: piece("topic"), style: piece("style"), constraint: piece("constraint") };
+
+  function tab(kind: "skill" | "medium", tiltDeg: number) {
+    if (has(kind) || landingKind === kind) {
+      return (
+        <TicketTab
+          kind={kind}
+          value={challenge.inputs[kind].revealText}
+          tiltDeg={tiltDeg}
+          motionClassName={landingKind === kind ? MOTION_CLASS.landTabs : ""}
+        />
+      );
+    }
+    if (shufflingKind === kind && motion.flickText !== null) {
+      return (
+        <ShufflingPiece kind={kind}>
+          <TicketTab kind={kind} value={motion.flickText} tiltDeg={tiltDeg} />
+        </ShufflingPiece>
+      );
+    }
+    return <EmptySlot kind={kind} tiltDeg={tiltDeg} className="min-w-0" />;
+  }
+
+  function scrapPiece(kind: "topic" | "style" | "constraint") {
+    return {
+      present: challenge.inputs[kind] !== undefined,
+      revealed: has(kind),
+      landing: landingKind === kind,
+      shufflingText: shufflingKind === kind ? motion.flickText : null,
+      value: challenge.inputs[kind]?.revealText ?? "",
+    };
+  }
+  const scrap = { topic: scrapPiece("topic"), style: scrapPiece("style"), constraint: scrapPiece("constraint") };
+
+  const briefShowing = briefTrulyLanded || landingKind === "brief";
 
   return (
     <>
       <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact desktop:gap-stage-gap">
         <li className="flex flex-wrap gap-stage-gap-compact">
-          {has("skill") ? (
-            <TicketTab kind="skill" value={challenge.inputs.skill.revealText} tiltDeg={1.5} />
-          ) : (
-            <EmptySlot kind="skill" tiltDeg={1.5} className="min-w-0" />
-          )}
-          {has("medium") ? (
-            <TicketTab kind="medium" value={challenge.inputs.medium.revealText} tiltDeg={-1.5} />
-          ) : (
-            <EmptySlot kind="medium" tiltDeg={-1.5} className="min-w-0" />
-          )}
+          {tab("skill", 1.5)}
+          {tab("medium", -1.5)}
         </li>
         {scrap.topic.present || scrap.style.present || scrap.constraint.present ? (
           <li>
@@ -80,7 +108,14 @@ export function RevealComposition({
         ) : null}
       </ul>
 
-      {briefLanded ? <BriefBlock ref={briefRef} brief={challenge.brief} guidance={challenge.guidance} /> : null}
+      {briefShowing ? (
+        <BriefBlock
+          ref={briefRef}
+          brief={challenge.brief}
+          guidance={challenge.guidance}
+          motionClassName={landingKind === "brief" ? MOTION_CLASS.landBrief : ""}
+        />
+      ) : null}
 
       {next !== null ? (
         // DESIGN.md -> Layout & Spacing -> Phone: "The action row becomes a
@@ -91,9 +126,11 @@ export function RevealComposition({
         <div
           ref={actionRowRef}
           data-testid="stage-action-row"
+          data-motion-status={motion.state.status}
+          data-motion-kind={motion.state.status === "idle" ? "" : motion.state.kind}
           className="fixed inset-x-0 bottom-0 mx-auto w-safe-area-width max-w-[calc(100%-2*var(--spacing-gutter-phone))] bg-lilac pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))] desktop:static desktop:mx-0 desktop:mt-2 desktop:w-auto desktop:max-w-none desktop:bg-transparent desktop:p-0"
         >
-          <SunButton ground="lilac" onClick={onRevealNext} onKeyDown={ignoreRepeatedActivation}>
+          <SunButton ground="lilac" onClick={motion.press} onKeyDown={ignoreRepeatedActivation}>
             {copy.button.revealNext}
           </SunButton>
         </div>
