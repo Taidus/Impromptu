@@ -1,0 +1,301 @@
+{
+  "note": "Original artwork for Impromptu, generated with Higgsfield (or drawn, for ornaments) for the Cutout design system. Decorative images take alt=\"\"; posters carry alt text.",
+  "files": [
+    {
+      "file": "artwork/bust.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Optional Setup 02 decoration on a pastel sun disc",
+      "fallback": "omit",
+      "bytes": 67454
+    },
+    {
+      "file": "artwork/hero-bloom-orange.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Setup hero figure (section 01)",
+      "fallback": "none needed",
+      "bytes": 126772
+    },
+    {
+      "file": "artwork/hero-bloom-peony.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Alternate hero for a second page; never beside the orange one",
+      "fallback": "omit",
+      "bytes": 170882
+    },
+    {
+      "file": "artwork/poster-eye.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Setup 03 poster card \"reveal.\"",
+      "fallback": "alt text, paper fill",
+      "bytes": 182688
+    },
+    {
+      "file": "artwork/poster-hands.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Setup 03 poster card \"make.\"",
+      "fallback": "alt text, paper fill",
+      "bytes": 17630
+    },
+    {
+      "file": "artwork/poster-still.webp",
+      "group": "artwork",
+      "source": "higgsfield",
+      "use": "Setup 03 poster card \"reflect.\"",
+      "fallback": "alt text, paper fill",
+      "bytes": 100902
+    },
+    {
+      "file": "chrome/chrome-burst.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Pins the paper scrap; ticker separator",
+      "fallback": "omit on phones",
+      "bytes": 30376
+    },
+    {
+      "file": "chrome/chrome-drip.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Hanging from the night/lilac seam",
+      "fallback": "omit on phones",
+      "bytes": 29174
+    },
+    {
+      "file": "chrome/chrome-ring.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Halo around the bust; rising out of the footer",
+      "fallback": "omit on phones",
+      "bytes": 56854
+    },
+    {
+      "file": "chrome/chrome-sparkle.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Poster corner; ticker separator; footer wordmark",
+      "fallback": "omit on phones",
+      "bytes": 10026
+    },
+    {
+      "file": "chrome/chrome-tendril.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Hero right; wrapping a poster corner",
+      "fallback": "omit on phones",
+      "bytes": 45798
+    },
+    {
+      "file": "chrome/chrome-tribal.webp",
+      "group": "chrome",
+      "source": "higgsfield",
+      "use": "Across the lilac/paper seam; beside the wordmark",
+      "fallback": "omit on phones",
+      "bytes": 26502
+    },
+    {
+      "file": "textures/grain.png",
+      "group": "textures",
+      "source": "higgsfield",
+      "use": "Page grain overlay, 0.1 opacity, overlay blend",
+      "fallback": "no grain",
+      "bytes": 101010
+    },
+    {
+      "file": "textures/ink-mask.png",
+      "group": "textures",
+      "source": "higgsfield",
+      "use": "Constraint stamp wear mask (Stage)",
+      "fallback": "plain rule",
+      "bytes": 67509
+    },
+    {
+      "file": "textures/paper-scrap.webp",
+      "group": "textures",
+      "source": "higgsfield",
+      "use": "Topic paper scrap background (Stage)",
+      "fallback": "flat paper scrap",
+      "bytes": 117364
+    },
+    {
+      "file": "ornaments/comet-star-grape.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 235
+    },
+    {
+      "file": "ornaments/cross-ink.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 161
+    },
+    {
+      "file": "ornaments/halo-coral.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 123
+    },
+    {
+      "file": "ornaments/orbit-ink.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 252
+    },
+    {
+      "file": "ornaments/perspective-grid-ink.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 291
+    },
+    {
+      "file": "ornaments/plus-ink.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 157
+    },
+    {
+      "file": "ornaments/sparkle-grape.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 179
+    },
+    {
+      "file": "ornaments/starburst-marigold.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 198
+    },
+    {
+      "file": "ornaments/torn-strip-paper.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 397
+    },
+    {
+      "file": "ornaments/wire-globe-ink.svg",
+      "group": "ornaments",
+      "source": "drawn",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 318
+    },
+    {
+      "file": "cutouts/butterfly.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 113341
+    },
+    {
+      "file": "cutouts/camera.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 147438
+    },
+    {
+      "file": "cutouts/chrome-star.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 51242
+    },
+    {
+      "file": "cutouts/eye-strip.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 126438
+    },
+    {
+      "file": "cutouts/flower-daisy.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 63947
+    },
+    {
+      "file": "cutouts/flower-lily.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 58408
+    },
+    {
+      "file": "cutouts/flower-peony.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 99753
+    },
+    {
+      "file": "cutouts/hand-open.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 111663
+    },
+    {
+      "file": "cutouts/hand-pointing.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 59241
+    },
+    {
+      "file": "cutouts/paintbrush.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 50556
+    },
+    {
+      "file": "cutouts/pencil.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 25224
+    },
+    {
+      "file": "cutouts/profile-face.png",
+      "group": "cutouts",
+      "source": "higgsfield",
+      "use": "Edge decoration (secondary kit)",
+      "fallback": "omit",
+      "bytes": 110490
+    }
+  ]
+}
