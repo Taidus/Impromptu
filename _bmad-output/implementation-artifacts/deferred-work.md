@@ -44,6 +44,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-6-the-app-store-and-the-library-loader.md`
   summary: The first UI story that renders `useAppStore` (3.9/3.10) must add an e2e check that the production store reaches `libraryStatus: 'ready'` from `src/generated/library.json`.
   evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-7-difficulty-dial-and-perform-timing.md`
+  summary: Design polish for the Difficulty Dial in Story 9.5 sign-off — phone thumb ink border is 1px (DESIGN asks 1.5px; needs a border-width token), the wrapped Perform timing control at 320px reads as a tall pill, and adjacent arc-label hit areas overlap ~6px.
+  evidence: Recorded by the 3.7 review-fix pass after visual checks at 1280/390/320.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-1-practice-page-with-empty-and-storage-states.md`
   summary: Give the store a history-only readiness signal (e.g. `historyStatus`) so /practice stops showing the loading placeholder as soon as the Repository is read, instead of waiting for the idle-scheduled library load.
   evidence: `status` stays `loading` on a first visit until the library resolves and a default Setup is persisted; the Practice page never needs the library.
@@ -58,6 +61,3 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets.md`
   summary: Route the orbit thread through margins and gutters (crossing sides inside the text-free seams) and draw it on scroll under the 8.3 motion gate, instead of the current near-vertical left-edge line.
   evidence: DESIGN → Orbit thread wants it to wind around the page; the current path satisfies 'never crosses text' by hugging x≈1% of the viewport.
-- source_spec: `_bmad-output/implementation-artifacts/spec-3-7-difficulty-dial-and-perform-timing.md`
-  summary: Design polish for the Difficulty Dial in Story 9.5 sign-off — phone thumb ink border is 1px (DESIGN asks 1.5px; needs a border-width token), the wrapped Perform timing control at 320px reads as a tall pill, and adjacent arc-label hit areas overlap ~6px.
-  evidence: Recorded by the 3.7 review-fix pass after visual checks at 1280/390/320.
