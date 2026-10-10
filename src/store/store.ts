@@ -3,14 +3,22 @@ import { loadLibrary, prefetchOnIdle } from "@/adapters/library";
 import { config } from "@/config/app";
 import { compose, recentKeyFor, type ComposeLibrary, type ComposeRequest } from "@/domain/compose/compose";
 import type { Envelope, StorageKey } from "@/domain/ports";
-import { Rep, Session, Setup } from "@/domain/session/schema";
-import { sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
+import { Rep, Session, Setup, type Challenge, type Reflection } from "@/domain/session/schema";
+import { finishRep, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
 import { setupReducer, type SetupEvent, type SetupReducerResult } from "@/domain/session/setup-reducer";
 import { buildDefaultSetup, emptySession } from "./defaults";
 import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
 
 const schemaVersions = config.storage.schemaVersions;
 const HistoryList = z.array(Rep);
+
+function appendRepIfAbsent(history: Rep[], rep: Rep): Rep[] {
+  return history.some((r) => r.id === rep.id) ? history : [...history, rep];
+}
+
+function upsertReflection(history: Rep[], repId: string, reflection: Reflection | null): Rep[] {
+  return history.map((r) => (r.id === repId ? { ...r, reflection } : r));
+}
 
 /** Each rev conflict means another tab wrote in between; ten in a row is a runaway loop, not real contention. */
 const MAX_SAVE_ATTEMPTS = 10;
@@ -40,6 +48,7 @@ export function createStore(deps: StoreDeps): Store {
   let state: StoreState = initialState;
   let setupRev = 0;
   let sessionRev = 0;
+  let historyRev = 0;
   let library: ComposeLibrary | null = null;
   let hydrated = false;
   let libraryRequested = false;
@@ -101,6 +110,7 @@ export function createStore(deps: StoreDeps): Store {
     const historySlice = loadSlice("history", HistoryList);
     setupRev = setupSlice.rev;
     sessionRev = sessionSlice.rev;
+    historyRev = historySlice.rev;
 
     setState({
       ...state,
@@ -117,6 +127,7 @@ export function createStore(deps: StoreDeps): Store {
     repository.subscribe("history", rereadHistory);
 
     startLibraryLoad();
+    drainPending(); // a finish/save/retry queued before hydrate needs only hydration
   }
 
   function rereadSetup(): void {
@@ -145,6 +156,7 @@ export function createStore(deps: StoreDeps): Store {
 
   function rereadHistory(): void {
     const slice = loadSlice("history", HistoryList);
+    historyRev = slice.rev;
     setState({ ...state, history: slice.data ?? [], migrationFailed: readMigrationFailed() });
   }
 
@@ -158,8 +170,8 @@ export function createStore(deps: StoreDeps): Store {
         library = result.library;
         onLibraryReady(result.library);
       } catch {
-        // No retry this story: report it and drop whatever was waiting on the library.
-        pendingCommands.length = 0;
+        // No retry this story: report it and drop what was waiting on the library (only new_challenge needs it).
+        removePending((c) => c.type === "new_challenge");
         setState({ ...state, libraryStatus: "error", status: state.setup === null ? "error" : state.status });
       }
     });
@@ -180,29 +192,49 @@ export function createStore(deps: StoreDeps): Store {
     setState({ ...state, setup: persisted.data, status: "ready", saveFailed: !persisted.saved });
   }
 
+  function removePending(match: (command: StoreCommand) => boolean): StoreCommand[] {
+    const removed = pendingCommands.filter(match);
+    const kept = pendingCommands.filter((c) => !match(c));
+    pendingCommands.length = 0;
+    pendingCommands.push(...kept);
+    return removed;
+  }
+
   function drainPending(): void {
-    if (!isReadyToCompose()) return;
-    for (const command of pendingCommands.splice(0, pendingCommands.length)) runCommand(command);
+    for (const command of removePending(canRun)) runCommand(command);
   }
 
   function isReadyToCompose(): boolean {
     return state.status === "ready" && state.libraryStatus === "ready" && state.setup !== null && library !== null;
   }
 
+  /** Only `new_challenge` composes, so only it waits for the library; finish/save/retry need hydration alone. */
+  function canRun(command: StoreCommand): boolean {
+    return command.type === "new_challenge" ? isReadyToCompose() : state.status === "ready";
+  }
+
   function dispatch(command: StoreCommand): void {
-    if (!isReadyToCompose()) {
-      if (state.status === "error" || state.libraryStatus === "error") return; // nothing will ever drain it
-      if (!pendingCommands.some((c) => c.type === command.type)) pendingCommands.push(command); // at most one per type
+    if (canRun(command)) {
+      runCommand(command);
       return;
     }
-    runCommand(command);
+    // A library error means nothing will ever drain a new_challenge; the others can still drain once a Setup arrives.
+    if (command.type === "new_challenge" && (state.status === "error" || state.libraryStatus === "error")) return;
+    if (!pendingCommands.some((c) => c.type === command.type)) pendingCommands.push(command); // at most one per type
   }
 
   function runCommand(command: StoreCommand): void {
     if (command.type === "new_challenge") runNewChallenge();
+    else if (command.type === "finish_rep") runFinishRep();
+    else if (command.type === "save_rep") runSaveRep();
+    else if (command.type === "retry") runRetry(command.fromRepId);
   }
 
   function runNewChallenge(): void {
+    // The command layer must not compose while an Attempt is running or just Finished (AD-7):
+    // the reducer already refuses the resulting challenge_committed, but skipping compose() here
+    // also skips the wasted library/recent-ring work and an unused Random draw.
+    if (state.session.state === "attempt" || state.session.state === "finished") return;
     const setup = state.setup;
     if (setup === null || library === null) return; // isReadyToCompose() guarantees this in practice
     const request: ComposeRequest = {
@@ -224,6 +256,96 @@ export function createStore(deps: StoreDeps): Store {
         }
       : { type: "compose_failed", reason: result.reason, blockingLock: result.blockingLock };
     applySessionEvent(event);
+  }
+
+  /**
+   * Finish rep (Story 5.5): reads the Clock/Random this once and moves the session to Finished,
+   * then appends the Rep to history. Session first: a rev conflict (another tab finished or
+   * discarded first) re-runs `finishRep` on the fresh session, and the Rep is appended only if the
+   * persisted session really is Finished on this Rep -- so a lost race never orphans a Rep.
+   */
+  function runFinishRep(): void {
+    const base = state.session;
+    const nowMs = clock.now();
+    const repId = random.uuid();
+    const finishedAt = new Date(nowMs).toISOString(); // outside src/domain only -- see finishRep's doc comment
+    const outcome = finishRep(base, nowMs, repId, finishedAt);
+    if (outcome === null) return;
+
+    const persistedSession = persist(
+      "session",
+      Session,
+      sessionRev,
+      outcome.session,
+      (fresh) => finishRep(fresh ?? base, nowMs, repId, finishedAt)?.session ?? (fresh ?? base),
+    );
+    sessionRev = persistedSession.rev;
+
+    const finishedHere = persistedSession.data.state === "finished" && persistedSession.data.lastRepId === repId;
+    let history = state.history;
+    let historySaved = true;
+    if (finishedHere) {
+      const persistedHistory = persist(
+        "history",
+        HistoryList,
+        historyRev,
+        appendRepIfAbsent(state.history, outcome.rep),
+        (fresh) => appendRepIfAbsent(fresh ?? [], outcome.rep),
+      );
+      historyRev = persistedHistory.rev;
+      history = persistedHistory.data;
+      historySaved = persistedHistory.saved;
+    }
+
+    setState({ ...state, session: persistedSession.data, history, saveFailed: !persistedSession.saved || !historySaved });
+  }
+
+  /** Save rep (Story 5.6): upserts the reflection draft onto the Rep by `lastRepId` (idempotent, null when both fields are blank), then moves Finished -> Saved. */
+  function runSaveRep(): void {
+    const base = state.session;
+    if (base.state !== "finished") return;
+    const repId = base.lastRepId;
+    const draft = base.reflectionDraft ?? { worked: "", change: "" };
+    const trimmed: Reflection = { worked: draft.worked.trim(), change: draft.change.trim() };
+    const reflection: Reflection | null = trimmed.worked === "" && trimmed.change === "" ? null : trimmed;
+
+    let nextHistory = state.history;
+    let historySaved = true;
+    if (repId !== null) {
+      // The Rep is missing when its finish-time history write failed: don't pretend it was saved.
+      if (!state.history.some((r) => r.id === repId)) {
+        setState({ ...state, saveFailed: true });
+        return;
+      }
+      const apply = (history: Rep[]) => upsertReflection(history, repId, reflection);
+      const persistedHistory = persist("history", HistoryList, historyRev, apply(state.history), (fresh) => apply(fresh ?? state.history));
+      historyRev = persistedHistory.rev;
+      nextHistory = persistedHistory.data;
+      historySaved = persistedHistory.saved;
+    }
+
+    const quickReveal = state.setup?.quickReveal ?? false;
+    const nextSession = sessionReducer(base, { type: "save_rep" }, { quickReveal });
+    const persistedSession = persist("session", Session, sessionRev, nextSession, (fresh) =>
+      sessionReducer(fresh ?? base, { type: "save_rep" }, { quickReveal }),
+    );
+    sessionRev = persistedSession.rev;
+
+    setState({
+      ...state,
+      session: persistedSession.data,
+      history: nextHistory,
+      saveFailed: !persistedSession.saved || !historySaved,
+    });
+  }
+
+  /** Retry (Story 5.7): copies the Rep's own Challenge snapshot under a new id, never composes. Outside Saved, or with a missing Rep, a no-op. */
+  function runRetry(fromRepId: string): void {
+    if (state.session.state !== "saved") return; // AD-7: Retry is offered from Saved only
+    const fromRep = state.history.find((r) => r.id === fromRepId);
+    if (fromRep === undefined) return;
+    const challenge: Challenge = { ...fromRep.challenge, id: random.uuid(), origin: { kind: "retry", fromRepId } };
+    applySessionEvent({ type: "challenge_committed", challenge, recentKey: null });
   }
 
   function dispatchSetup(event: SetupEvent): SetupReducerResult["notice"] {

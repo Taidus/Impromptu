@@ -9,9 +9,9 @@ import {
   noneSession,
   savedSession,
 } from "./session-fixture";
-import { Session } from "./schema";
+import { Session, type Challenge } from "./schema";
 import type { SessionEvent } from "./session-reducer";
-import { sessionReducer } from "./session-reducer";
+import { finishRep, presentKinds, sessionReducer } from "./session-reducer";
 
 const quickOff = { quickReveal: false };
 const quickOn = { quickReveal: true };
@@ -41,6 +41,38 @@ describe("sessionReducer", () => {
       expect(result.challenge).toBe(fullChallenge);
       expect(result.revealed).toEqual([]);
       expect(result.recent).toEqual(["k2"]);
+    });
+
+    it("Saved + challenge_committed (a plain new/reroll) becomes Held, following quickReveal like any other commit", () => {
+      const result = sessionReducer(
+        savedSession,
+        { type: "challenge_committed", challenge: baseChallenge, recentKey: "k-saved" },
+        quickOff,
+      );
+      expect(result.state).toBe("held");
+      expect(result.challenge).toBe(baseChallenge);
+      expect(result.revealed).toEqual([]);
+    });
+
+    it("a retry-origin Challenge lands every present kind at once, even with Quick reveal off", () => {
+      const retryChallenge: Challenge = {
+        ...fullChallenge,
+        origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" },
+      };
+      const result = sessionReducer(
+        savedSession,
+        { type: "challenge_committed", challenge: retryChallenge, recentKey: null },
+        quickOff,
+      );
+      expect(result.state).toBe("held");
+      expect(result.revealed).toEqual(presentKinds(retryChallenge));
+    });
+
+    it("retry's recentKey is null and never pushes onto the ring", () => {
+      const retryChallenge: Challenge = { ...baseChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } };
+      const withRecent: Session = { ...savedSession, recent: ["old-key"] };
+      const result = sessionReducer(withRecent, { type: "challenge_committed", challenge: retryChallenge, recentKey: null }, quickOff);
+      expect(result.recent).toEqual(["old-key"]);
     });
 
     it("None + challenge_committed with Quick reveal on lands every present kind at once, brief last", () => {
@@ -143,6 +175,13 @@ describe("sessionReducer", () => {
       expect(result.locks).toEqual({ skill: "skl.observation" });
       expect(result.lastRepId).toBe("223e4567-e89b-42d3-a456-426614174000");
     });
+
+    it("is a no-op during an Attempt or Finished (new_challenge stays rejected mid-Attempt)", () => {
+      for (const session of [attemptSession, finishedSession]) {
+        const result = sessionReducer(session, { type: "challenge_committed", challenge: baseChallenge, recentKey: "k" }, quickOff);
+        expect(result).toBe(session);
+      }
+    });
   });
 
   describe("compose_failed", () => {
@@ -167,6 +206,19 @@ describe("sessionReducer", () => {
       expect(result.challenge).toBe(held.challenge);
       expect(result.revealed).toEqual(["skill"]);
       expect(result.lastComposeError).toEqual({ reason: "no_compatible", blockingLock: null });
+    });
+
+    it("from Saved stays Saved and sets lastComposeError", () => {
+      const result = sessionReducer(savedSession, { type: "compose_failed", reason: "no_compatible", blockingLock: null }, quickOff);
+      expect(result.state).toBe("saved");
+      expect(result.lastComposeError).toEqual({ reason: "no_compatible", blockingLock: null });
+    });
+
+    it("is a no-op during an Attempt or Finished", () => {
+      for (const session of [attemptSession, finishedSession]) {
+        const result = sessionReducer(session, { type: "compose_failed", reason: "no_compatible", blockingLock: null }, quickOff);
+        expect(result).toBe(session);
+      }
     });
   });
 
@@ -198,15 +250,152 @@ describe("sessionReducer", () => {
     });
   });
 
+  describe("start", () => {
+    const fullyRevealed: Session = { ...heldSession, revealed: presentKinds(baseChallenge) };
+
+    it("Held with every present kind landed becomes Attempt, startedAt = nowMs, locks cleared", () => {
+      const withLocks: Session = { ...fullyRevealed, locks: { skill: "skl.observation" } };
+      const result = sessionReducer(withLocks, { type: "start", nowMs: 5_000 }, quickOff);
+      expect(result.state).toBe("attempt");
+      expect(result.attempt).toEqual({ startedAt: 5_000, pausedAt: null, pausedTotalMs: 0, timeLimitSec: null });
+      expect(result.locks).toEqual({});
+    });
+
+    it("carries the held Challenge's own timeLimitSec onto the Attempt", () => {
+      const timedChallenge: Challenge = { ...baseChallenge, timeLimitSec: 300 };
+      const held: Session = { ...heldSession, challenge: timedChallenge, revealed: presentKinds(timedChallenge) };
+      const result = sessionReducer(held, { type: "start", nowMs: 0 }, quickOff);
+      expect(result.attempt?.timeLimitSec).toBe(300);
+    });
+
+    it("is a no-op while any present kind hasn't landed yet", () => {
+      const partial: Session = { ...heldSession, revealed: ["skill"] };
+      const result = sessionReducer(partial, { type: "start", nowMs: 1 }, quickOff);
+      expect(result).toBe(partial);
+    });
+
+    it("is a no-op from any state other than Held", () => {
+      for (const session of [noneSession, attemptSession, finishedSession, savedSession]) {
+        const result = sessionReducer(session, { type: "start", nowMs: 1 }, quickOff);
+        expect(result).toBe(session);
+      }
+    });
+  });
+
+  describe("pause / resume", () => {
+    it("pause sets pausedAt to nowMs", () => {
+      const result = sessionReducer(attemptSession, { type: "pause", nowMs: 100 }, quickOff);
+      expect(result.attempt?.pausedAt).toBe(100);
+    });
+
+    it("pause is a no-op when already paused", () => {
+      const paused: Session = { ...attemptSession, attempt: { ...attemptSession.attempt!, pausedAt: 50 } };
+      const result = sessionReducer(paused, { type: "pause", nowMs: 100 }, quickOff);
+      expect(result).toBe(paused);
+    });
+
+    it("resume clears pausedAt and folds the paused span into pausedTotalMs", () => {
+      const paused: Session = { ...attemptSession, attempt: { ...attemptSession.attempt!, pausedAt: 50, pausedTotalMs: 10 } };
+      const result = sessionReducer(paused, { type: "resume", nowMs: 150 }, quickOff);
+      expect(result.attempt).toEqual({ ...attemptSession.attempt, pausedAt: null, pausedTotalMs: 10 + (150 - 50) });
+    });
+
+    it("resume clamps a backwards clock step to zero so the Attempt still parses", () => {
+      const paused: Session = { ...attemptSession, attempt: { ...attemptSession.attempt!, pausedAt: 500, pausedTotalMs: 0 } };
+      const result = sessionReducer(paused, { type: "resume", nowMs: 100 }, quickOff);
+      expect(result.attempt?.pausedTotalMs).toBe(0);
+      expect(Session.safeParse(result).success).toBe(true);
+    });
+
+    it("resume is a no-op when already running", () => {
+      const result = sessionReducer(attemptSession, { type: "resume", nowMs: 100 }, quickOff);
+      expect(result).toBe(attemptSession);
+    });
+
+    it("multiple pause/resume cycles accumulate pausedTotalMs", () => {
+      let session = attemptSession;
+      session = sessionReducer(session, { type: "pause", nowMs: 100 }, quickOff);
+      session = sessionReducer(session, { type: "resume", nowMs: 150 }, quickOff); // +50
+      session = sessionReducer(session, { type: "pause", nowMs: 200 }, quickOff);
+      session = sessionReducer(session, { type: "resume", nowMs: 230 }, quickOff); // +30
+      expect(session.attempt?.pausedTotalMs).toBe(80);
+    });
+
+    it("are no-ops outside Attempt", () => {
+      for (const session of [noneSession, heldSession, finishedSession, savedSession]) {
+        expect(sessionReducer(session, { type: "pause", nowMs: 1 }, quickOff)).toBe(session);
+        expect(sessionReducer(session, { type: "resume", nowMs: 1 }, quickOff)).toBe(session);
+      }
+    });
+  });
+
+  describe("update_reflection_draft", () => {
+    it("sets the draft while Finished", () => {
+      const result = sessionReducer(
+        finishedSession,
+        { type: "update_reflection_draft", reflection: { worked: "good light", change: "" } },
+        quickOff,
+      );
+      expect(result.reflectionDraft).toEqual({ worked: "good light", change: "" });
+    });
+
+    it("slices an over-cap draft to config.reflection.maxChars", () => {
+      const max = config.reflection.maxChars;
+      const long = "x".repeat(max + 20);
+      const result = sessionReducer(finishedSession, { type: "update_reflection_draft", reflection: { worked: long, change: long } }, quickOff);
+      expect(result.reflectionDraft?.worked).toHaveLength(max);
+      expect(result.reflectionDraft?.change).toHaveLength(max);
+    });
+
+    it("is a no-op outside Finished", () => {
+      for (const session of [noneSession, heldSession, attemptSession, savedSession]) {
+        const result = sessionReducer(session, { type: "update_reflection_draft", reflection: { worked: "x", change: "y" } }, quickOff);
+        expect(result).toBe(session);
+      }
+    });
+  });
+
+  describe("save_rep", () => {
+    it("Finished becomes Saved with the Attempt cleared", () => {
+      const result = sessionReducer(finishedSession, { type: "save_rep" }, quickOff);
+      expect(result.state).toBe("saved");
+      expect(result.attempt).toBeNull();
+    });
+
+    it("is a no-op outside Finished", () => {
+      for (const session of [noneSession, heldSession, attemptSession, savedSession]) {
+        expect(sessionReducer(session, { type: "save_rep" }, quickOff)).toBe(session);
+      }
+    });
+  });
+
+  describe("discard", () => {
+    it("Attempt becomes None with the challenge and attempt cleared, nothing recorded", () => {
+      const result = sessionReducer(attemptSession, { type: "discard" }, quickOff);
+      expect(result.state).toBe("none");
+      expect(result.challenge).toBeNull();
+      expect(result.attempt).toBeNull();
+      expect(result.revealed).toEqual([]);
+      expect(result.locks).toEqual({});
+    });
+
+    it("is a no-op outside Attempt", () => {
+      for (const session of [noneSession, heldSession, finishedSession, savedSession]) {
+        expect(sessionReducer(session, { type: "discard" }, quickOff)).toBe(session);
+      }
+    });
+  });
+
   it("config.reveal.order ends with brief (assumption this reducer relies on)", () => {
     expect(config.reveal.order.at(-1)).toBe("brief");
   });
 
   // Required AC: cross every AD-7 state with every event this story
-  // implements. None/Held are in scope for challenge_committed and
-  // compose_failed; only Held is in scope for reveal_next. Everywhere else
-  // the pair is out of scope and must be a no-op (same session reference),
-  // and every output -- in scope or not -- must still parse as a Session.
+  // implements. Every output -- in scope or not -- must still parse as a
+  // Session, and every out-of-scope pair must be a true no-op (same
+  // reference). In-scope pairs are checked precisely by the dedicated
+  // describe blocks above; this sweep only guards against a pair silently
+  // mutating when it has no business to.
   const allStates = [
     ["None", noneSession],
     ["Held", heldSession],
@@ -219,11 +408,32 @@ describe("sessionReducer", () => {
     { type: "challenge_committed", challenge: baseChallenge, recentKey: "k-cross" },
     { type: "compose_failed", reason: "no_compatible", blockingLock: null },
     { type: "reveal_next" },
+    { type: "start", nowMs: 1_000 },
+    { type: "pause", nowMs: 1_000 },
+    { type: "resume", nowMs: 1_000 },
+    { type: "update_reflection_draft", reflection: { worked: "a", change: "b" } },
+    { type: "save_rep" },
+    { type: "discard" },
   ];
 
   function isInScope(stateLabel: string, eventType: SessionEvent["type"]): boolean {
-    if (eventType === "reveal_next") return stateLabel === "Held";
-    return stateLabel === "None" || stateLabel === "Held";
+    switch (eventType) {
+      case "challenge_committed":
+      case "compose_failed":
+        return stateLabel === "None" || stateLabel === "Held" || stateLabel === "Saved";
+      case "reveal_next":
+      case "start":
+        return stateLabel === "Held";
+      case "pause":
+      case "resume":
+      case "discard":
+        return stateLabel === "Attempt";
+      case "update_reflection_draft":
+      case "save_rep":
+        return stateLabel === "Finished";
+      default:
+        return false;
+    }
   }
 
   const crossRows = allStates.flatMap(([stateLabel, session]) =>
@@ -238,26 +448,17 @@ describe("sessionReducer", () => {
     }
   });
 
-  // Table-driven sweep (required AC): any (state, event) pair this story
-  // does not model -- including AD-7 events later stories add -- is a no-op.
+  // Table-driven sweep (required AC): any (state, event) pair this reducer
+  // never models -- a future story's event, or garbage -- is a no-op
+  // everywhere.
   const notYetImplemented: SessionEvent[] = [
     { type: "toggle_lock" } as unknown as SessionEvent,
-    { type: "start" } as unknown as SessionEvent,
-    { type: "pause" } as unknown as SessionEvent,
-    { type: "resume" } as unknown as SessionEvent,
-    { type: "finish" } as unknown as SessionEvent,
-    { type: "update_reflection_draft" } as unknown as SessionEvent,
-    { type: "save_rep" } as unknown as SessionEvent,
-    { type: "discard" } as unknown as SessionEvent,
+    { type: "finish" } as unknown as SessionEvent, // deliberately not a dispatchable event -- see finishRep
+    { type: "vary" } as unknown as SessionEvent, // Story 5.8 phase 2
     { type: "not_a_real_event" } as unknown as SessionEvent,
   ];
 
-  const scopedStates = [
-    ["None", noneSession],
-    ["Held", heldSession],
-  ] as const;
-
-  const sweepRows = scopedStates.flatMap(([stateLabel, session]) =>
+  const sweepRows = allStates.flatMap(([stateLabel, session]) =>
     notYetImplemented.map((event) => [`${stateLabel} + ${event.type}`, session, event] as const),
   );
 
@@ -265,5 +466,50 @@ describe("sessionReducer", () => {
     const result = sessionReducer(session, event, quickOff);
     expect(result).toBe(session);
     expect(Session.safeParse(result).success).toBe(true);
+  });
+});
+
+describe("finishRep", () => {
+  it("Attempt -> Finished returns the session and a new Rep with the supplied id/finishedAt", () => {
+    const result = finishRep(attemptSession, 1_000, "323e4567-e89b-42d3-a456-426614174000", "2026-10-10T00:00:00.000Z");
+    expect(result).not.toBeNull();
+    expect(result?.session.state).toBe("finished");
+    expect(result?.session.lastRepId).toBe("323e4567-e89b-42d3-a456-426614174000");
+    expect(result?.session.reflectionDraft).toEqual({ worked: "", change: "" });
+    expect(result?.rep).toEqual({
+      id: "323e4567-e89b-42d3-a456-426614174000",
+      challenge: attemptSession.challenge,
+      finishedAt: "2026-10-10T00:00:00.000Z",
+      timeUsedSec: null, // the fixture's Attempt is untimed
+      reflection: null,
+    });
+  });
+
+  it("caps timeUsedSec at the Attempt's time limit", () => {
+    const timedChallenge: Challenge = { ...baseChallenge, timeLimitSec: 300 };
+    const timedAttemptSession: Session = {
+      ...attemptSession,
+      challenge: timedChallenge,
+      attempt: { startedAt: 0, pausedAt: null, pausedTotalMs: 0, timeLimitSec: 300 },
+    };
+    const result = finishRep(timedAttemptSession, 1_000_000, "323e4567-e89b-42d3-a456-426614174000", "2026-10-10T00:00:00.000Z");
+    expect(result?.rep.timeUsedSec).toBe(300);
+  });
+
+  it("counts only unpaused time strictly under the limit", () => {
+    const timedChallenge: Challenge = { ...baseChallenge, timeLimitSec: 300 };
+    const s: Session = {
+      ...attemptSession,
+      challenge: timedChallenge,
+      attempt: { startedAt: 0, pausedAt: null, pausedTotalMs: 5_000, timeLimitSec: 300 },
+    };
+    const result = finishRep(s, 70_500, "323e4567-e89b-42d3-a456-426614174000", "2026-10-10T00:00:00.000Z");
+    expect(result?.rep.timeUsedSec).toBe(65);
+  });
+
+  it("returns null outside Attempt", () => {
+    for (const session of [noneSession, heldSession, finishedSession, savedSession]) {
+      expect(finishRep(session, 0, "323e4567-e89b-42d3-a456-426614174000", "2026-10-10T00:00:00.000Z")).toBeNull();
+    }
   });
 });

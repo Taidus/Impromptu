@@ -15,6 +15,8 @@ export interface PracticeViewProps {
   map: ReturnType<typeof practiceMap> | null;
   /** The Get a challenge / Resume control (a client `GetAChallengeButton`); rendered in the empty and unavailable states. */
   action: ReactNode;
+  /** Story 6.4: the Export control (a client `ExportButton`); right-aligned above the history, with-Reps only. */
+  exportControl: ReactNode;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface PracticeViewProps {
  * `status === "error"` renders like `ready`: history is already loaded by then,
  * and compose failures are the Stage's to handle.
  */
-export function PracticeView({ status, storageAvailable, reps, map, action }: PracticeViewProps) {
+export function PracticeView({ status, storageAvailable, reps, map, action, exportControl }: PracticeViewProps) {
   const repCount = reps.length;
   if (status === "loading") {
     return (
@@ -49,6 +51,7 @@ export function PracticeView({ status, storageAvailable, reps, map, action }: Pr
       {storageAvailable && repCount > 0 && (
         <>
           {map && <PracticeMap map={map} />}
+          <div className="flex justify-end">{exportControl}</div>
           <PracticeHistory reps={reps} />
         </>
       )}
