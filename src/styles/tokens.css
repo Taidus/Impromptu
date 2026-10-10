@@ -100,6 +100,8 @@
   /* Story 8.2: one loop of the Ticker's library-fragment marquee. */
   /* ponytail: fixed duration while the track grows with the library, so ticker speed drifts with library size; scale duration by fragment count if it matters. */
   --dur-ticker: 40s;
+  /* Story 8.4: the Decor canvas's fade-in over its fallback still. */
+  --dur-decor-fade: 900ms;
 }
 
 /*
@@ -582,6 +584,12 @@
    thread draw, poster tilt, ...) must be listed here too. */
 :root[data-motion="off"] .animate-ticker {
   animation: none;
+}
+
+/* Story 8.4: the gate also unmounts the scene; this makes the Motion
+   kill switch instant instead of waiting on that unmount. */
+:root[data-motion="off"] [data-decor-scene] canvas {
+  display: none;
 }
 
 /* Reading roles (DESIGN.md → Typography: Instrument Sans is the reading
