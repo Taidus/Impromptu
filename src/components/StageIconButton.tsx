@@ -18,6 +18,9 @@ export interface StageIconButtonProps extends ButtonHTMLAttributes<HTMLButtonEle
   "aria-label": string;
 }
 
+// `className` goes on the outer wrapper, so positioning (e.g. `fixed` corner
+// placement) moves the disc and its caption together.
+
 // DESIGN.md -> Components -> Actions: a 52px circle with a 1px
 // plum-muted outline and a plum glyph, for back and sound. Always visible
 // on the Stage, outside the safe area. The caption, when present, sits
@@ -40,11 +43,11 @@ export function StageIconButton({
     : "border-plum-muted text-plum hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]";
 
   return (
-    <span className="inline-flex flex-col items-center gap-1">
+    <span className={`inline-flex flex-col items-center gap-1 ${className}`}>
       <button
         type={type}
         disabled={disabled}
-        className={`flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone} ${className}`}
+        className={`flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone}`}
         {...props}
       >
         {icon}

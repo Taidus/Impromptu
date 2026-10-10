@@ -33,11 +33,36 @@ export const copy = {
     either: "Either",
   },
   stage: {
+    // Visually hidden h1 (EXPERIENCE.md -> Accessibility Floor: Stage's h1 is
+    // "Challenge"); the Stage mark itself is decorative (aria-hidden), not a
+    // heading.
+    h1: "Challenge",
+    mark: "impromptu",
     back: "Back to setup",
     soundOffCaption: "SOUND OFF",
     soundOnCaption: "SOUND ON",
     soundOffAnnounced: "Sound, off",
     soundOnAnnounced: "Sound, on",
+    // Level/mode meta line (DESIGN.md -> Layout, "the Level and mode meta").
+    // Keyed by src/domain/library/schema's Level enum; "mode" is derived from
+    // a held Challenge's timeLimitSec (Perform's Timed/Untimed/Either setup
+    // choice resolves to one or the other per generated Challenge).
+    levelName: {
+      explore: "Explore",
+      experiment: "Experiment",
+      develop: "Develop",
+      perform: "Perform",
+    },
+    mode: {
+      timed: "TIMED",
+      untimed: "UNTIMED",
+    },
+    // Short, cause-naming, no-penalty-language message (EXPERIENCE.md ->
+    // Voice and Tone) for when the store or library fails to load.
+    loadError: "Couldn't load a challenge right now. Try reloading the page.",
+    // new_challenge failed (session.lastComposeError). Lock-specific copy and
+    // the unlock action arrive with the Lock stories; this covers every case.
+    composeError: "No challenge fits this setup yet. Change your setup and try again.",
   },
   button: {
     getAChallenge: "Get a challenge",
@@ -65,6 +90,12 @@ export const copy = {
     challengeInProgress: "You have a challenge in progress.",
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
+  },
+  // Story 6.1: the Practice page shell (empty and storage-unavailable states).
+  practice: {
+    title: "Practice",
+    loading: "Loading your practice…",
+    storageUnavailable: "This browser isn't saving data, so there's no history to show.",
   },
   privacy: {
     title: "privacy.",

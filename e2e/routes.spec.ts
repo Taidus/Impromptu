@@ -3,7 +3,7 @@ import { copy } from "../src/components/copy";
 
 const routes = [
   ["/", copy.setup.headline],
-  ["/stage", "Stage"],
+  ["/stage", "Challenge"],
   ["/practice", "Practice"],
   ["/privacy", "privacy."],
 ] as const;
