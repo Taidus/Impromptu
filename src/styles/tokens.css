@@ -342,6 +342,14 @@
   letter-spacing: var(--typography-stage-meta-tracking);
 }
 
+@utility text-stage-meta-phone {
+  font-family: var(--typography-stage-meta-phone-family);
+  font-size: var(--typography-stage-meta-phone-size);
+  font-weight: var(--typography-stage-meta-phone-weight);
+  line-height: var(--typography-stage-meta-phone-leading);
+  letter-spacing: var(--typography-stage-meta-phone-tracking);
+}
+
 @utility text-button {
   font-family: var(--typography-button-family);
   font-size: var(--typography-button-size);

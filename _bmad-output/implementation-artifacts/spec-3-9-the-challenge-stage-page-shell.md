@@ -2,7 +2,7 @@
 title: 'Story 3.9: The Challenge Stage page shell'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '0f12d0fd97a898d64b2915a925f519bf033f3e3f'
@@ -95,6 +95,23 @@ context:
 - **Focus on arrival at `/`:** EXPERIENCE.md's focus-target table ("Back, Esc, or Discard to Setup → Setup `h1` or the notice banner") is Setup's own responsibility (`src/app/page.tsx`, out of this story's ownership) — the Stage only calls `router.push('/')`.
 - Verified against the real generated library (`npm run build`'s `prebuild`, currently 3 CL-5 anchor Templates only): the default Setup (`level: 'explore'`, all Mediums enabled, Medium/Skill random) has exactly one compatible Template (`tpl.observation.explore.nearby-object`), so `/stage`'s e2e composes deterministically without flaking.
 - `npm run lint`, `npm run typecheck`, `npm test` (30 files, 473 tests), `npm run build`, `npm run check:static`, `npm run check:privacy`, and `npm run test:e2e` (36 tests across chromium/webkit/firefox) all pass clean.
+- **Review patch pass:** compose failure now shows `copy.stage.composeError` (from `session.lastComposeError`) with a "Back to setup" line button, as does the load error; the `role="status"` region is always mounted and only its text changes; the dispatch-once ref re-arms whenever the session leaves `none`. Esc ignores repeat/defaultPrevented/isComposing/modifier presses (`isPlainEscape`, unit-tested). Back/Esc use `router.replace("/")`, and `src/components/stage/ReturnFocus.tsx` (mounted in `src/app/layout.tsx`, tracking the previous pathname — no storage flag) focuses Setup's `h1` on a `/stage` → `/` transition. `StageIconButton`'s `className` moved to its wrapper so the disc and caption are positioned together; the sound caption is hidden until `setup` loads. Meta line uses `text-stage-meta-phone` (new `@utility`) with `desktop:text-stage-meta` and an explicit `\u00a0` placeholder. Added a CSS lilac-deep bottom edge fade (bottom third, tokens only, behind content, clear of the corner controls); grain deferred to Story 8.2 in `deferred-work.md`. `metadata.title` uses `copy.stage.h1`. New e2e: Back → `/` with history replaced and h1 focused, held Challenge unchanged across reload, Esc after hydration focuses Setup h1, repeat/held Esc navigates once; the Level-name unit test loops all four Levels. Re-verified: lint, typecheck, test (483), build, check:static, test:e2e (45) all pass.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Compose failure leaves a blank Stage; one-shot ref blocks retry | medium | StagePage never reads `lastComposeError`; `requestedChallenge` never resets | patch |
+| 2 | blind | Sound caption not positioned with its disc | medium | `className` lands on the inner button; caption stays in flow at top-left | patch |
+| 3 | blind, edge | Esc fires on repeat/defaultPrevented/IME/modifiers | low | Handler checks only `key` | patch |
+| 4 | blind, edge | `router.push` loops history; focus lost on leaving | low | EXPERIENCE focus targets: Setup `h1` | patch |
+| 5 | blind, edge | Meta line collapses (layout shift); phone meta size | low | Whitespace-only text node; DESIGN stage-meta-phone | patch |
+| 6 | blind, edge | Status region mounted with text; no retry/back action | low | Live region announcement reliability | patch |
+| 7 | blind | Sound caption misleading while loading | low | Disabled "SOUND OFF" before setup loads | patch |
+| 8 | edge | Stage lacks lilac-deep edge fade and grain | low | DESIGN → Challenge Stage; grain asset arrives with 8.2 | patch (fade) / defer (grain) |
+| 9 | blind | Hardcoded `/stage` title | low | Single copy source | patch |
+| 10 | verif-gap, blind, edge | Back click, held-challenge reload, racy Esc test, Level-name loop untested | low | Pre-verified mutations pass CI | patch |
+| 11 | verif-gap | Load-error message never shown in a test | low | Needs a failure-injection seam for the generated chunk | defer |
 
 ## Verification
 

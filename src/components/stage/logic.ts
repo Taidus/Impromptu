@@ -43,3 +43,27 @@ export function stageMeta(challenge: Challenge | null): string | null {
 export function canHandleEscape(session: Pick<Session, "state">): boolean {
   return session.state !== "attempt";
 }
+
+type KeyLike = Pick<
+  KeyboardEvent,
+  "key" | "repeat" | "defaultPrevented" | "isComposing" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
+>;
+
+/**
+ * A bare, first-press Escape nobody else handled: a held key's auto-repeat,
+ * an IME composition, a modifier chord, or an event a popover/dialog
+ * already consumed (EXPERIENCE.md: "Esc closes an open popover or dialog
+ * first") never reaches the Stage's Esc behavior.
+ */
+export function isPlainEscape(event: KeyLike): boolean {
+  return (
+    event.key === "Escape" &&
+    !event.repeat &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}

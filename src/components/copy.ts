@@ -45,6 +45,9 @@ export const copy = {
     // Short, cause-naming, no-penalty-language message (EXPERIENCE.md ->
     // Voice and Tone) for when the store or library fails to load.
     loadError: "Couldn't load a challenge right now. Try reloading the page.",
+    // new_challenge failed (session.lastComposeError). Lock-specific copy and
+    // the unlock action arrive with the Lock stories; this covers every case.
+    composeError: "No challenge fits this setup yet. Change your setup and try again.",
   },
   button: {
     getAChallenge: "Get a challenge",

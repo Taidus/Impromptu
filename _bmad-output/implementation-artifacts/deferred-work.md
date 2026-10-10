@@ -46,3 +46,6 @@
   evidence: `loadGeneratedLibrarySource` (dynamic import + `.default`) is never executed by unit tests because CI runs tests before the build generates the file.
   status: resolved
   resolved_by: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md` — `e2e/stage.spec.ts`'s "opening /stage composes a held Challenge from the production library" test runs against `npm run build`'s real `src/generated/library.json`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md`
+  summary: Add the page grain overlay (0.1 opacity, overlay blend) to the Stage, suppressed inside the safe area, once Story 8.2 ships `grain.png`.
+  evidence: DESIGN.md -> Colors asks for grain suppressed inside the Stage safe area; no grain asset exists yet. Story 3.9's patch pass added only the lilac-deep edge fade (CSS gradient, tokens only).

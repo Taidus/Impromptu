@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { copy } from "@/components/copy";
+import { LineButton } from "@/components/LineButton";
 import { StageIconButton } from "@/components/StageIconButton";
 import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
-import { canHandleEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import { canHandleEscape, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -27,8 +28,15 @@ export function StagePage() {
 
   // AD-7 + EXPERIENCE.md -> Information Architecture: opening /stage with
   // nothing held behaves like "Get a challenge" with the saved setup.
-  // Fires once; the store itself handles "wait until truly ready".
+  // Fires once per stay in `none`; the store itself handles "wait until truly
+  // ready". Re-arms whenever the session leaves `none`, so a later return to
+  // `none` (another tab cleared it) asks again; a failed compose leaves the
+  // session in `none` and does not loop.
   useEffect(() => {
+    if (store.session.state !== "none") {
+      requestedChallenge.current = false;
+      return;
+    }
     if (requestedChallenge.current) return;
     if (!shouldRequestNewChallenge(store.libraryStatus, store.session.state)) return;
     requestedChallenge.current = true;
@@ -36,12 +44,14 @@ export function StagePage() {
   }, [store.libraryStatus, store.session.state]);
 
   const goToSetup = useCallback(() => {
-    router.push("/");
+    // replace, not push: browser Back from Setup must not reopen /stage and
+    // compose again. Focus lands on Setup's h1 via ReturnFocus (layout).
+    router.replace("/");
   }, [router]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
+      if (!isPlainEscape(event)) return;
       if (!canHandleEscape(store.session)) return;
       goToSetup();
     }
@@ -51,10 +61,22 @@ export function StagePage() {
 
   const sound = store.setup?.sound ?? false;
   const meta = stageMeta(store.session.challenge);
-  const hasError = isStageError(store.status, store.libraryStatus);
+  const errorText = isStageError(store.status, store.libraryStatus)
+    ? copy.stage.loadError
+    : store.session.lastComposeError !== null
+      ? copy.stage.composeError
+      : null;
 
   return (
-    <div className="relative min-h-screen bg-lilac">
+    <div className="relative isolate min-h-screen bg-lilac">
+      {/* Lilac-deep edge fade (DESIGN.md -> Colors): a bottom band behind the
+          content, ending well over 120px below the top corner controls so
+          back and sound sit on plain lilac. Grain is deferred to Story 8.2. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 -z-10 h-1/3 bg-linear-to-t from-lilac-deep"
+      />
+
       <h1 className="sr-only">{copy.stage.h1}</h1>
 
       {/* Corner controls (DESIGN.md -> Layout: "outside the safe area on
@@ -71,7 +93,7 @@ export function StagePage() {
       <StageIconButton
         ground="lilac"
         icon={sound ? <SpeakerIcon /> : <SpeakerOffIcon />}
-        caption={sound ? copy.stage.soundOnCaption : copy.stage.soundOffCaption}
+        caption={store.setup === null ? undefined : sound ? copy.stage.soundOnCaption : copy.stage.soundOffCaption}
         aria-label={sound ? copy.stage.soundOnAnnounced : copy.stage.soundOffAnnounced}
         disabled={store.setup === null}
         onClick={() => getAppStore().dispatchSetup({ type: "set_sound", sound: !sound })}
@@ -90,14 +112,21 @@ export function StagePage() {
 
           {/* Reserves the meta row's height before a Challenge lands, so
               nothing reflows once it does (EXPERIENCE.md -> Cold load). */}
-          <p aria-hidden={meta === null} className="text-stage-meta uppercase text-plum-muted">
-            {meta ?? " "}
+          <p
+            aria-hidden={meta === null}
+            className="text-stage-meta-phone uppercase text-plum-muted desktop:text-stage-meta"
+          >
+            {meta ?? "\u00a0"}
           </p>
 
-          {hasError ? (
-            <p role="status" className="text-body text-plum">
-              {copy.stage.loadError}
-            </p>
+          {/* Always mounted, so screen readers announce text changes. */}
+          <p role="status" className="text-body text-plum">
+            {errorText}
+          </p>
+          {errorText !== null ? (
+            <LineButton ground="lilac" onClick={goToSetup}>
+              {copy.stage.back}
+            </LineButton>
           ) : null}
 
           {/* Story 3.10 renders the reveal composition here: ticket tabs,
