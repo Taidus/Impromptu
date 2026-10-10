@@ -63,6 +63,7 @@ export function StagePage() {
   // phase elapses; see useRevealMotion.ts).
   const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
   const motion = useRevealMotion(heldChallenge, store.session.revealed, store.library, store.setup);
+  const { canPress, press } = motion;
 
   // AD-7 / EXPERIENCE.md -> Interaction Primitives: this stays the Stage's
   // one keydown listener. Story 3.10 extends it with the Space/Enter
@@ -80,13 +81,13 @@ export function StagePage() {
       const focused = document.activeElement;
       if (focused !== null && focused !== document.body && focused !== document.documentElement) return;
       if (store.session.state !== "held" || store.session.challenge === null) return;
-      if (!motion.canPress) return;
+      if (!canPress) return;
       event.preventDefault();
-      motion.press();
+      press();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [store.session, goToSetup, motion]);
+  }, [store.session, goToSetup, canPress, press]);
 
   // EXPERIENCE.md -> Accessibility Floor: the Stage's one aria-live region.
   // It lives here, mounted before any Challenge is held, so its text changes

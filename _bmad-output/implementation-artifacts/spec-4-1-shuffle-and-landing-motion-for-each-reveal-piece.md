@@ -2,7 +2,7 @@
 title: 'Shuffle and landing motion for each reveal piece'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 story_key: '4-1-shuffle-and-landing-motion-for-each-reveal-piece'
@@ -97,6 +97,24 @@ context:
 - **Reduced motion (Story 4.2's territory) is only minimally touched here**, per the override: `useRevealMotion` reuses the existing `usePrefersReducedMotion()` (Story 8.3, `src/components/motion.ts` -- not a new hook) to force `shuffle = false` on every press, satisfying "do not break it: skip the shuffle" without building 4.2's full fade system. The landing CSS entrance still plays under reduced motion; each new utility carries `motion-reduce:animate-none` as a courtesy (matching `SunButton`/`Ticker`), but Story 4.2 is expected to revisit this with its own 120ms-fade convention.
 - **Founder-level open question, resolved conservatively per CHECKPOINT 1:** the spec doesn't say whether the foil's "material feel" should literally reuse DESIGN.md's 6s background-position shimmer tuned for the whole Reveal, or something scoped to one 900ms shuffle. Chose the latter (a 900ms `filter: brightness()` pulse, scoped to `animate-foil-shimmer`), because Story 4.1's own AC text ("the foil shimmer runs only during a shuffle") is more specific than DESIGN.md's broader framing and because `filter` (not `background-position`) avoids fighting the foil's existing inline gradient `style`.
 - `npm run lint`, `npm run typecheck`, `npm test` (649/649), `npm run build`, `npm run check:static`, `npm run check:privacy`, and `E2E_PORT=3105 npm run test:e2e` (237/237 across chromium/webkit/firefox) all pass clean.
+- **Review patch pass (triage rows 1-9):** landing keyframes animate individual `translate`/`scale` so the inline `rotate(...)` tilt holds; land and shimmer durations come from `config.reveal.motion` via an inline `--motion-ms` variable (no CSS literals); the timer/commit scheduler moved into a pure `createMotionDriver` in `reveal-motion.ts` that commits only while `nextKind(challenge, revealed)` is still the in-flight kind, drops to idle on an external `revealed` change or new Challenge, commits on unmount mid-landing, and under reduced motion skips the shuffle and commits after `reducedLandMs` (120ms). Flick pools are setup-allowed only (Skills reachable at the held Level with an allowed Medium; fills via `isCompatible`; fallback is the real value, never `""`) -- which supersedes the candidate-pool note above and means no piece shuffles in today's thin library. Topic flick no longer remounts per tick; `useRevealMotion` returns a memoized API with a stable `press`. Tests: driver logic with fake timers, `ScrapGroup` render test via `renderToStaticMarkup`, updated `flickPool` cases, and e2e driven by a paused page clock plus `data-motion-status` (single-Medium press never reaches `shuffling`). lint, typecheck, `npm test` (700/700), build, check:static, check:privacy, and `E2E_PORT=3105 npm run test:e2e` (243/243) pass.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Landing keyframes override inline tilt; pieces snap to their rotation at the end | medium | `@keyframes` animate `transform` on the element carrying `rotate(...)` | patch |
+| 2 | edge | External `revealed` change mid-motion dispatches an untargeted `reveal_next`; stale timer on an already-landed kind | medium | Cross-tab sync / restore paths | patch |
+| 3 | edge | Unmount during landing leaves the shown value uncommitted | low | Cleanup clears the timer without committing | patch |
+| 4 | blind, edge | Flick pools ignore Level/enabled Mediums (Skill) and requires/excludes (fills); `[""]` fallback | medium | AD-18 "setup-allowed values only"; 6 Skills flick at Explore where 1 is composable | patch |
+| 5 | blind, edge | Topic flick remounts per tick, toggling size | low | `key={shufflingText}` | patch |
+| 6 | blind, edge | Durations duplicated between config and CSS | low | `landMs` vs `animate-land-*` literals | patch |
+| 7 | blind | Reduced motion still waits full landing before commit | low | Value visible, announcement lags | patch |
+| 8 | blind | Keydown listener re-subscribes every flick | low | Unstable hook return object | patch |
+| 9 | blind, edge, verif-gap | e2e checks match aria-hidden flicks (single-Medium, mid-shuffle); Scrap shuffle rendering and hook untested | medium | Pre-verified: forcing a Medium shuffle passes | patch |
+| 10 | blind | Motion ignores Quick reveal budget | false | Quick reveal lands every kind at commit (AD-18, 3.4); press motion never runs | reject |
+| 11 | blind | Topic scrap switches to paper during shuffle | low | Material visible while candidates flick is intended | reject |
+| 12 | verif-gap | Reduced-motion `/stage` e2e missing | low | Story 4.2 owns reduced-motion parity | defer |
 
 ## Verification
 

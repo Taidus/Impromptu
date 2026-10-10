@@ -6,9 +6,11 @@
 // itself -- `useRevealMotion` dispatches the existing `reveal_next` event
 // only when a piece's landing phase completes (see that file).
 import type { ComposeLibrary } from "@/domain/compose/compose";
-import type { Medium, Skill, Template } from "@/domain/library/schema";
+import { isCompatible } from "@/domain/library/compat";
+import type { Constraint, Medium, Skill, Style, Topic } from "@/domain/library/schema";
 import type { Challenge, RevealedKind, Setup } from "@/domain/session/schema";
 import { config } from "@/config/app";
+import { nextKind } from "./reveal-logic";
 
 export type MotionState =
   | { status: "idle" }
@@ -61,34 +63,22 @@ export function landingDone(state: MotionState, kind: RevealedKind): PressResult
 
 // --- Flick candidates (AD-18 "only values the user's setup allows") -------
 
-type Fill = { id: string; revealText: string; tags: readonly string[]; retired?: boolean };
+type Fill = Topic | Style | Constraint;
 
-function fillsFor(kind: "topic" | "style" | "constraint", library: ComposeLibrary): Fill[] {
-  switch (kind) {
-    case "topic":
-      return library.topics;
-    case "style":
-      return library.styles;
-    case "constraint":
-      return library.constraints;
-  }
+/** The Mediums the Setup allows: a pinned "This time" Medium, else every enabled one. */
+function allowedMediumIds(setup: Pick<Setup, "medium" | "enabledMediums">): readonly string[] {
+  return setup.medium !== "random" ? [setup.medium] : setup.enabledMediums;
 }
 
-function templateTagsFor(kind: "topic" | "style" | "constraint", template: Template): readonly string[] {
-  switch (kind) {
-    case "topic":
-      return template.topicTags;
-    case "style":
-      return template.styleTags;
-    case "constraint":
-      return template.constraintTags;
-  }
-}
-
-function skillPool(library: ComposeLibrary, setup: Pick<Setup, "skillFocus">): Skill[] {
-  if (setup.skillFocus === "random") return library.skills;
-  const pinned = library.skills.find((s) => s.id === setup.skillFocus);
-  return pinned ? [pinned] : library.skills;
+/** Skills that could have been composed: a pinned Skill focus, else every Skill with a non-retired Template at the held Level for an allowed Medium. */
+function skillPool(challenge: Challenge, library: ComposeLibrary, setup: Pick<Setup, "skillFocus" | "medium" | "enabledMediums">): Skill[] {
+  if (setup.skillFocus !== "random") return library.skills.filter((s) => s.id === setup.skillFocus);
+  const mediums = allowedMediumIds(setup);
+  return library.skills.filter((s) =>
+    library.templates.some(
+      (t) => !t.retired && t.skill === s.id && t.level === challenge.level && t.mediums.some((m) => mediums.includes(m)),
+    ),
+  );
 }
 
 function mediumPool(challenge: Challenge, library: ComposeLibrary, setup: Pick<Setup, "medium" | "enabledMediums">): Medium[] {
@@ -102,24 +92,32 @@ function mediumPool(challenge: Challenge, library: ComposeLibrary, setup: Pick<S
   return compatible.length > 0 ? compatible : enabled;
 }
 
+/** Non-retired fills of `kind` that `isCompatible` accepts with the held Template, Medium, and the other held fills. */
 function fillPool(kind: "topic" | "style" | "constraint", challenge: Challenge, library: ComposeLibrary): Fill[] {
-  const all = fillsFor(kind, library).filter((f) => f.retired !== true);
   const template = library.templates.find((t) => t.id === challenge.templateId);
-  if (!template) return all;
-  const tags = templateTagsFor(kind, template);
-  const compatible = all.filter((f) => f.tags.some((t) => tags.includes(t)) && !template.incompatible.includes(f.id));
-  return compatible.length > 0 ? compatible : all;
+  const medium = library.mediums.find((m) => m.id === challenge.inputs.medium.id);
+  if (!template || !medium) return [];
+  const held = <F extends Fill>(fills: F[], k: "topic" | "style" | "constraint"): F | null =>
+    fills.find((f) => f.id === challenge.inputs[k]?.id) ?? null;
+  const topic = held(library.topics, "topic");
+  const style = held(library.styles, "style");
+  const constraint = held(library.constraints, "constraint");
+  switch (kind) {
+    case "topic":
+      return library.topics.filter((f) => !f.retired && isCompatible(template, medium, f, style, constraint));
+    case "style":
+      return library.styles.filter((f) => !f.retired && isCompatible(template, medium, topic, f, constraint));
+    case "constraint":
+      return library.constraints.filter((f) => !f.retired && isCompatible(template, medium, topic, style, f));
+  }
 }
 
 /**
  * The decorative candidate values an in-progress flick may show for `kind`
- * -- "compatible with the held Template where feasible, else the same-kind
- * values" (AD-18). Skill/Medium are instead gated by the setup fields that
- * actually restrict them (`skillFocus`, `medium`/`enabledMediums`); Topic,
- * Style, and Constraint have no such setup field, so they fall back to
- * every non-retired fill of that kind. Never empty -- a pool that would
- * otherwise be empty falls back to the Challenge's own landed value, so
- * `shouldShuffle` always sees at least one candidate.
+ * -- only values the user's setup allows (AD-18): Skills reachable at the
+ * held Level with an allowed Medium, allowed Mediums, and fills compatible
+ * with everything else held. An empty pool falls back to the Challenge's own
+ * landed value (never `""`), so a single value lands without a shuffle.
  */
 export function flickPool(
   kind: Exclude<RevealedKind, "brief">,
@@ -127,10 +125,11 @@ export function flickPool(
   library: ComposeLibrary,
   setup: Pick<Setup, "enabledMediums" | "medium" | "skillFocus">,
 ): string[] {
-  const fallback = [challenge.inputs[kind]?.revealText ?? ""];
+  const real = challenge.inputs[kind]?.revealText;
+  const fallback = real !== undefined ? [real] : [];
   const pool =
     kind === "skill"
-      ? skillPool(library, setup)
+      ? skillPool(challenge, library, setup)
       : kind === "medium"
         ? mediumPool(challenge, library, setup)
         : fillPool(kind, challenge, library);
@@ -142,3 +141,100 @@ export function flickPool(
 export function shouldShuffle(pool: readonly string[]): boolean {
   return pool.length > 1;
 }
+
+// --- The scheduler: real timers + the one commit, store-agnostic ------------
+
+/** What the driver reads at the moment it acts -- the live store, never a stale render's copy. */
+export interface MotionSnapshot {
+  challenge: Challenge | null;
+  revealed: readonly RevealedKind[];
+  library: ComposeLibrary | null;
+  setup: Setup | null;
+  reduced: boolean;
+}
+
+export interface MotionDriverDeps {
+  read: () => MotionSnapshot;
+  /** Dispatches `reveal_next` -- only ever called for the kind that is still `nextKind`. */
+  commit: () => void;
+  onState: (state: MotionState, challengeId: string | null) => void;
+}
+
+/** A motion started for `kind` on `challengeId` is still the live next step (no other tab, restore, or new Challenge moved past it). */
+export function isStillNext(
+  kind: RevealedKind,
+  challengeId: string | null,
+  challenge: Challenge | null,
+  revealed: readonly RevealedKind[],
+): boolean {
+  return challenge !== null && challenge.id === challengeId && nextKind(challenge, revealed) === kind;
+}
+
+/** How long a phase lasts. Reduced motion never shuffles and commits after the fade budget (Story 4.2 refines the visuals). */
+export function phaseMs(state: Exclude<MotionState, { status: "idle" }>, reduced: boolean): number {
+  if (state.status === "shuffling") return config.reveal.motion.shuffleMs;
+  return reduced ? config.reveal.motion.reducedLandMs : landDurationMs(state.kind);
+}
+
+/**
+ * Owns the phase timer and the one `reveal_next` commit (AD-18), outside
+ * React so it can be driven by fake timers in tests. `useRevealMotion`
+ * creates one per Stage and mirrors `onState` into React state.
+ */
+export function createMotionDriver(deps: MotionDriverDeps) {
+  let state: MotionState = idleMotion;
+  let challengeId: string | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  function stillNext(kind: RevealedKind): boolean {
+    const { challenge, revealed } = deps.read();
+    return isStillNext(kind, challengeId, challenge, revealed);
+  }
+
+  function set(next: MotionState) {
+    clearTimeout(timer);
+    timer = undefined;
+    state = next;
+    if (next.status !== "idle") timer = setTimeout(elapse, phaseMs(next, deps.read().reduced));
+    deps.onState(state, challengeId);
+  }
+
+  function settle(result: PressResult) {
+    set(result.state);
+    if (result.completeKind !== null && stillNext(result.completeKind)) deps.commit();
+  }
+
+  function elapse() {
+    timer = undefined;
+    if (state.status === "shuffling") set(shuffleElapsed(state, state.kind));
+    else if (state.status === "landing") settle(landingDone(state, state.kind));
+  }
+
+  return {
+    press() {
+      const { challenge, revealed, library, setup, reduced } = deps.read();
+      if (state.status === "idle") challengeId = challenge?.id ?? null;
+      const next = challenge !== null ? nextKind(challenge, revealed) : null;
+      const shuffle =
+        next !== null && next !== "brief" && challenge !== null && library !== null && setup !== null && !reduced
+          ? shouldShuffle(flickPool(next, challenge, library, setup))
+          : false;
+      settle(press(state, next, shuffle));
+    },
+    /** Call whenever the held Challenge or `revealed` changes: an in-flight piece that's no longer next is dropped, its timer cancelled. */
+    reconcile() {
+      if (state.status !== "idle" && !stillNext(state.kind)) set(idleMotion);
+    },
+    dispose() {
+      clearTimeout(timer);
+      timer = undefined;
+      // Unmounting mid-landing (e.g. Back to Setup): the real value is already
+      // on screen, so commit it rather than let it silently revert. A reload
+      // never runs this, so "reload mid-animation keeps `revealed`" holds.
+      if (state.status === "landing" && stillNext(state.kind)) deps.commit();
+      state = idleMotion;
+    },
+  };
+}
+
+export type MotionDriver = ReturnType<typeof createMotionDriver>;
