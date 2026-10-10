@@ -19,7 +19,7 @@ export function PracticeClient() {
           <PracticeView
             status={status}
             storageAvailable={storageAvailable}
-            repCount={history.length}
+            reps={history}
             action={<GetAChallengeButton ground="paper" />}
           />
         </div>
