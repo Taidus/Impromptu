@@ -13,6 +13,7 @@ const escaped = (text: string) => renderToStaticMarkup(createElement(Fragment, n
 
 const action = createElement("a", { href: "/stage" }, copy.button.getAChallenge);
 const exportControl = createElement("button", { type: "button" }, "EXPORT_MARKER");
+const clearControl = createElement("button", { type: "button" }, "CLEAR_MARKER");
 const reps = [
   Rep.parse({
     id: "323e4567-e89b-42d3-a456-426614174000",
@@ -29,6 +30,7 @@ const base: PracticeViewProps = {
   map: null,
   action,
   exportControl,
+  clearControl,
 };
 
 describe("PracticeView — loading", () => {
@@ -72,6 +74,10 @@ describe("PracticeView — empty (no Reps)", () => {
   it("renders no exportControl", () => {
     expect(html).not.toContain("EXPORT_MARKER");
   });
+
+  it("renders no clearControl", () => {
+    expect(html).not.toContain("CLEAR_MARKER");
+  });
 });
 
 describe("PracticeView — with Reps", () => {
@@ -97,6 +103,11 @@ describe("PracticeView — with Reps", () => {
   it("renders exportControl right-aligned above the history", () => {
     expect(html).toContain("EXPORT_MARKER");
     expect(html.indexOf("EXPORT_MARKER")).toBeLessThan(html.indexOf(copy.practice.historyTitle));
+  });
+
+  it("renders clearControl beside exportControl, above the history", () => {
+    expect(html).toContain("CLEAR_MARKER");
+    expect(html.indexOf("CLEAR_MARKER")).toBeLessThan(html.indexOf(copy.practice.historyTitle));
   });
 });
 
@@ -152,6 +163,10 @@ describe("PracticeView — storage unavailable", () => {
   it("renders no exportControl", () => {
     expect(html).not.toContain("EXPORT_MARKER");
   });
+
+  it("renders no clearControl", () => {
+    expect(html).not.toContain("CLEAR_MARKER");
+  });
 });
 
 describe("PracticeView — error status", () => {
@@ -172,5 +187,9 @@ describe("PracticeView — storage unavailable, with Reps", () => {
 
   it("renders no exportControl", () => {
     expect(html).not.toContain("EXPORT_MARKER");
+  });
+
+  it("renders no clearControl", () => {
+    expect(html).not.toContain("CLEAR_MARKER");
   });
 });
