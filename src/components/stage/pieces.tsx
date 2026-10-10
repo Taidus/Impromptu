@@ -24,6 +24,15 @@ function counter(tiltDeg: number): string {
   return `rotate(${-tiltDeg}deg)`;
 }
 
+/**
+ * How far a box tilted by `tiltDeg` rises past its own level edges: half its
+ * width times sin|tilt|. As a padding/margin percentage it resolves against
+ * the containing block's width, so it covers any box up to that width.
+ */
+function tiltRise(tiltDeg: number): string {
+  return `${Math.ceil(Math.abs(Math.sin((tiltDeg * Math.PI) / 180)) * 5000) / 100}%`;
+}
+
 /** A piece's entrance or shimmer: the utility class plus its `animation-duration`, as an inline CSS variable. */
 export interface PieceMotion {
   className: string;
@@ -208,7 +217,8 @@ export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string
       className={`border-y-4 border-double border-stamp px-3 py-1 ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      {/* The level label/value would cross the tilted rules at its far corners: pad it by the tilt's rise over its own width. */}
+      <div style={{ transform: counter(tiltDeg), paddingBlock: tiltRise(tiltDeg) }}>
         <LabelValue
           kind="constraint"
           value={value}
@@ -297,6 +307,7 @@ export function ScrapGroup({
   reduced?: boolean;
 }) {
   const scrapTiltDeg = -1.2;
+  const stampTiltDeg = -7;
   const foil = !style.present
     ? null
     : style.revealed || style.landing
@@ -328,19 +339,20 @@ export function ScrapGroup({
               : <EmptySlot kind="topic" />
           : null}
         {constraint.present ? (
-          <div className="clear-both mt-2 flex min-h-14 items-center justify-end">
+          // The stamp's tilted corners rise past its layout box; the band reserves that rise so they stay off the Topic and on paper.
+          <div className="clear-both mt-2 flex min-h-14 items-center justify-end" style={{ paddingBlock: tiltRise(stampTiltDeg) }}>
             {constraint.revealed || constraint.landing ? (
               <InkStamp
                 value={constraint.value}
-                tiltDeg={-7}
+                tiltDeg={stampTiltDeg}
                 motion={constraint.landing ? landingMotion("constraint", reduced) : REVEALED_MOTION}
               />
             ) : constraint.shufflingText !== null ? (
               <ShufflingPiece kind="constraint">
-                <InkStamp value={constraint.shufflingText} tiltDeg={-7} />
+                <InkStamp value={constraint.shufflingText} tiltDeg={stampTiltDeg} />
               </ShufflingPiece>
             ) : (
-              <EmptySlot kind="constraint" tiltDeg={-7} />
+              <EmptySlot kind="constraint" tiltDeg={stampTiltDeg} />
             )}
           </div>
         ) : null}
