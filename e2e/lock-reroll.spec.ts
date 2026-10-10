@@ -12,18 +12,30 @@ import { baseSetup } from "../src/domain/session/setup-fixture";
 // is bundled JS, not a fetched JSON file, so there is no data URL to route.
 const TOPIC_MARKER = 'topics:[{id:"top.nearby-object"';
 const EXTRA_TOPIC = '{id:"top.window-view",revealText:"A window view",briefText:"the view from a window",tags:["object"],requires:[],excludes:[]},';
+// The same Template's Brief stretched to DESIGN.md's 160-character fit-rule worst case.
+const BRIEF_MARKER = 'briefPattern:"Draw {topic}. {constraint}"';
+const LONG_BRIEF = 'briefPattern:"Draw {topic} from life, slowly, looking at it more than at the page and keep each line light. {constraint}"';
+// The widest real Skill and Medium values (content/library/skills.json, mediums.json), swapped onto this Template's own.
+const WIDEST_TABS: [string, string][] = [
+  ['{id:"skl.observation",revealText:"Observation"', '{id:"skl.observation",revealText:"Idea generation"'],
+  ['{id:"med.drawing",revealText:"Drawing"', '{id:"med.drawing",revealText:"Spoken storytelling"'],
+];
 
-async function seedSecondTopic(page: Page) {
+/** Rewrites the library chunk in transit: each `marker` -> its `replacement`; `done` once every marker was found. */
+async function patchLibrary(page: Page, swaps: [marker: string, replacement: string][]) {
   const patched = { done: false };
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {
     const response = await route.fetch();
-    const body = await response.text();
-    if (!body.includes(TOPIC_MARKER)) return route.fulfill({ response, body });
-    patched.done = true;
-    await route.fulfill({ response, body: body.replace(TOPIC_MARKER, `topics:[${EXTRA_TOPIC}{id:"top.nearby-object"`) });
+    let body = await response.text();
+    if (!body.includes(swaps[0][0])) return route.fulfill({ response, body });
+    patched.done = swaps.every(([marker]) => body.includes(marker));
+    for (const [marker, replacement] of swaps) body = body.replace(marker, replacement);
+    await route.fulfill({ response, body });
   });
   return patched;
 }
+
+const seedSecondTopic = (page: Page) => patchLibrary(page, [[TOPIC_MARKER, `topics:[${EXTRA_TOPIC}{id:"top.nearby-object"`]]);
 
 async function seedSetup(page: Page, over: Partial<Setup>) {
   const envelope = JSON.stringify({ v: config.storage.schemaVersions.setup, rev: 1, data: Setup.parse({ ...baseSetup, ...over }) });
@@ -124,8 +136,63 @@ type Box = { x: number; y: number; width: number; height: number };
 const intersects = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
+/** Every Lock disc, its LOCKED caption, its piece, and every piece's text line boxes. */
+function lockGeometry(page: Page) {
+  return page.evaluate(() => {
+    const box = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    // The text itself (each line box), not the block-level <p>, which runs under floats.
+    const textBoxes = [...document.querySelectorAll("[data-kind] p")].flatMap((p) => {
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
+    });
+    return [...document.querySelectorAll("[data-lock]")].map((disc) => {
+      const piece = disc.closest("[data-kind]")!;
+      const caption = disc.parentElement!.querySelector("span[aria-hidden]");
+      return {
+        kind: disc.getAttribute("data-lock"),
+        disc: box(disc),
+        caption: caption ? box(caption) : null,
+        piece: box(piece),
+        textBoxes,
+      };
+    });
+  });
+}
+
+/** DESIGN.md -> Lock toggle: each disc straddles its piece's outer left edge (mostly outside it), centred vertically, and no disc or caption meets a text box. */
+function expectDiscsOnEdgesClearOfText(result: Awaited<ReturnType<typeof lockGeometry>>, locked = true) {
+  for (const { kind, disc, caption, piece, textBoxes } of result) {
+    expect(disc.width, kind ?? "").toBeCloseTo(52, 1);
+    expect(disc.x + disc.width, kind ?? "").toBeLessThanOrEqual(piece.x + 16);
+    expect(disc.x + disc.width, kind ?? "").toBeGreaterThan(piece.x - 24);
+    expect(disc.x + disc.width / 2, `${kind} disc mostly outside its piece`).toBeLessThan(piece.x);
+    expect(Math.abs(disc.y + disc.height / 2 - (piece.y + piece.height / 2)), kind ?? "").toBeLessThan(8);
+    expect(disc.x, kind ?? "").toBeGreaterThanOrEqual(0);
+    expect(caption === null, `${kind} LOCKED caption`).toBe(!locked);
+    if (caption !== null) expect(caption.x, kind ?? "").toBeGreaterThanOrEqual(0);
+    for (const text of textBoxes) {
+      expect(intersects(disc, text), `${kind} disc vs a text box`).toBe(false);
+      if (caption !== null) expect(intersects(caption, text), `${kind} caption vs a text box`).toBe(false);
+    }
+  }
+}
+
+/** Locks every piece, so each LOCKED caption is showing too; returns the disc count. */
+async function lockEverything(page: Page) {
+  const discs = page.locator("[data-lock]");
+  const count = await discs.count();
+  expect(count).toBeGreaterThanOrEqual(4);
+  for (let i = 0; i < count; i++) await discs.nth(i).click();
+  return count;
+}
+
 for (const viewport of [
   { width: 1280, height: 800 },
+  { width: 1528, height: 784 },
   { width: 390, height: 844 },
 ]) {
   for (const level of ["explore", "perform"] as const) {
@@ -135,49 +202,12 @@ for (const viewport of [
       await page.goto("/stage");
       await expect(reroll(page)).toBeVisible({ timeout: 15_000 });
 
-      // Lock every piece, so each LOCKED caption is showing too.
+      const count = await lockEverything(page);
       const discs = page.locator("[data-lock]");
-      const count = await discs.count();
-      expect(count).toBeGreaterThanOrEqual(4);
-      for (let i = 0; i < count; i++) await discs.nth(i).click();
 
-      const result = await page.evaluate(() => {
-        const box = (el: Element) => {
-          const r = el.getBoundingClientRect();
-          return { x: r.x, y: r.y, width: r.width, height: r.height };
-        };
-        // The text itself (each line box), not the block-level <p>, which runs under floats.
-        const textBoxes = [...document.querySelectorAll("[data-kind] p")].flatMap((p) => {
-          const range = document.createRange();
-          range.selectNodeContents(p);
-          return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height }));
-        });
-        return [...document.querySelectorAll("[data-lock]")].map((disc) => {
-          const piece = disc.closest("[data-kind]")!;
-          const caption = disc.parentElement!.querySelector("span[aria-hidden]");
-          return {
-            kind: disc.getAttribute("data-lock"),
-            disc: box(disc),
-            caption: caption ? box(caption) : null,
-            piece: box(piece),
-            textBoxes,
-          };
-        });
-      });
+      const result = await lockGeometry(page);
 
-      for (const { kind, disc, caption, piece, textBoxes } of result) {
-        expect(disc.width, kind ?? "").toBeCloseTo(52, 1);
-        // On the piece's outer left edge: mostly outside it, vertically centred on it.
-        expect(disc.x + disc.width, kind ?? "").toBeLessThanOrEqual(piece.x + 16);
-        expect(disc.x + disc.width, kind ?? "").toBeGreaterThan(piece.x - 24);
-        expect(Math.abs(disc.y + disc.height / 2 - (piece.y + piece.height / 2)), kind ?? "").toBeLessThan(8);
-        expect(disc.x, kind ?? "").toBeGreaterThanOrEqual(0);
-        expect(caption, kind ?? "").not.toBeNull();
-        for (const text of textBoxes) {
-          expect(intersects(disc, text), `${kind} disc vs a text box`).toBe(false);
-          expect(intersects(caption!, text), `${kind} caption vs a text box`).toBe(false);
-        }
-      }
+      expectDiscsOnEdgesClearOfText(result);
 
       // Phone: scrolled into view, no disc ever sits under the fixed action bar.
       const bar = page.getByTestId("stage-action-row");
@@ -186,6 +216,51 @@ for (const viewport of [
         const discBox = await discs.nth(i).boundingBox();
         const barBox = await bar.boundingBox();
         expect(intersects(discBox!, barBox!)).toBe(false);
+      }
+    });
+  }
+}
+
+// DESIGN.md -> Challenge Stage fit rule: Held fits a desktop screen without
+// scrolling -- tabs side by side, the Brief and the action row on screen --
+// with or without Locks showing, and the Lock discs never cost the pieces width.
+// With the widest real Skill and Medium, so a wide pair can't wrap the tabs.
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 1528, height: 784 },
+]) {
+  for (const longBrief of [false, true]) {
+    if (longBrief && viewport.height !== 800) continue;
+    test(`the held Stage fits ${viewport.width}x${viewport.height}${longBrief ? " with a 160-character Brief" : ""}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      // The widest pair wraps each tab value to two lines; with the 160-character Brief on top that
+      // overruns 800px by ~14px (DESIGN.md fit rule step 2, Topic -> topic-stage-long, isn't built yet),
+      // so the worst-case Brief keeps this Template's own pair.
+      const patched = await patchLibrary(page, longBrief ? [[BRIEF_MARKER, LONG_BRIEF]] : WIDEST_TABS);
+      await seedSetup(page, { level: "explore", quickReveal: true });
+      await page.goto("/stage");
+      await expect(reroll(page)).toBeVisible({ timeout: 15_000 });
+      expect(patched.done).toBe(true);
+      if (longBrief) expect((await page.locator('[data-kind="brief"] p').first().innerText()).length).toBe(160);
+      else await expect(page.locator('[data-kind="medium"]')).toContainText("Spoken storytelling");
+
+      for (const locked of [false, true]) {
+        if (locked) await lockEverything(page);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        // This Challenge fits outright; the 160-character worst case keeps its Brief and actions on screen (DESIGN.md fit rule).
+        if (!longBrief) expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), "page scroll").toBeLessThanOrEqual(0);
+        const skill = (await page.locator('[data-kind="skill"]').boundingBox())!;
+        const medium = (await page.locator('[data-kind="medium"]').boundingBox())!;
+        expect(Math.abs(skill.y - medium.y), "tabs share a row").toBeLessThan(6);
+        // "A nearby object" stays on one line: no reserved Lock gutter narrows the Topic.
+        const topic = topicValue(page);
+        const lines = await topic.evaluate((el) => el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight));
+        expect(Math.round(lines), "Topic lines").toBe(1);
+        for (const box of [await page.locator('[data-kind="brief"]').boundingBox(), await page.getByTestId("stage-action-row").boundingBox()]) {
+          expect(box!.y).toBeGreaterThanOrEqual(0);
+          expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+        }
+        expectDiscsOnEdgesClearOfText(await lockGeometry(page), locked);
       }
     });
   }

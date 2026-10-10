@@ -105,6 +105,15 @@
 }
 
 /*
+ * DESIGN.md → Layout & Spacing → Challenge Stage, fit rule step 1: on a
+ * desktop Stage shorter than 900px the gaps drop to stage-gap-compact (and
+ * composition-to-actions to spacing.6), so Held fits 1280×800 and similar
+ * laptop screens without scrolling. Used as `desktop:stage-short:…`.
+ */
+/* ponytail: a viewport-height proxy for "the composition doesn't fit"; measure the column in JS if a taller screen ever overflows. */
+@custom-variant stage-short (@media (max-height: 899px));
+
+/*
  * DESIGN.md → Typography, every role including the Stage and phone ramps.
  * Deliberately NOT mapped into Tailwind's font, text, and font-weight theme
  * namespaces: role names repeat across those namespaces (e.g. "button" would

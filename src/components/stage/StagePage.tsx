@@ -224,8 +224,8 @@ export function StagePage() {
       />
 
       {/* Phone: bottom padding clears the fixed action row (RevealComposition). */}
-      <div className="flex min-h-screen flex-col items-center justify-center px-gutter-phone pt-12 pb-[calc(var(--spacing-target-min)+--spacing(8)+env(safe-area-inset-bottom))] desktop:pb-12">
-        <div data-testid="stage-column" data-stage-frozen={frozenThisVisit} className="flex w-safe-area-width max-w-full flex-col items-start gap-stage-gap">
+      <div className="flex min-h-screen flex-col items-center justify-center px-gutter-phone pt-12 pb-[calc(var(--spacing-target-min)+--spacing(8)+env(safe-area-inset-bottom))] desktop:pb-12 desktop:stage-short:py-8">
+        <div data-testid="stage-column" data-stage-frozen={frozenThisVisit} className="flex w-safe-area-width max-w-full flex-col items-start gap-stage-gap desktop:stage-short:gap-stage-gap-compact">
           {/* Decorative; the h1 above names the page (DESIGN.md -> Stage mark). */}
           <p aria-hidden="true" className="flex items-center gap-2 text-stage-mark text-plum">
             {copy.stage.mark}
@@ -244,7 +244,7 @@ export function StagePage() {
           </p>
 
           {/* Always mounted, so screen readers announce text changes. */}
-          <p role="status" className="text-body text-plum">
+          <p role="status" className="text-body text-plum empty:absolute">
             {errorText}
           </p>
           {errorText !== null ? (
@@ -260,6 +260,7 @@ export function StagePage() {
               motion={motion}
               locks={store.session.locks}
               reshuffle={reshuffle}
+              skills={store.library?.skills ?? []}
               onToggleLock={(kind) => getAppStore().dispatchSession({ type: "toggle_lock", kind })}
               onReroll={() => getAppStore().dispatch({ type: "reroll" })}
             />

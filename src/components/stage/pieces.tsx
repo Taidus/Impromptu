@@ -502,9 +502,10 @@ export function BriefBlock({
       ref={ref}
       tabIndex={-1}
       data-kind="brief"
-      className={`max-w-[34ch] ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${motion.className}`}
+      className={`max-w-[34ch] text-brief-stage-phone desktop:text-brief-stage ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${motion.className}`}
       style={motion.style}
     >
+      {/* The block carries the Brief's type too, so its 34ch measure is in Brief type (DESIGN.md -> Brief block). */}
       <p className="text-brief-stage-phone text-plum desktop:text-brief-stage">{brief}</p>
       {guidance !== null ? <p className="mt-2 text-lede text-plum-muted">{guidance}</p> : null}
     </div>
