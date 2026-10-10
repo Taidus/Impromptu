@@ -108,7 +108,7 @@ test("a storage-unavailable browser shows the Notice banner and still generates 
   await page.goto("/");
   await expect(page.getByText(copy.notice.storageUnavailable)).toBeVisible({ timeout: 15_000 });
 
-  await page.getByRole("button", { name: copy.button.getAChallenge }).click();
+  await page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge }).click();
   await expect(page).toHaveURL("/stage");
 });
 
@@ -139,7 +139,7 @@ test("continuing a Reveal still works after the connection drops (NFR-4)", async
 test("generating a new Challenge still works after the connection drops (NFR-4)", async ({ page, context }) => {
   // Load the library while still online (prefetched on idle, Story 3.6).
   await page.goto("/");
-  const getAChallenge = page.getByRole("button", { name: copy.button.getAChallenge });
+  const getAChallenge = page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge });
   await expect(getAChallenge).toBeVisible({ timeout: 15_000 });
   expect(await heldChallenge(page)).toBeNull();
 
