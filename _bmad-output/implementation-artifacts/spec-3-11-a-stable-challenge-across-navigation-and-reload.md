@@ -2,7 +2,7 @@
 title: 'A stable Challenge across navigation and reload'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '8d9401cd92b02b862027c4e9b775961830098a9b'
