@@ -444,6 +444,22 @@
   letter-spacing: var(--typography-style-stage-phone-tracking);
 }
 
+@utility text-countdown {
+  font-family: var(--typography-countdown-family);
+  font-size: var(--typography-countdown-size);
+  font-weight: var(--typography-countdown-weight);
+  line-height: var(--typography-countdown-leading);
+  letter-spacing: var(--typography-countdown-tracking);
+}
+
+@utility text-countdown-phone {
+  font-family: var(--typography-countdown-phone-family);
+  font-size: var(--typography-countdown-phone-size);
+  font-weight: var(--typography-countdown-phone-weight);
+  line-height: var(--typography-countdown-phone-leading);
+  letter-spacing: var(--typography-countdown-phone-tracking);
+}
+
 @utility text-stamp-stage {
   font-family: var(--typography-stamp-stage-family);
   font-size: var(--typography-stamp-stage-size);

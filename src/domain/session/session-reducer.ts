@@ -1,30 +1,55 @@
 import { config } from "@/config/app";
-import type { Challenge, ComposeError, RevealedKind, Session, Setup } from "./schema";
+import { timeUsedSec as timerTimeUsedSec } from "@/domain/timer/timer";
+import type { Challenge, ComposeError, Reflection, Rep, RevealedKind, Session, Setup } from "./schema";
 
 export type SessionEvent =
   | { type: "challenge_committed"; challenge: Challenge; recentKey: string | null }
   | ({ type: "compose_failed" } & ComposeError)
-  | { type: "reveal_next" };
+  | { type: "reveal_next" }
+  | { type: "start"; nowMs: number }
+  | { type: "pause"; nowMs: number }
+  | { type: "resume"; nowMs: number }
+  | { type: "update_reflection_draft"; reflection: Reflection }
+  | { type: "save_rep" }
+  | { type: "discard" };
 
 /**
- * The AD-7 session reducer, scoped to the None and Held states (Story 3.4).
- * Pure: no Clock, Random, or storage. challenge_committed and compose_failed
- * apply only when `state` is None or Held -- AD-7's Saved -> Held
- * (retry/vary/new) and Saved -> Saved (compose_failed) arrive with Story 5.7.
- * Any other (state, event) pair -- including AD-7 events later stories
- * implement (e.g. toggle_lock, start) -- is a no-op that returns the same
- * session reference.
+ * The AD-7 session reducer. Pure: no Clock, Random, or storage -- times come
+ * in as `nowMs`. `finish` is deliberately not a dispatchable event: it needs
+ * to hand the store a new Rep in the same transition, so it's the separate
+ * pure `finishRep()` below instead (see that function's doc comment). `vary`
+ * is phase 2 (Story 5.8) and isn't modelled here yet. Any other
+ * (state, event) pair is a no-op that returns the same session reference.
  */
 export function sessionReducer(session: Session, event: SessionEvent, setup: Pick<Setup, "quickReveal">): Session {
   switch (event.type) {
     case "challenge_committed":
-      return isNoneOrHeld(session) ? commitChallenge(session, event, setup.quickReveal) : session;
+      return canCommit(session) ? commitChallenge(session, event, setup.quickReveal) : session;
     case "compose_failed":
-      return isNoneOrHeld(session)
+      return canCommit(session)
         ? { ...session, lastComposeError: { reason: event.reason, blockingLock: event.blockingLock } }
         : session;
     case "reveal_next":
       return session.state === "held" ? revealNext(session) : session;
+    case "start":
+      return canStart(session) ? startAttempt(session, event.nowMs) : session;
+    case "pause": {
+      if (session.state !== "attempt" || session.attempt === null || session.attempt.pausedAt !== null) return session;
+      return { ...session, attempt: { ...session.attempt, pausedAt: event.nowMs } };
+    }
+    case "resume": {
+      if (session.state !== "attempt" || session.attempt === null || session.attempt.pausedAt === null) return session;
+      const { pausedAt, pausedTotalMs } = session.attempt;
+      return { ...session, attempt: { ...session.attempt, pausedAt: null, pausedTotalMs: pausedTotalMs + Math.max(0, event.nowMs - pausedAt) } };
+    }
+    case "update_reflection_draft":
+      return session.state === "finished" ? { ...session, reflectionDraft: clampReflection(event.reflection) } : session;
+    case "save_rep":
+      return session.state === "finished" ? { ...session, state: "saved", attempt: null } : session;
+    case "discard":
+      return session.state === "attempt"
+        ? { ...session, state: "none", challenge: null, attempt: null, revealed: [], locks: {}, reflectionDraft: null }
+        : session;
     default:
       // Exhaustiveness guard: fails to compile if a SessionEvent variant is
       // added without a case above. The runtime fallback is still a no-op,
@@ -34,8 +59,24 @@ export function sessionReducer(session: Session, event: SessionEvent, setup: Pic
   }
 }
 
-function isNoneOrHeld(session: Session): boolean {
-  return session.state === "none" || session.state === "held";
+/** None/Held/Saved may receive a new Challenge (AD-7); Attempt/Finished reject it (new_challenge stays rejected mid-Attempt). */
+function canCommit(session: Session): boolean {
+  return session.state === "none" || session.state === "held" || session.state === "saved";
+}
+
+/** Held -> Attempt only once every present kind of the held Challenge has landed. */
+function canStart(session: Session): boolean {
+  return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
+}
+
+function startAttempt(session: Session, nowMs: number): Session {
+  if (session.challenge === null) return session; // canStart guarantees this; narrows the type here
+  return {
+    ...session,
+    state: "attempt",
+    attempt: { startedAt: nowMs, pausedAt: null, pausedTotalMs: 0, timeLimitSec: session.challenge.timeLimitSec },
+    locks: {},
+  };
 }
 
 function commitChallenge(
@@ -47,15 +88,46 @@ function commitChallenge(
     event.recentKey === null || event.recentKey.length === 0
       ? session.recent
       : [...session.recent, event.recentKey].slice(-config.generator.recentWindow);
+  // Retry never plays a Reveal (AD-3): every present kind lands at once, regardless of Quick reveal.
+  const revealAll = quickReveal || event.challenge.origin.kind === "retry";
 
   return {
     ...session,
     state: "held",
     challenge: event.challenge,
-    revealed: quickReveal ? presentKinds(event.challenge) : [],
+    revealed: revealAll ? presentKinds(event.challenge) : [],
     recent,
     lastComposeError: null,
   };
+}
+
+/**
+ * Attempt -> Finished, returning the new Rep alongside the session so the
+ * store can append it to history in the same transition and set
+ * `lastRepId`. Exported separately from the reducer -- not a dispatchable
+ * SessionEvent -- because of that extra return value. `finishedAt` is taken
+ * as an already-formatted ISO string rather than built here from `nowMs`:
+ * `src/domain` is the pure core and never touches `Date` itself, so the
+ * store derives it from the same Clock reading it passes as `nowMs` and
+ * hands both in. Returns `null` outside an Attempt (nothing to finish).
+ */
+export function finishRep(session: Session, nowMs: number, repId: string, finishedAt: string): { session: Session; rep: Rep } | null {
+  if (session.state !== "attempt" || session.challenge === null || session.attempt === null) return null;
+  const timed = session.attempt.timeLimitSec !== null;
+  const rep: Rep = {
+    id: repId,
+    challenge: session.challenge,
+    finishedAt,
+    timeUsedSec: timed ? timerTimeUsedSec(session.attempt, nowMs) : null,
+    reflection: null,
+  };
+  const nextSession: Session = {
+    ...session,
+    state: "finished",
+    lastRepId: repId,
+    reflectionDraft: { worked: "", change: "" },
+  };
+  return { session: nextSession, rep };
 }
 
 function revealNext(session: Session): Session {
@@ -72,6 +144,12 @@ export function presentKinds(challenge: Challenge): RevealedKind[] {
 function isPresent(challenge: Challenge, kind: RevealedKind): boolean {
   if (kind === "brief") return true;
   return challenge.inputs[kind] !== undefined;
+}
+
+/** Over-cap drafts (a paste, a stale tab) are cut to `config.reflection.maxChars` rather than stored past the textarea's own cap. */
+function clampReflection(reflection: Reflection): Reflection {
+  const max = config.reflection.maxChars;
+  return { worked: reflection.worked.slice(0, max), change: reflection.change.slice(0, max) };
 }
 
 function assertNever(value: never): void {

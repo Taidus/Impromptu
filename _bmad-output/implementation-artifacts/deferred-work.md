@@ -67,3 +67,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets.md`
   summary: Route the orbit thread through margins and gutters (crossing sides inside the text-free seams) and draw it on scroll under the 8.3 motion gate, instead of the current near-vertical left-edge line.
   evidence: DESIGN → Orbit thread wants it to wind around the page; the current path satisfies 'never crosses text' by hugging x≈1% of the viewport.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-0-epic-5-domain-and-creating-components.md`
+  summary: In the phase 2 Stage wiring, announce CountdownAnnouncer minute marks on crossing (previous tick's `remainingSec` above the mark, this tick's at or below it) instead of `announceFor`'s exact-equality check, and announce "Resumed." (`copy.stage.countdown.resumedAnnounced`) when the Stage dispatches `resume`.
+  evidence: `announceFor` is a stateless per-instant selector, so a late tick that skips from 61 to 59 misses the 1:00 mark, and resume is never announced; the React Compiler lint rules forbid tracking the previous tick inside the component, and the Stage already owns the tick loop and the resume dispatch.
