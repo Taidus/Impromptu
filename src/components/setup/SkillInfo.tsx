@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { copy } from "@/components/copy";
-import { FOCUS_RING_BASE, focusRingClassName, type Ground } from "@/components/ground";
+import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
+import { isPlainEscape } from "@/components/stage/logic";
 import type { Skill } from "@/domain/library/schema";
 
 export interface SkillInfoProps {
   skills: readonly Skill[];
-  /** Which ground the Info button sits on (Setup's night, or Story 4.5's Stage lilac) -- picks its border/text tone and focus-ring color. Defaults to Setup's existing night treatment. */
-  ground?: Ground;
+  /** Which ground the Info button sits on (Setup's night, or Story 4.5's Stage lilac) -- picks its tone, focus-ring color, and panel placement. Defaults to Setup's existing night treatment. */
+  ground?: "night" | "lilac";
 }
 
 /**
@@ -24,9 +25,27 @@ export interface SkillInfoProps {
  *
  * Story 4.5 reuses this on the Stage (beside the Skill tab, once Held)
  * rather than duplicating it -- `ground` is the only thing that differs by
- * caller; everything else (glossary content, open/close behavior, the
- * panel's right anchor) is identical.
+ * caller; everything else (glossary content, open/close behavior) is
+ * identical.
  */
+
+// Night: Setup's classes, unchanged since before `ground` existed. Lilac:
+// like every other Stage icon button (StageIconButton, LockToggle) -- a
+// plum-muted ring and plum glyph, no color transition (the Held Stage stays
+// still). Its root is not `relative`, so the panel anchors to the caller's
+// positioned wrapper (the Stage's Skill row, starting at the Skill tab's
+// left edge) rather than to the button, which can sit too far left of a
+// short Skill name to fit the panel. The Stage panel is capped at a fraction
+// of the viewport and scrolls, so on short phones it stays above the fixed
+// bottom action bar.
+const GROUND_STYLES = {
+  night: { root: "relative", tone: "border-cream", panel: "right-0" },
+  lilac: {
+    root: undefined,
+    tone: "border-plum-muted text-plum hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]",
+    panel: "left-0 max-h-[45dvh] overflow-y-auto desktop:max-h-none",
+  },
+} as const;
 export function SkillInfo({ skills, ground = "night" }: SkillInfoProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,7 +68,7 @@ export function SkillInfo({ skills, ground = "night" }: SkillInfoProps) {
     // needs to guarantee "Esc closes the popover before it reaches the
     // Stage" without the two components sharing any state.
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
+      if (!isPlainEscape(event)) return;
       event.preventDefault();
       closeAndRefocus();
     }
@@ -65,19 +84,12 @@ export function SkillInfo({ skills, ground = "night" }: SkillInfoProps) {
     };
   }, [open, closeAndRefocus]);
 
-  // Setup sits on night (cream ring, inherits the ambient cream text) --
-  // unchanged from before this prop existed. The Stage sits on lilac, like
-  // every other Stage icon button (StageIconButton, LockToggle): a
-  // plum-muted ring and plum glyph, with the same hover/press fill.
-  const tone =
-    ground === "lilac" || ground === "lilac-deep"
-      ? "border-plum-muted text-plum hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]"
-      : "border-cream";
+  const styles = GROUND_STYLES[ground];
 
   return (
     <div
       ref={rootRef}
-      className="relative"
+      className={styles.root}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
       }}
@@ -90,25 +102,21 @@ export function SkillInfo({ skills, ground = "night" }: SkillInfoProps) {
         aria-controls={panelId}
         aria-label={copy.setup.skillInfoLabel}
         onClick={() => (open ? closeAndRefocus() : setOpen(true))}
-        className={`inline-flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName(ground)} ${tone}`}
+        className={`inline-flex size-target-min items-center justify-center rounded-disc border ${styles.tone} ${FOCUS_RING_BASE} ${focusRingClassName(ground)}`}
       >
         <span aria-hidden="true" className="text-button italic">
           i
         </span>
       </button>
       {open && (
-        // Right-aligned to the button, never wider than the phone content
-        // column. Setup's row ends at this button; the Stage's sits right
-        // after the Skill tab, which (by its own text width) always leaves
-        // more room to the button's left than its right on both the phone
-        // and desktop safe-area widths this story checks.
+        // Never wider than the phone content column; placement per GROUND_STYLES.
         // tabIndex -1: a click inside the panel moves focus into it, so the blur-close above doesn't fire.
         <div
           id={panelId}
           role="dialog"
           aria-labelledby={buttonId}
           tabIndex={-1}
-          className="absolute right-0 top-full z-10 mt-2 flex w-70 max-w-[calc(100vw_-_2*var(--spacing-gutter-phone))] flex-col gap-3 rounded-scrap bg-cream p-4 text-ink shadow-lift-soft focus:outline-none"
+          className={`absolute ${styles.panel} top-full z-10 mt-2 flex w-70 max-w-[calc(100vw_-_2*var(--spacing-gutter-phone))] flex-col gap-3 rounded-scrap bg-cream p-4 text-ink shadow-lift-soft focus:outline-none`}
         >
           <dl className="flex flex-col gap-2">
             {skills.map((skill) => (

@@ -102,4 +102,11 @@ describe("RevealComposition -- Skill info button (Story 4.5)", () => {
     expect(html).not.toContain('role="dialog"');
     expect(html).not.toContain(fixtureSkills[0].info);
   });
+
+  it("appears once Held for a retry-origin Challenge too (Lock/Reroll stay hidden)", () => {
+    const retryChallenge: Challenge = { ...fullChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } };
+    const html = render(retryChallenge, presentKinds(retryChallenge), {}, fixtureSkills);
+    expect(html).toContain(copy.setup.skillInfoLabel);
+    expect(html).not.toContain(copy.button.reroll);
+  });
 });

@@ -140,10 +140,16 @@ export function RevealComposition({
   const showSunButton = next !== null;
 
   // Story 4.5 / EXPERIENCE.md -> Component Patterns: a collapsed Skill Info
-  // button beside the Skill tab, shown only once Held -- same gate as the
-  // Lock toggles and Reroll, never mounted mid-Reveal, so it can never
-  // "open on its own" (there's nothing to open until the user clicks it).
-  const skillInfo = held && skills.length > 0 ? <SkillInfo skills={skills} ground="lilac" /> : null;
+  // button beside the Skill tab, shown once Held for every origin (unlike
+  // Lock/Reroll, Retry included). Never mounted mid-Reveal, so it can never
+  // "open on its own"; until then an empty slot of the same size holds its
+  // place so the Skill/Medium row doesn't shift when Held arrives.
+  const skillInfo =
+    next === null && skills.length > 0 ? (
+      <SkillInfo skills={skills} ground="lilac" />
+    ) : (
+      <span aria-hidden="true" className="size-target-min shrink-0" />
+    );
 
   return (
     <>
@@ -156,7 +162,7 @@ export function RevealComposition({
           nothing reflows when Held arrives. */}
       <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap desktop:pl-0 desktop:stage-short:gap-stage-gap-compact">
         <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact">
-          <span className="inline-flex items-center gap-2">
+          <span className="relative inline-flex items-center gap-2">
             {tab("skill", 1.5)}
             {skillInfo}
           </span>

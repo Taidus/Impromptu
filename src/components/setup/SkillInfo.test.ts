@@ -16,7 +16,7 @@ function render(props: Partial<Parameters<typeof SkillInfo>[0]> = {}) {
   return renderToStaticMarkup(createElement(SkillInfo, { skills, ...props }));
 }
 
-describe("SkillInfo ground/anchor (Story 4.5)", () => {
+describe("SkillInfo ground (Story 4.5)", () => {
   it("defaults to Setup's existing night treatment", () => {
     const html = render();
     expect(html).toContain("border-cream");
@@ -27,6 +27,8 @@ describe("SkillInfo ground/anchor (Story 4.5)", () => {
     const html = render({ ground: "lilac" });
     expect(html).toContain("border-plum-muted");
     expect(html).toContain("text-plum");
+    // The Held Stage stays still: no color transition on its button.
+    expect(html).not.toContain("transition");
   });
 
   // The panel only renders while open, which this environment's static

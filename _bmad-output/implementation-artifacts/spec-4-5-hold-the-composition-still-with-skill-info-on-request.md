@@ -2,7 +2,7 @@
 title: 'Hold the composition still, with Skill info on request'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'e5179460e73d669d2e126105311a3c942ffaeca1'
@@ -53,6 +53,26 @@ context:
 - **Stillness was already true by construction** (Stories 4.1-4.3): every landing entrance is a finite CSS animation (`LAND_CLASS`/`REVEALED_MOTION`), the foil shimmer only renders mid-shuffle, and no decor/3D layer is mounted on `/stage` (Epic 8 Story 8.5 is still backlog). This story's only behavioral addition is the Skill Info button; the rest of its scope is proving the existing stillness and wiring the Esc-ordering guarantee.
 - **Esc ordering:** rather than lifting "is a popover open" state into `StagePage.tsx` (which would couple the Stage to every future popover), `SkillInfo`'s own Escape listener moved to the capture phase and now calls `preventDefault()`. Capture-phase listeners on `document` always run before bubble-phase listeners on `document` for the same event, regardless of which was attached first or when each component mounted -- so this holds even though `StagePage`'s listener is attached once at Stage mount, long before `SkillInfo` ever mounts (Held only, see above). `isPlainEscape` (`src/components/stage/logic.ts`) already gated on `!event.defaultPrevented`; no change needed there.
 - `npm run lint`, `npm run typecheck`, `npm test` (917/917, 50 files), `npm run build`, `npm run check:static`, and `E2E_PORT=3111 npm run test:e2e` (318/318 across chromium/webkit/firefox) all pass.
+- Review patches applied (triage rows 1–12): Skill Info shows whenever Held for every origin (Retry included); on the Stage the panel anchors left to the Skill row (tab's left edge) with `max-h-[45dvh] overflow-y-auto` on phone, superseding the right-anchor note above (Setup keeps its original classes byte-for-byte); Esc reuses `isPlainEscape`; no color transition on the Stage button; `ground` narrowed to `"night" | "lilac"`; an empty `size-target-min` slot reserves the button's place before Held; e2e rewritten (deterministic `defaultPrevented` Esc check, mid-Reveal no-auto-open, one seed per page, real Held transition geometry, Retry + shortest-Skill "Revision" cases at 1280x800/390x844/375x667 incl. above-action-bar check, tightened no-toast). `npm test` 918/918 (49 files), `E2E_PORT=3111 npm run test:e2e` 333/333; lint, typecheck, build, check:static pass.
+
+## Spec Change Log
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | Skill Info gated on lockable-origin `held`; Retry Challenges never show it | high | `RevealComposition.tsx:146` gate excludes retry origin; AC says "Given Held" for every Challenge | patch |
+| 2 | blind, edge | Popover overflows left edge at 390px for short Skill names | medium | Panel `right-0 w-70` anchored to a button whose right edge sits under 280px; e2e covers only Observation | patch |
+| 3 | verif-gap | Esc-ordering e2e is timing-dependent; breaking preventDefault could still pass | medium | Test races the Stage key handler; record `defaultPrevented` from a bubble listener instead | patch |
+| 4 | blind | Esc handler skips repeat/isComposing/modifier guards | low | Stage handler uses `isPlainEscape`; SkillInfo should share it | patch |
+| 5 | edge | `transition-colors` on the Stage button animates while Held | low | Filming Contract stillness rule; restrict to night ground | patch |
+| 6 | blind, edge | `ground` tone handles only night/lilac; paper/sun get invisible cream border; Setup classes changed despite "byte-for-byte" | low | `SkillInfo.tsx:77-93` | patch |
+| 7 | blind | "Never auto-opens during the Reveal" test doesn't check mid-reveal | low | Assertion only after Held | patch |
+| 8 | blind | Stacked `addInitScript` seeds in one page | low | Later seeds overlay earlier ones; use a fresh page per seed | patch |
+| 9 | blind | Skill row may jump when Held arrives (button mounts late) | low | Reserve the button slot so the Medium/Skill position is stable | patch |
+| 10 | edge | Panel can run under the bottom action bar on short phones (375x667) | low | Six Skills listed; add max-height + overflow | patch |
+| 11 | verif-gap | Stale "anchor" comments | low | Comment cleanup | patch |
+| 12 | blind | Weak no-toast test; unneeded decor filter | low | Tighten or drop | patch |
 
 ## Design Notes
 
