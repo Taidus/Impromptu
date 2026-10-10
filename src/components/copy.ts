@@ -41,11 +41,36 @@ export const copy = {
     either: "Either",
   },
   stage: {
+    // Visually hidden h1 (EXPERIENCE.md -> Accessibility Floor: Stage's h1 is
+    // "Challenge"); the Stage mark itself is decorative (aria-hidden), not a
+    // heading.
+    h1: "Challenge",
+    mark: "impromptu",
     back: "Back to setup",
     soundOffCaption: "SOUND OFF",
     soundOnCaption: "SOUND ON",
     soundOffAnnounced: "Sound, off",
     soundOnAnnounced: "Sound, on",
+    // Level/mode meta line (DESIGN.md -> Layout, "the Level and mode meta").
+    // Keyed by src/domain/library/schema's Level enum; "mode" is derived from
+    // a held Challenge's timeLimitSec (Perform's Timed/Untimed/Either setup
+    // choice resolves to one or the other per generated Challenge).
+    levelName: {
+      explore: "Explore",
+      experiment: "Experiment",
+      develop: "Develop",
+      perform: "Perform",
+    },
+    mode: {
+      timed: "TIMED",
+      untimed: "UNTIMED",
+    },
+    // Short, cause-naming, no-penalty-language message (EXPERIENCE.md ->
+    // Voice and Tone) for when the store or library fails to load.
+    loadError: "Couldn't load a challenge right now. Try reloading the page.",
+    // new_challenge failed (session.lastComposeError). Lock-specific copy and
+    // the unlock action arrive with the Lock stories; this covers every case.
+    composeError: "No challenge fits this setup yet. Change your setup and try again.",
   },
   button: {
     getAChallenge: "Get a challenge",
@@ -133,10 +158,21 @@ export const copy = {
       constraint: "CONSTRAINT",
       brief: "BRIEF",
     },
+    // Story 8.2: title is the figcaption word; alt is the poster artwork's
+    // own alt text (the title alone doesn't describe the image).
     posters: {
-      reveal: "reveal.",
-      make: "make.",
-      reflect: "reflect.",
+      reveal: {
+        title: "reveal.",
+        alt: "A blue eye inside a gold-edged triangle, set against a pink moon, UFOs and a shooting star, above teal mountains.",
+      },
+      make: {
+        title: "make.",
+        alt: "Two glowing blue hands reaching toward each other, fingertips almost touching, on a blue-to-magenta gradient.",
+      },
+      reflect: {
+        title: "reflect.",
+        alt: "A dark red dahlia, an apple, mushrooms and a starry glass orb, with a full moon and rainbow behind.",
+      },
     },
     footer: {
       practice: "Practice",

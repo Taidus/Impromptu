@@ -11,7 +11,7 @@ export function WhatsInAChallenge() {
 
   return (
     <section className="bg-lilac px-gutter-phone py-20 text-plum desktop:px-14 desktop:py-28">
-      <div className="mx-auto flex max-w-content-max flex-col gap-12">
+      <div className="relative z-10 mx-auto flex max-w-content-max flex-col gap-12">
         <SectionHeader
           ground="lilac"
           eyebrow={journey.whatsInAChallenge.eyebrow}

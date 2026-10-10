@@ -12,7 +12,7 @@ export interface ClosingCallProps {
 export function ClosingCall({ label = copy.button.getAChallenge, href = "/stage" }: ClosingCallProps) {
   return (
     <section className="bg-sun px-gutter-phone py-20 text-ink desktop:px-14 desktop:py-28">
-      <div className="mx-auto flex max-w-content-max flex-col items-start gap-10">
+      <div className="relative z-10 mx-auto flex max-w-content-max flex-col items-start gap-10">
         <h2 className="text-y2k-display text-grape-deep">{copy.journey.closing}</h2>
         {/* Link-shaped button: InkButton itself only renders a <button>. */}
         <Link href={href} className={inkButtonClassName("sun")}>
