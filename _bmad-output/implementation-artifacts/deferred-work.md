@@ -76,3 +76,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-lock-inputs-and-reroll-the-rest.md`
   summary: Story 4.4 adds the test that the generic compose-error banner stays hidden while a Challenge is held (lock conflict path).
   evidence: Triage row 11.
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-4-decor-component-gate-and-the-3d-hero.md`
+  summary: Founder design decision on the Setup hero art column: keep the wide single-line display headline (art column 20%, a ~224px bloom at 1280) or move to DESIGN's two-line headline (italic second line) with a tighter vertical rhythm in a ~590px column, which frees room for a larger bloom and 3D hero.
+  evidence: Story 8.4 shipped `xl:grid-cols-[80fr_20fr]` instead of the spec's `[46fr_54fr]` because the single-line headline needs ~900px to keep "Get a challenge" above the 1280x800 fold (`setup-mediums-and-challenge.spec.ts`); recorded in the 8.4 Review Triage Log as `[defer]`.

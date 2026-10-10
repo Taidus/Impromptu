@@ -26,6 +26,10 @@ Everything here is account-level (AD-20, AD-14). Items marked **founder** need t
 - [ ] Send 6 requests to `/api/subscribe` within a minute from one IP: the 6th gets 429 and the form shows "Too many tries. Wait a minute and try again."
 - [ ] Erasure path: delete the contact in Resend; the privacy note's contact address (`copy.privacy.contactEmail`) is confirmed and monitored. Address: ______
 
+## Design decisions
+
+- [ ] **founder** Setup hero layout (Story 8.4): keep the wide single-line headline with a narrow (20%) art column, or switch to DESIGN's two-line headline so the bloom and 3D hero get a ~590px column. See `_bmad-output/implementation-artifacts/deferred-work.md`.
+
 ## Rollback
 
 Vercel Instant Rollback to the previous Production deployment. No server data migrates; user data lives in browsers and contacts live in Resend.

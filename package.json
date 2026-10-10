@@ -20,11 +20,13 @@
     "library:sample": "tsx scripts/library/sample.ts"
   },
   "dependencies": {
+    "@types/three": "0.186.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "4.6.5",
-    "resend": "6.32.1"
+    "resend": "6.32.1",
+    "three": "0.186.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
