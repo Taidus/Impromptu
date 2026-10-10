@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:57
-last_updated: 10-10-2026 01:17
+last_updated: 10-10-2026 01:28
 project: Impromptu
 project_key: NOKEY
 tracking_system: file-system
@@ -82,9 +82,9 @@ development_status:
   4-7-filming-contract-fit-rule-and-automated-legibility-checks: backlog
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-start-creating-and-the-untimed-creating-view: backlog
-  5-2-countdown-for-timed-challenges: backlog
+  epic-5: in-progress
+  5-1-start-creating-and-the-untimed-creating-view: in-progress
+  5-2-countdown-for-timed-challenges: in-progress
   5-3-pause-resume-and-time-s-up-without-failure: backlog
   5-4-resume-or-discard-an-attempt-from-setup: backlog
   5-5-finish-rep-and-the-rep-done-moment: backlog
