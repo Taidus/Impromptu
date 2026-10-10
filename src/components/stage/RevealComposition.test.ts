@@ -13,7 +13,7 @@ import { presentKinds } from "@/domain/session/session-reducer";
 import { RevealComposition } from "./RevealComposition";
 import type { RevealMotion } from "./useRevealMotion";
 
-const idleMotion: RevealMotion = { state: { status: "idle" }, flickText: null, canPress: false, press: () => {} };
+const idleMotion: RevealMotion = { state: { status: "idle" }, flickText: null, canPress: false, reduced: false, press: () => {} };
 
 function render(challenge: Challenge, revealed: RevealedKind[] = presentKinds(challenge), locks: Locks = {}) {
   return renderToStaticMarkup(

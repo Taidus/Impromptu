@@ -47,21 +47,49 @@ const durationVar = (ms: number) => ({ "--motion-ms": `${ms}ms` }) as CSSPropert
 /**
  * Story 4.1 / UX-DR22: the landing entrance per material. Durations come
  * from `config.reveal.motion` (the same values `useRevealMotion`'s timers
- * use), never CSS literals. `motion-reduce:` mirrors this codebase's
- * per-animation guard (SunButton, Ticker) -- Story 4.2 owns the full
- * reduced-motion fade.
+ * use), never CSS literals.
  */
 const LAND_CLASS: Record<RevealedKind, string> = {
-  skill: "animate-land-tabs motion-reduce:animate-none",
-  medium: "animate-land-tabs motion-reduce:animate-none",
-  topic: "animate-land-tabs motion-reduce:animate-none",
-  style: "animate-land-foil motion-reduce:animate-none",
-  constraint: "animate-land-stamp motion-reduce:animate-none",
-  brief: "animate-land-brief motion-reduce:animate-none",
+  skill: "animate-land-tabs",
+  medium: "animate-land-tabs",
+  topic: "animate-land-tabs",
+  style: "animate-land-foil",
+  constraint: "animate-land-stamp",
+  brief: "animate-land-brief",
 };
 
-export function landingMotion(kind: RevealedKind): PieceMotion {
-  return { className: LAND_CLASS[kind], style: durationVar(config.reveal.motion.landMs[kind]) };
+/**
+ * Story 4.2: the one reduced-motion entrance, a plain 120ms fade -- for a
+ * piece landing under reduced motion and for a piece that mounts already
+ * revealed (Quick reveal's instant landing, a restore) under it.
+ */
+export const REVEALED_MOTION: PieceMotion = {
+  className: "animate-reduced-fade",
+  style: durationVar(config.reveal.motion.reducedLandMs),
+};
+
+/**
+ * Story 4.2: `reduced` is the value captured at the press (`RevealMotion.reduced`),
+ * decided here in JS -- not via the `motion-reduce:` variant -- so the class
+ * and `--motion-ms` (and the driver's timer) always agree.
+ */
+export function landingMotion(kind: RevealedKind, reduced: boolean): PieceMotion {
+  return reduced ? REVEALED_MOTION : { className: LAND_CLASS[kind], style: durationVar(config.reveal.motion.landMs[kind]) };
+}
+
+/** A piece that mounts already revealed: the fade under reduced motion, nothing otherwise (today's instant full-motion Quick reveal). */
+export function revealedMotion(reduced: boolean): PieceMotion {
+  return reduced ? REVEALED_MOTION : NO_MOTION;
+}
+
+/**
+ * Story 4.2: a piece keeps the entrance it mounted with, so a later
+ * re-render (its landing committing, the OS setting flipping) never swaps
+ * the animation and replays it. Callers key revealed pieces on their value,
+ * so a new value remounts and picks its entrance afresh.
+ */
+function useMountMotion(motion: PieceMotion): PieceMotion {
+  return useState(motion)[0];
 }
 
 /** The foil's shimmer, only while it's actively shuffling: one pulse per shuffle. */
@@ -182,8 +210,10 @@ export function TicketTab({
   tiltDeg: number;
   motion?: PieceMotion;
 }) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind={kind}
       className={`min-w-0 rounded-scrap border-l border-dotted border-ink-soft bg-cream px-4 py-2 shadow-lift-soft ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
@@ -201,8 +231,10 @@ export function TicketTab({
 
 /** Style (DESIGN.md: iridescent foil, tilted 4°). */
 export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind="style"
       className={`px-3 py-2 ${motion.className}`}
       style={{
         ...motion.style,
@@ -229,8 +261,10 @@ export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * see the file header note.
  */
 export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind="constraint"
       className={`border-y-4 border-double border-stamp px-3 py-1 ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
@@ -254,6 +288,7 @@ export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * back and forth. Not keyed during a shuffle, so the size stays put across flicks.
  */
 function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: PieceMotion }) {
+  motion = useMountMotion(motion);
   const valueRef = useRef<HTMLParagraphElement>(null);
   const [long, setLong] = useState(false);
   useEffect(() => {
@@ -266,7 +301,7 @@ function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: Pie
     return () => observer.disconnect();
   }, [long]);
   return (
-    <div className={motion.className} style={motion.style}>
+    <div data-kind="topic" className={motion.className} style={motion.style}>
       <LabelValue
         kind="topic"
         value={value}
@@ -311,13 +346,31 @@ function hasMaterial(piece: ScrapPiece): boolean {
  * for it"). Style and Constraint still render on a Topic-less Challenge:
  * the scrap is then a plain paper band, since the stamp is always on paper.
  */
-export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; style: ScrapPiece; constraint: ScrapPiece }) {
+export function ScrapGroup({
+  topic,
+  style,
+  constraint,
+  reduced,
+}: {
+  topic: ScrapPiece;
+  style: ScrapPiece;
+  constraint: ScrapPiece;
+  /** Story 4.2: `RevealMotion.reduced`, forwarded by `RevealComposition`. */
+  reduced: boolean;
+}) {
   const scrapTiltDeg = -1.2;
   const stampTiltDeg = -7;
   const foil = !style.present
     ? null
     : style.revealed || style.landing
-      ? <FoilSlip value={style.value} tiltDeg={4} motion={style.landing ? landingMotion("style") : NO_MOTION} />
+      ? (
+          <FoilSlip
+            key={style.value}
+            value={style.value}
+            tiltDeg={4}
+            motion={style.landing ? landingMotion("style", reduced) : revealedMotion(reduced)}
+          />
+        )
       : style.shufflingText !== null
         ? (
             <ShufflingPiece kind="style">
@@ -335,7 +388,7 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
         {foil !== null ? <div className="float-right -mt-6 -mr-7 ml-3 w-2/5 max-w-40">{foil}</div> : null}
         {topic.present
           ? topic.revealed || topic.landing
-            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic") : NO_MOTION} />
+            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic", reduced) : revealedMotion(reduced)} />
             : topic.shufflingText !== null
               ? (
                   <ShufflingPiece kind="topic">
@@ -348,7 +401,12 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
           // The stamp's tilted corners rise past its layout box; the band reserves that rise so they stay off the Topic and on paper.
           <div className="clear-both mt-2 flex min-h-14 items-center justify-end" style={{ paddingBlock: tiltRise(stampTiltDeg) }}>
             {constraint.revealed || constraint.landing ? (
-              <InkStamp value={constraint.value} tiltDeg={stampTiltDeg} motion={constraint.landing ? landingMotion("constraint") : NO_MOTION} />
+              <InkStamp
+                key={constraint.value}
+                value={constraint.value}
+                tiltDeg={stampTiltDeg}
+                motion={constraint.landing ? landingMotion("constraint", reduced) : revealedMotion(reduced)}
+              />
             ) : constraint.shufflingText !== null ? (
               <ShufflingPiece kind="constraint">
                 <InkStamp value={constraint.shufflingText} tiltDeg={stampTiltDeg} />
@@ -375,11 +433,13 @@ export function BriefBlock({
   ref?: Ref<HTMLDivElement>;
   motion?: PieceMotion;
 }) {
+  motion = useMountMotion(motion);
   // tabIndex -1: focus target when the last piece lands and the Reveal next button unmounts.
   return (
     <div
       ref={ref}
       tabIndex={-1}
+      data-kind="brief"
       className={`max-w-[34ch] ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${motion.className}`}
       style={motion.style}
     >
