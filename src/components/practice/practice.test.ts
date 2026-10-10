@@ -12,6 +12,7 @@ const render = (props: PracticeViewProps) => renderToStaticMarkup(createElement(
 const escaped = (text: string) => renderToStaticMarkup(createElement(Fragment, null, text));
 
 const action = createElement("a", { href: "/stage" }, copy.button.getAChallenge);
+const exportControl = createElement("button", { type: "button" }, "EXPORT_MARKER");
 const reps = [
   Rep.parse({
     id: "323e4567-e89b-42d3-a456-426614174000",
@@ -27,6 +28,7 @@ const base: PracticeViewProps = {
   reps: [],
   map: null,
   action,
+  exportControl,
 };
 
 describe("PracticeView — loading", () => {
@@ -66,6 +68,10 @@ describe("PracticeView — empty (no Reps)", () => {
   it("renders no history", () => {
     expect(html).not.toContain(copy.practice.historyTitle);
   });
+
+  it("renders no exportControl", () => {
+    expect(html).not.toContain("EXPORT_MARKER");
+  });
 });
 
 describe("PracticeView — with Reps", () => {
@@ -86,6 +92,11 @@ describe("PracticeView — with Reps", () => {
   it("renders no Map when map is null (library not loaded yet)", () => {
     expect(html).not.toContain(copy.practice.mapGroups.skill);
     expect(html).not.toContain(copy.state.practiceMapDisclaimer);
+  });
+
+  it("renders exportControl right-aligned above the history", () => {
+    expect(html).toContain("EXPORT_MARKER");
+    expect(html.indexOf("EXPORT_MARKER")).toBeLessThan(html.indexOf(copy.practice.historyTitle));
   });
 });
 
@@ -137,6 +148,10 @@ describe("PracticeView — storage unavailable", () => {
   it("renders no history", () => {
     expect(html).not.toContain(copy.practice.historyTitle);
   });
+
+  it("renders no exportControl", () => {
+    expect(html).not.toContain("EXPORT_MARKER");
+  });
 });
 
 describe("PracticeView — error status", () => {
@@ -153,5 +168,9 @@ describe("PracticeView — storage unavailable, with Reps", () => {
   it("shows the unavailable copy and no storage note", () => {
     expect(html).toContain(escaped(copy.practice.storageUnavailable));
     expect(html).not.toContain(copy.state.progressSavedInBrowserOnly);
+  });
+
+  it("renders no exportControl", () => {
+    expect(html).not.toContain("EXPORT_MARKER");
   });
 });
