@@ -2,7 +2,8 @@
 // out of StagePage.tsx so the branches below are unit-testable without
 // rendering React or mounting the Next.js router.
 import { copy } from "@/components/copy";
-import type { Challenge, Session } from "@/domain/session/schema";
+import type { DecorMode } from "@/decor";
+import type { Challenge, Session, SessionState } from "@/domain/session/schema";
 import type { Status } from "@/store";
 
 /**
@@ -87,4 +88,37 @@ export function isPlainActivationKey(event: KeyLike): boolean {
     !event.metaKey &&
     !event.shiftKey
   );
+}
+
+export interface StageDecorInput {
+  sessionState: SessionState;
+  revealComplete: boolean;
+  shuffling: boolean;
+  frozenThisVisit: boolean;
+}
+
+/**
+ * Story 8.5 / AD-12's freeze rule: the 3D shuffle layer behind the Stage
+ * animates only while a held, incomplete Challenge has a piece actually
+ * shuffling (Story 4.1's `useRevealMotion`) and the visit has not frozen
+ * yet; between presses on that same Stage it is `idle` (chunk warm, loop
+ * stopped) so the first shuffle can be 3D. Once frozen (see
+ * `shouldFreezeVisit`), Reroll (4.3) and Variation (5.8) piece shuffles stay
+ * DOM-only -- `frozenThisVisit` already latched true by then, so this never
+ * needs a special case for either.
+ */
+export function stageDecorMode(input: StageDecorInput): Extract<DecorMode, "shuffle" | "idle" | "frozen"> {
+  const { sessionState, revealComplete, shuffling, frozenThisVisit } = input;
+  if (sessionState !== "held" || revealComplete || frozenThisVisit) return "frozen";
+  return shuffling ? "shuffle" : "idle";
+}
+
+/**
+ * True once this Stage visit must never animate the shuffle layer again:
+ * the Brief has landed, or the session left `held` for an Attempt or later.
+ * `none` is not "has been held": it is also the pre-hydration snapshot on
+ * every full load, and `stageDecorMode` already freezes it on its own.
+ */
+export function shouldFreezeVisit(sessionState: SessionState, revealComplete: boolean): boolean {
+  return sessionState === "held" ? revealComplete : sessionState !== "none";
 }

@@ -9,19 +9,27 @@ const colors = Object.fromEntries(
 ) as DecorColors;
 
 /** A 1280x800 canvas whose Decor box holds a keep-out probe `keepOutWidthPx` wide (or none). */
-function build(keepOutWidthPx: number | null) {
+function build(keepOutWidthPx: number | null, size = { width: 1280, height: 800 }) {
   const probe = keepOutWidthPx === null ? null : { getBoundingClientRect: () => ({ width: keepOutWidthPx }) };
   const box = { querySelector: () => probe };
-  const canvas = { clientWidth: 1280, clientHeight: 800, parentElement: { closest: () => box } } as unknown as HTMLCanvasElement;
+  const canvas = {
+    get clientWidth() {
+      return size.width;
+    },
+    get clientHeight() {
+      return size.height;
+    },
+    parentElement: { closest: () => box },
+  } as unknown as HTMLCanvasElement;
   const camera = new THREE.PerspectiveCamera(35, 1280 / 800, 0.1, 50);
   camera.position.z = 6;
   const scene = new THREE.Scene();
-  buildShuffleScene({ scene, camera, colors, canvas });
+  const handle = buildShuffleScene({ scene, camera, colors, canvas });
   const stars: THREE.Mesh[] = [];
   scene.traverse((o) => {
     if (o instanceof THREE.Mesh) stars.push(o);
   });
-  return { scene, camera, stars };
+  return { scene, camera, stars, handle };
 }
 
 describe("buildShuffleScene", () => {
@@ -32,6 +40,15 @@ describe("buildShuffleScene", () => {
     for (const star of stars) {
       expect(Math.abs(star.position.x) / worldPerPx).toBeGreaterThanOrEqual(320 + config.decor.shuffle.keepOutMarginPx - 1e-6);
     }
+  });
+
+  it("re-seeds star heights when the first layout was 0x0 (remount at desktop size)", () => {
+    const size = { width: 0, height: 0 };
+    const { stars, handle } = build(640, size);
+    size.width = 1280;
+    size.height = 800;
+    handle.update(0, { x: 0, y: 0 });
+    expect(new Set(stars.map((s) => s.position.y.toFixed(4))).size).toBe(stars.length);
   });
 
   it("hides every star when there is no keep-out probe", () => {

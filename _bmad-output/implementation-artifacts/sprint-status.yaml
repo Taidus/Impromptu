@@ -77,7 +77,7 @@ development_status:
   4-2-reduced-motion-parity-for-the-reveal: review
   4-3-lock-inputs-and-reroll-the-rest: review
   4-4-name-the-lock-to-release-when-nothing-fits: backlog
-  4-5-hold-the-composition-still-with-skill-info-on-request: backlog
+  4-5-hold-the-composition-still-with-skill-info-on-request: done
   4-6-optional-reveal-sounds: backlog
   4-7-filming-contract-fit-rule-and-automated-legibility-checks: backlog
   epic-4-retrospective: optional
@@ -113,7 +113,7 @@ development_status:
   8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets: done
   8-3-motion-toggle-and-ambient-motion-control: done
   8-4-decor-component-gate-and-the-3d-hero: done
-  8-5-the-3d-shuffle-layer-on-the-stage-and-the-freeze-rule: in-progress
+  8-5-the-3d-shuffle-layer-on-the-stage-and-the-freeze-rule: review
   epic-8-retrospective: optional
 
   epic-9: backlog

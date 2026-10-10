@@ -44,7 +44,10 @@ export function buildShuffleScene(ctx: SceneContext): SceneHandle {
   let heightWorld = 0;
 
   // Measures the keep-out probe and places every star just outside it, alternating sides.
-  function layout(firstRun: boolean) {
+  function layout() {
+    // Seed y on the first layout and again after a <=1px-tall one (a 0x0 box
+    // remounting at desktop size), or every star would sit in one row.
+    const seedY = lastHeight <= 1;
     const canvasWidth = canvas.clientWidth;
     const canvasHeight = canvas.clientHeight || 1;
     worldPerPx = pxToWorld(camera, canvasHeight);
@@ -63,7 +66,7 @@ export function buildShuffleScene(ctx: SceneContext): SceneHandle {
       // Deterministic spread (golden-ratio offsets), not random: a decorative margin scene needs variety, not entropy.
       const xPx = side * (minXPx + ((i * 0.618033) % 1) * spanPx);
       star.mesh.position.x = xPx * worldPerPx;
-      if (firstRun) star.yWorld = (i / shuffle.starCount - 0.5) * heightWorld;
+      if (seedY) star.yWorld = (i / shuffle.starCount - 0.5) * heightWorld;
       star.mesh.position.y = star.yWorld;
     });
 
@@ -71,13 +74,13 @@ export function buildShuffleScene(ctx: SceneContext): SceneHandle {
     lastHeight = canvasHeight;
   }
 
-  layout(true);
+  layout();
 
   return {
     update(dtSec, pointer) {
       void pointer; // the shuffle scene ignores the cursor; only the hero reacts to it.
 
-      if (canvas.clientWidth !== lastWidth || canvas.clientHeight !== lastHeight) layout(false);
+      if (canvas.clientWidth !== lastWidth || canvas.clientHeight !== lastHeight) layout();
 
       const driftWorld = shuffle.driftPxPerSec * worldPerPx * dtSec;
       const halfHeight = heightWorld / 2;

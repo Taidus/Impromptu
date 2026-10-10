@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { baseChallenge } from "@/domain/session/session-fixture";
+import type { SessionState } from "@/domain/session/schema";
 import type { Status } from "@/store";
-import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import {
+  canHandleEscape,
+  isPlainActivationKey,
+  isPlainEscape,
+  isStageError,
+  shouldFreezeVisit,
+  shouldRequestNewChallenge,
+  stageDecorMode,
+  stageMeta,
+} from "./logic";
 
 const STATUSES: Status[] = ["loading", "ready", "error"];
 
@@ -92,6 +102,61 @@ describe("isPlainEscape", () => {
 
   it("is false for other keys", () => {
     expect(isPlainEscape({ ...plain, key: "Enter" })).toBe(false);
+  });
+});
+
+describe("stageDecorMode", () => {
+  const base = { sessionState: "held" as SessionState, revealComplete: false, shuffling: true, frozenThisVisit: false };
+
+  it("is shuffle when held, incomplete, shuffling, and not yet frozen", () => {
+    expect(stageDecorMode(base)).toBe("shuffle");
+  });
+
+  it("is idle between presses (not shuffling): chunk warm, loop stopped", () => {
+    expect(stageDecorMode({ ...base, shuffling: false })).toBe("idle");
+  });
+
+  it("is frozen once the reveal is complete, even while shuffling", () => {
+    expect(stageDecorMode({ ...base, revealComplete: true })).toBe("frozen");
+  });
+
+  it("is frozen once the visit has frozen, even while shuffling", () => {
+    expect(stageDecorMode({ ...base, frozenThisVisit: true })).toBe("frozen");
+  });
+
+  for (const sessionState of ["none", "attempt", "finished", "saved"] as const) {
+    it(`is frozen for sessionState=${sessionState}`, () => {
+      expect(stageDecorMode({ ...base, sessionState })).toBe("frozen");
+    });
+  }
+});
+
+describe("shouldFreezeVisit", () => {
+  it("is false while held with an incomplete reveal", () => {
+    expect(shouldFreezeVisit("held", false)).toBe(false);
+  });
+
+  it("is true once held with a complete reveal", () => {
+    expect(shouldFreezeVisit("held", true)).toBe(true);
+  });
+
+  it("is true outside held, even with an incomplete reveal", () => {
+    expect(shouldFreezeVisit("attempt", false)).toBe(true);
+  });
+
+  it("is false for none (the pre-hydration snapshot is not 'has been held')", () => {
+    expect(shouldFreezeVisit("none", false)).toBe(false);
+  });
+
+  it("never latches across a full load's none -> held(incomplete) walk", () => {
+    let frozen = false;
+    for (const [state, complete] of [["none", false], ["held", false]] as const) {
+      frozen ||= shouldFreezeVisit(state, complete);
+    }
+    expect(frozen).toBe(false);
+    expect(stageDecorMode({ sessionState: "held", revealComplete: false, shuffling: false, frozenThisVisit: frozen })).toBe(
+      "idle",
+    );
   });
 });
 

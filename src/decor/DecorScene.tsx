@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { config } from "@/config/app";
-import type { DecorMode, DecorSceneName } from "./Decor";
+import { modeLoops, type DecorMode, type DecorSceneName } from "./Decor";
 import { buildHeroScene } from "./scenes/hero";
 import { buildShuffleScene } from "./scenes/shuffle";
 import { readDecorColors, type SceneContext, type SceneHandle } from "./scenes/types";
@@ -76,10 +76,13 @@ export default function DecorScene({ scene, mode, onState }: DecorSceneProps) {
     let contextLost = false;
     let currentMode: DecorMode | null = null;
     let reportRunning = true;
+    // `idle` before anything has painted keeps the still and an empty canvas.
+    let hasPainted = false;
 
     const paint = (dtSec: number) => {
       handle.update(dtSec, pointer);
       gl.render(threeScene, camera);
+      hasPainted = true;
       canvas.className = `${CANVAS_CLASS} opacity-100`;
     };
     const fail = () => {
@@ -104,7 +107,7 @@ export default function DecorScene({ scene, mode, onState }: DecorSceneProps) {
     };
     // One frame while the loop is stopped (frozen start, resize while frozen or hidden).
     const paintStill = () => {
-      if (contextLost) return;
+      if (contextLost || currentMode === null || (currentMode === "idle" && !hasPainted)) return;
       try {
         paint(0);
       } catch {
@@ -112,7 +115,7 @@ export default function DecorScene({ scene, mode, onState }: DecorSceneProps) {
       }
     };
     const sync = () => {
-      const run = currentMode !== null && currentMode !== "frozen" && !document.hidden && !contextLost;
+      const run = currentMode !== null && modeLoops(currentMode) && !document.hidden && !contextLost;
       if (run === looping) return;
       looping = run;
       if (run) {
@@ -125,7 +128,11 @@ export default function DecorScene({ scene, mode, onState }: DecorSceneProps) {
     const setMode = (next: DecorMode) => {
       if (next === currentMode) return;
       currentMode = next;
-      if (next === "frozen") {
+      if (next === "idle" && !hasPainted) {
+        // Built and warm, nothing painted: Decor keeps reporting `loading`.
+        sync();
+      } else if (!modeLoops(next)) {
+        // `frozen`, or `idle` between shuffles: hold the last frame.
         sync();
         paintStill();
         report("frozen");
@@ -144,7 +151,7 @@ export default function DecorScene({ scene, mode, onState }: DecorSceneProps) {
       camera.position.z =
         FIT_RADIUS_WORLD / Math.sin(THREE.MathUtils.degToRad(FOV_DEG / 2)) / Math.min(1, camera.aspect);
       camera.updateProjectionMatrix();
-      if (!looping && currentMode !== null) paintStill();
+      if (!looping) paintStill();
     };
     resize(container.clientWidth, container.clientHeight);
     const resizeObserver = new ResizeObserver(([entry]) => {
