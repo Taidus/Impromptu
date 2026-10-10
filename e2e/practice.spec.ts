@@ -72,6 +72,44 @@ test("/practice with Reps shows the storage note in the body", async ({ page }) 
   await expect(page.getByText(copy.state.nothingHereYet)).toHaveCount(0);
 });
 
+// Story 6.2 AC: Reps render newest first with the meta row, the Brief and
+// Reflection, the TIMED segment, and the Retry/Variation pill.
+test("/practice shows Rep cards: newest first, the RETRY pill, TIMED, and Reflection", async ({ page }) => {
+  const olderNewRep = Rep.parse({
+    id: "323e4567-e89b-42d3-a456-426614174000",
+    challenge: baseChallenge,
+    finishedAt: "2026-10-01T09:00:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  const newerRetryRep = Rep.parse({
+    id: "423e4567-e89b-42d3-a456-426614174000",
+    challenge: { ...baseChallenge, timeLimitSec: 300, origin: { kind: "retry", fromRepId: olderNewRep.id } },
+    finishedAt: "2026-10-09T09:00:00.000Z",
+    timeUsedSec: 252,
+    reflection: { worked: "The loose grip.", change: "Slow down more." },
+  });
+  await seed(page, {
+    "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [olderNewRep, newerRetryRep] },
+  });
+  await page.goto("/practice");
+
+  const main = page.locator("main");
+  await expect(main.getByText(copy.state.progressSavedInBrowserOnly)).toBeVisible({ timeout: 15_000 });
+
+  const cards = main.getByRole("listitem");
+  await expect(cards).toHaveCount(2);
+  // Newest (the retry) first.
+  await expect(cards.nth(0)).toContainText(copy.rep.retry);
+  await expect(cards.nth(0)).toContainText(`${copy.stage.mode.timed} 4:12`);
+  await expect(cards.nth(0)).toContainText(copy.rep.worked);
+  await expect(cards.nth(0)).toContainText("The loose grip.");
+  await expect(cards.nth(0)).toContainText(copy.rep.change);
+  await expect(cards.nth(0)).toContainText("Slow down more.");
+  await expect(cards.nth(1)).not.toContainText(copy.rep.retry);
+  await expect(cards.nth(1)).not.toContainText(copy.stage.mode.timed);
+});
+
 test("/practice with an active Attempt offers Resume", async ({ page }) => {
   const session = Session.parse(attemptSession);
   await seed(page, { "impromptu:session": { v: config.storage.schemaVersions.session, rev: 1, data: session } });

@@ -2,7 +2,7 @@
 title: 'Story 6.2: Practice History Rep cards'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '053bafa'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -44,12 +44,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/components/copy.ts` -- `copy.levelName`, `copy.rep.*`, `copy.practice.historyTitle`.
-- [ ] `src/components/practice/RepCard.tsx` -- pure card.
-- [ ] `src/components/practice/PracticeHistory.tsx` -- sorted list (`<ol>`), hidden `h2`.
-- [ ] `src/components/practice/PracticeView.tsx` + `PracticeClient.tsx` -- `reps` prop wired.
-- [ ] `src/components/practice/rep-card.test.ts` -- the unit cases above.
-- [ ] `e2e/practice.spec.ts` -- seeded two-Rep case.
+- [x] `src/components/copy.ts` -- `copy.levelName`, `copy.rep.*`, `copy.practice.historyTitle`.
+- [x] `src/components/practice/RepCard.tsx` -- pure card.
+- [x] `src/components/practice/PracticeHistory.tsx` -- sorted list (`<ol>`), hidden `h2`.
+- [x] `src/components/practice/PracticeView.tsx` + `PracticeClient.tsx` -- `reps` prop wired.
+- [x] `src/components/practice/rep-card.test.ts` -- the unit cases above.
+- [x] `e2e/practice.spec.ts` -- seeded two-Rep case.
 
 **Acceptance Criteria:**
 - Given Reps, then cards render newest first with the meta row, the Brief, and expanded Reflection answers; timed Reps show `TIMED m:ss`.
@@ -59,9 +59,33 @@ context:
 
 ## Implementation Notes
 
+- Review fixes by an Opus agent: `repCount` derived from `reps.length`; `Date.parse` ordering; `role="list"`; TIMED only with both fields; blank reflection answers skipped; `hyphens-auto`; one shared `levelName` const. Verification after patches: lint, typecheck, 636 unit tests, build (static), check:static, 198 e2e all pass. Checked in Chrome with two seeded Reps: cream cards on paper, meta row with TIMED and the RETRY pill, Brief lede, reflection under labels, newest first.
+
+- `copy.levelName` is a new top-level map, distinct from the existing `copy.stage.levelName` (same values) -- the spec asks for this name explicitly rather than reusing the Stage one. `copy.stage.mode.timed` ("TIMED") is reused as-is for the meta row's TIMED segment rather than adding a duplicate `copy.rep.timed`.
+- `PracticeView` gained a required `reps: Rep[]` prop; `practice.test.ts`'s `base` fixture was updated to pass `reps: []` so the existing 6.1 tests keep compiling and passing unchanged otherwise.
+- `RepCard` is a plain `div` (not its own heading); `PracticeHistory` supplies the single visually-hidden `h2` (`copy.practice.historyTitle`) for the list. Sort is `Array.prototype.sort` (stable per spec) comparing `finishedAt` strings directly -- no date parsing needed since the format is ISO 8601.
+- Verified "retired library entry" handling with a unit test using a made-up `skl.*`-pattern id (not present in the production library) with its own `revealText`, confirming the card displays it -- `RepCard` never imports `@/domain/library` or does any lookup.
+- Full verification after implementation: lint clean; typecheck clean; 627 unit tests (38 files) pass, including the 12 new `rep-card.test.ts` cases; production build succeeds with `/practice` static; `check:static` OK; `E2E_PORT=3102 npm run test:e2e` -- 198 e2e specs pass across chromium, webkit, and firefox, including the new seeded two-Rep Practice spec.
+- Not committed/pushed per the task's instructions; left on `story/6-2-rep-cards` for the overseer to review and merge.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | verif-gap | `m:ss` zero padding untested (252 s hides it) | low | Pre-verified | patch |
+| 2 | verif-gap, edge, blind | `repCount` and `reps` can disagree; empty state could render a hidden heading over an empty list | medium | Pre-verified; derive from `reps.length` | patch |
+| 3 | edge | Lexicographic `finishedAt` sort misorders differing fractional precision | low | `Date.parse` compare | patch |
+| 4 | edge | Duplicate Rep ids → duplicate React keys | low | Store writes unique ids; Export refines uniqueness; not worth a guard | reject |
+| 5 | edge, blind | `timeUsedSec ?? 0` fabricates "TIMED 0:00" | low | Gate on both fields | patch |
+| 6 | edge, blind | Blank reflection answers render empty labelled blocks | medium | `savedSession` fixture uses empty strings | patch |
+| 7 | blind | `<ol>` loses list semantics under Tailwind preflight in Safari | low | `role="list"` | patch |
+| 8 | blind, implementer | `copy.levelName` duplicates `copy.stage.levelName` | low | Hoist one const | patch |
+| 9 | blind | Read-only rule untested | low | One assertion | patch |
+| 10 | blind | Spec file absent from the diff | false | Excluded from the review diff on purpose | reject |
+| 11 | blind | `makeRep` overrides untyped | low | `Partial<Rep>` | patch |
+| 12 | blind | Missing `hyphens-auto` vs the Stage's long-text pattern | low | One class | patch |
 
 ## Verification
 
