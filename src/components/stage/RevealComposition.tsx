@@ -3,7 +3,9 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { copy } from "@/components/copy";
 import { LineButton } from "@/components/LineButton";
+import { SkillInfo } from "@/components/setup/SkillInfo";
 import { SunButton } from "@/components/SunButton";
+import type { Skill } from "@/domain/library/schema";
 import type { Challenge, InputKind, Locks, RevealedKind } from "@/domain/session/schema";
 import type { RerollShuffle, RevealMotion } from "./useRevealMotion";
 import { BriefBlock, EmptySlot, landingMotion, LockToggle, revealedMotion, ScrapGroup, ShufflingPiece, TicketTab } from "./pieces";
@@ -34,6 +36,7 @@ export function RevealComposition({
   motion,
   locks,
   reshuffle = NO_RESHUFFLE,
+  skills = [],
   onToggleLock,
   onReroll,
 }: {
@@ -44,6 +47,8 @@ export function RevealComposition({
   locks: Locks;
   /** Story 4.3: the changed pieces' reshuffle after a Reroll (`useRerollShuffle`, owned by StagePage). */
   reshuffle?: RerollShuffle;
+  /** Story 4.5: the loaded library's Skills, for the Skill info popover's glossary. `[]` renders no button (mirrors Setup's own `state.library` gate). */
+  skills?: readonly Skill[];
   onToggleLock: (kind: InputKind) => void;
   onReroll: () => void;
 }) {
@@ -134,6 +139,18 @@ export function RevealComposition({
 
   const showSunButton = next !== null;
 
+  // Story 4.5 / EXPERIENCE.md -> Component Patterns: a collapsed Skill Info
+  // button beside the Skill tab, shown once Held for every origin (unlike
+  // Lock/Reroll, Retry included). Never mounted mid-Reveal, so it can never
+  // "open on its own"; until then an empty slot of the same size holds its
+  // place so the Skill/Medium row doesn't shift when Held arrives.
+  const skillInfo =
+    next === null && skills.length > 0 ? (
+      <SkillInfo skills={skills} ground="lilac" />
+    ) : (
+      <span aria-hidden="true" className="size-target-min shrink-0" />
+    );
+
   return (
     <>
       {/* Each Lock disc straddles its piece's left edge, mostly outside it,
@@ -142,10 +159,16 @@ export function RevealComposition({
           pieces keep the full column width. Phone has no margin, so pl-14
           keeps disc and caption on screen. gap-x-14: room for the Medium
           disc and caption between the tabs. Reserved from the start, so
-          nothing reflows when Held arrives. */}
+          nothing reflows when Held arrives. Desktop never wraps the tabs:
+          the widest pair shares the row, each value wrapping inside its own
+          tab, and the Skill Info button sits in the margin left of the Skill
+          disc so it costs the row no width. */}
       <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap desktop:pl-0 desktop:stage-short:gap-stage-gap-compact">
-        <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact">
-          {tab("skill", 1.5)}
+        <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact desktop:flex-nowrap">
+          <span className="relative inline-flex min-w-0 items-center gap-2">
+            {tab("skill", 1.5)}
+            <span className="desktop:absolute desktop:right-full desktop:mr-13">{skillInfo}</span>
+          </span>
           {tab("medium", -1.5)}
         </li>
         {scrap.topic.present || scrap.style.present || scrap.constraint.present ? (
