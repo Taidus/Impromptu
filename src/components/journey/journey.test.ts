@@ -57,9 +57,13 @@ describe("Seam", () => {
 });
 
 describe("copy.journey.posters", () => {
-  for (const [name, title] of Object.entries(copy.journey.posters)) {
+  for (const [name, poster] of Object.entries(copy.journey.posters)) {
     it(`"${name}" title ends with a full stop`, () => {
-      expect(title.endsWith(".")).toBe(true);
+      expect(poster.title.endsWith(".")).toBe(true);
+    });
+
+    it(`"${name}" has non-empty alt text`, () => {
+      expect(poster.alt.trim().length).toBeGreaterThan(0);
     });
   }
 });

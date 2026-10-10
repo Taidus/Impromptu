@@ -55,3 +55,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-9-the-challenge-stage-page-shell.md`
   summary: Add the page grain overlay (0.1 opacity, overlay blend) to the Stage, suppressed inside the safe area, once Story 8.2 ships `grain.png`.
   evidence: DESIGN.md -> Colors asks for grain suppressed inside the Stage safe area; no grain asset exists yet. Story 3.9's patch pass added only the lilac-deep edge fade (CSS gradient, tokens only).
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets.md`
+  summary: Route the orbit thread through margins and gutters (crossing sides inside the text-free seams) and draw it on scroll under the 8.3 motion gate, instead of the current near-vertical left-edge line.
+  evidence: DESIGN → Orbit thread wants it to wind around the page; the current path satisfies 'never crosses text' by hugging x≈1% of the viewport.

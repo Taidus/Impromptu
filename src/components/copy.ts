@@ -135,10 +135,21 @@ export const copy = {
       constraint: "CONSTRAINT",
       brief: "BRIEF",
     },
+    // Story 8.2: title is the figcaption word; alt is the poster artwork's
+    // own alt text (the title alone doesn't describe the image).
     posters: {
-      reveal: "reveal.",
-      make: "make.",
-      reflect: "reflect.",
+      reveal: {
+        title: "reveal.",
+        alt: "A blue eye inside a gold-edged triangle, set against a pink moon, UFOs and a shooting star, above teal mountains.",
+      },
+      make: {
+        title: "make.",
+        alt: "Two glowing blue hands reaching toward each other, fingertips almost touching, on a blue-to-magenta gradient.",
+      },
+      reflect: {
+        title: "reflect.",
+        alt: "A dark red dahlia, an apple, mushrooms and a starry glass orb, with a full moon and rainbow behind.",
+      },
     },
     footer: {
       practice: "Practice",

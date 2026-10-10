@@ -43,7 +43,7 @@ test("the page never scrolls horizontally at 320px", async ({ page }) => {
 test("posters are hidden on phones and visible on desktop", async ({ page }) => {
   await page.goto("/");
   // Scope to the figcaption, the only place the poster title renders.
-  const poster = page.locator("figcaption", { hasText: copy.journey.posters.reveal });
+  const poster = page.locator("figcaption", { hasText: copy.journey.posters.reveal.title });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(poster).toBeHidden();
