@@ -109,6 +109,19 @@ export const copy = {
     // Empty slot screen-reader text, joined as "{piece}, not revealed yet."
     // (EXPERIENCE.md -> Component Patterns -> Empty slot).
     notRevealedYet: "not revealed yet.",
+    // Story 4.3: the Lock toggle's fixed accessible name (DESIGN.md -> Lock
+    // toggle) -- it never relabels itself; only `aria-pressed` and the
+    // visible caption beside it carry locked/unlocked -- and that caption.
+    lock: {
+      toggleLabel: (pieceLabel: string) => `Lock ${pieceLabel}`,
+      lockedCaption: "LOCKED",
+    },
+    // Story 4.3: Reroll's own live-region lead-in (EXPERIENCE.md -> Rerolling).
+    rerolled: "Rerolled.",
+    // Story 4.3 interim: a Reroll that no Challenge fits announces this
+    // (EXPERIENCE.md -> Lock conflict's opening sentence). Story 4.4 adds the
+    // inline message naming the Lock plus its Unlock button.
+    rerollFailed: "No challenge fits these locks.",
     // Story 5.2/5.3: the Countdown's own caption and time's-up copy.
     countdown: {
       caption: (minutes: number) => `TIME LIMIT ${minutes} MIN`,

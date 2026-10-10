@@ -2,7 +2,7 @@
 // which one lands next, and what the aria-live region says. Kept out of the
 // React components so they're unit-testable without rendering anything.
 import { copy } from "@/components/copy";
-import type { Challenge, RevealedKind } from "@/domain/session/schema";
+import type { Challenge, InputKind, RevealedKind } from "@/domain/session/schema";
 import { presentKinds } from "@/domain/session/session-reducer";
 
 /** The next kind to land, or `null` once every present kind (including the Brief) has. */
@@ -41,8 +41,26 @@ function landedAnnouncement(challenge: Challenge, kinds: readonly RevealedKind[]
 }
 
 /**
+ * Story 4.3: the Input kinds whose value differs between two Challenges, in
+ * reveal order (a kind that appears or disappears counts as changed only
+ * when the new Challenge has it). Drives the Reroll's reshuffle and its
+ * announcement.
+ */
+export function changedInputKinds(prev: Challenge | null, next: Challenge): InputKind[] {
+  return presentKinds(next).filter(
+    (kind): kind is InputKind => kind !== "brief" && prev?.inputs[kind]?.id !== next.inputs[kind]?.id,
+  );
+}
+
+/** EXPERIENCE.md -> Rerolling: "Rerolled." followed by each changed Input and the Brief. */
+export function rerollAnnouncement(prev: Challenge | null, next: Challenge): string {
+  const changed = changedInputKinds(prev, next).map((kind) => announcementFor(kind, next));
+  return [copy.stage.rerolled, ...changed, next.brief].join(" ");
+}
+
+/**
  * What the Stage's live region should say after a session change, or `null`
- * to leave it as is. `prevChallengeId`/`prevRevealed` are what the region
+ * to leave it as is. `prevChallenge`/`prevRevealed` are what the region
  * last saw; the caller seeds them with the restored state on its first
  * hydrated render, so whatever a fresh mount already finds held is never
  * "new" here -- `restoreAnnouncement` (below) speaks for it instead.
@@ -52,17 +70,30 @@ function landedAnnouncement(challenge: Challenge, kinds: readonly RevealedKind[]
  * another tab announces all of them, not just the last).
  */
 export function liveAnnouncement(
-  prevChallengeId: string | null,
+  prevChallenge: Challenge | null,
   prevRevealed: readonly RevealedKind[],
   challenge: Challenge | null,
   revealed: readonly RevealedKind[],
   quickReveal: boolean,
 ): string | null {
-  if (challenge === null) return prevChallengeId === null ? null : "";
-  const isNew = challenge.id !== prevChallengeId;
+  if (challenge === null) return prevChallenge === null ? null : "";
+  const isNew = challenge.id !== prevChallenge?.id;
+  if (isNew && challenge.origin.kind === "reroll") return rerollAnnouncement(prevChallenge, challenge);
   if (isNew && quickReveal && isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
   const text = landedAnnouncement(challenge, isNew ? revealed : revealed.filter((kind) => !prevRevealed.includes(kind)));
   return text ?? (isNew ? "" : null);
+}
+
+/**
+ * The live region's next text, given what it says now and a new announcement
+ * (`null`: leave it). Identical non-empty text is cleared and queued as
+ * `pending` for the caller to set a tick later -- a region whose text doesn't
+ * change is not spoken again (two Rerolls, or two failed ones, in a row).
+ */
+export function nextLiveText(current: string, text: string | null): { text: string; pending: string | null } {
+  if (text === null) return { text: current, pending: null };
+  if (text !== "" && text === current) return { text: "", pending: text };
+  return { text, pending: null };
 }
 
 /**

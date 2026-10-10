@@ -28,13 +28,14 @@ export interface StoreState {
 /**
  * The command layer (AD-7): calls into `compose()`, or otherwise needs more
  * than one storage slice (session + history) in one transition. `vary` is
- * phase 2 (Story 5.8); `reroll` is a later story.
+ * phase 2 (Story 5.8).
  */
 export type StoreCommand =
   | { type: "new_challenge" }
   | { type: "finish_rep" }
   | { type: "save_rep" }
   | { type: "retry"; fromRepId: string }
+  | { type: "reroll" }
   | { type: "clear_all_data" };
 
 export interface StoreDeps {

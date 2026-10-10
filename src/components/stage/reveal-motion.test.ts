@@ -434,7 +434,7 @@ describe("RevealComposition (Story 4.2, reduced landing)", () => {
 
   it("the landing Skill tile gets reducedLandMs", () => {
     const html = renderToStaticMarkup(
-      createElement(RevealComposition, { challenge: fullChallenge, revealed: [], motion: stubMotion("skill") }),
+      createElement(RevealComposition, { challenge: fullChallenge, revealed: [], motion: stubMotion("skill"), locks: {}, onToggleLock: () => {}, onReroll: () => {} }),
     );
     expect(html).toMatch(new RegExp(`data-kind="skill"[^>]*class="[^"]*animate-reduced-fade[^"]*"[^>]*style="${ms}`));
   });
@@ -445,6 +445,9 @@ describe("RevealComposition (Story 4.2, reduced landing)", () => {
         challenge: fullChallenge,
         revealed: ["skill", "medium", "topic", "style", "constraint"],
         motion: stubMotion("brief"),
+        locks: {},
+        onToggleLock: () => {},
+        onReroll: () => {},
       }),
     );
     expect(html).toMatch(new RegExp(`data-kind="brief"[^>]*class="[^"]*animate-reduced-fade[^"]*"[^>]*style="${ms}`));
