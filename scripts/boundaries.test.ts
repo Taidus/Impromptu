@@ -24,6 +24,8 @@ describe("layer boundaries", () => {
     ["app -> server", "src/app/x/page.tsx", 'import { x } from "@/server/x"; export const y = x;'],
     ["shared -> config", "src/shared/x.ts", 'import { config } from "@/config/app"; export const c = config;'],
     ["decor -> domain", "src/decor/x.tsx", 'import { x } from "@/domain/x"; export const y = x;'],
+    ["decor dynamic -> store", "src/decor/x.tsx", 'export const load = () => import("@/store/x");'],
+    ["decor dynamic non-literal", "src/decor/x.tsx", 'const p = "@/store/x"; export const load = () => import(p);'],
     ["store -> server", "src/store/x.ts", 'import { x } from "@/server/x"; export const y = x;'],
     ["config -> domain", "src/config/x.ts", 'import { x } from "@/domain/x"; export const y = x;'],
     ["server -> components", "src/server/x.ts", 'import { x } from "@/components/x"; export const y = x;'],
@@ -31,6 +33,8 @@ describe("layer boundaries", () => {
   const expectedRule: Record<string, string> = {
     "domain Date.now()": "no-restricted-properties",
     "domain new Date()": "no-restricted-syntax",
+    "decor dynamic -> store": "no-restricted-syntax",
+    "decor dynamic non-literal": "no-restricted-syntax",
   };
 
   for (const [name, filePath, code] of violations) {
@@ -44,6 +48,8 @@ describe("layer boundaries", () => {
     ["domain -> domain (own submodule)", "src/domain/session/x.ts", 'import { Level } from "@/domain/library/schema"; export const l = Level;'],
     ["adapters -> domain", "src/adapters/x.ts", 'import type { Clock } from "@/domain/ports"; export const c: Clock = { now: () => 0 };'],
     ["app/api -> server", "src/app/api/x/route.ts", 'import { x } from "@/server/x"; export const y = x;'],
+    ["decor -> config", "src/decor/x.ts", 'import { config } from "@/config/app"; export const d = config.decor;'],
+    ["decor dynamic -> own file", "src/decor/x.tsx", 'export const load = () => import("./DecorScene");'],
   ];
 
   for (const [name, filePath, code] of allowed) {

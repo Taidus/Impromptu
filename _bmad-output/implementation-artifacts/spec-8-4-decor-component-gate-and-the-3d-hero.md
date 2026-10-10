@@ -2,7 +2,7 @@
 title: 'Story 8.4: Decor component, gate, and the 3D hero'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '762caef'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -77,18 +77,23 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `package.json` / `package-lock.json` -- add `three@0.186.1`, `@types/three@0.186.0` (exact).
-- [ ] `src/config/app.ts` -- `config.decor`.
-- [ ] `src/decor/gate.ts` + `gate.test.ts` -- `DecorEnvironment`, `isLowPower`, `decorGate`, `readDecorEnvironment`.
-- [ ] `src/decor/useDecorGate.ts` -- gate hook with the `data-motion` observer and reduced-motion listener.
-- [ ] `src/decor/scenes/types.ts`, `hero.ts`, `shuffle.ts` -- scene builders, `readDecorColors`, `pxToWorld`.
-- [ ] `src/decor/DecorScene.tsx` -- renderer, loop, freeze, visibility, pointer, dispose.
-- [ ] `src/decor/Decor.tsx` + `decor.test.ts` -- `DecorView`, `shouldRequestScene`, `Decor` with `next/dynamic`; `src/decor/index.ts`.
-- [ ] `src/styles/tokens.css` -- `--dur-decor-fade`, the `data-motion="off"` canvas rule.
-- [ ] `src/components/setup/SetupHero.tsx` -- the 1280px+ art column with the hero bloom and `<Decor scene="hero" mode="ambient">`.
-- [ ] `eslint.config.mjs` + `scripts/boundaries.test.ts` -- the decor dynamic-import rule and its cases.
-- [ ] `e2e/decor.spec.ts` -- cases 1–5.
-- [ ] Record the `/` First Load JS before/after in Verification; remove `src/decor/.gitkeep`.
+- [x] `package.json` / `package-lock.json` -- add `three@0.186.1`, `@types/three@0.186.0` (exact).
+- [x] `src/config/app.ts` -- `config.decor`.
+- [x] `src/decor/gate.ts` + `gate.test.ts` -- `DecorEnvironment`, `isLowPower`, `decorGate`, `readDecorEnvironment`.
+- [x] `src/decor/useDecorGate.ts` -- gate hook with the `data-motion` observer and reduced-motion listener.
+- [x] `src/decor/scenes/types.ts`, `hero.ts`, `shuffle.ts` -- scene builders, `readDecorColors`, `pxToWorld`.
+- [x] `src/decor/DecorScene.tsx` -- renderer, loop, freeze, visibility, pointer, dispose.
+- [x] `src/decor/Decor.tsx` + `decor.test.ts` -- `DecorView`, `shouldRequestScene`, `Decor` with `next/dynamic`; `src/decor/index.ts`.
+- [x] `src/styles/tokens.css` -- `--dur-decor-fade`, the `data-motion="off"` canvas rule.
+- [x] `src/components/setup/SetupHero.tsx` -- the 1280px+ art column with the hero bloom and `<Decor scene="hero" mode="ambient">`.
+- [x] `eslint.config.mjs` + `scripts/boundaries.test.ts` -- the decor dynamic-import rule and its cases.
+- [x] `e2e/decor.spec.ts` -- cases 1–5.
+- [x] Record the `/` First Load JS before/after in Verification; remove `src/decor/.gitkeep`.
+- [x] Review fixes: crash/NFR-7 (per-mount imperative canvas, guarded renderer construction, `SceneBoundary` around the dynamic scene, `failed` latch).
+- [x] Review fixes: visuals (camera fit, metalness 0.85 / roughness 0.2, decay-0 point lights, still fades out once painted, Decor box top 45% above the bloom, bloom `sizes`).
+- [x] Review fixes: lifecycle (0x0 box = frozen, context lost/restored, `running` from the first painted frame, still frame on freeze/resize-while-stopped, `setPixelRatio` in resize, `readDecorColors` throws on empty tokens, shuffle hides stars without a probe, gate reuses `readDecorEnvironment` and waits for `data-motion`, dead `fadeMs` removed).
+- [x] Review fixes: tests (`shuffle.test.ts`, `SceneBoundary` unit test, non-literal dynamic-import lint rule + boundaries case, e2e CI-aware skip, RAF stop after Motion off, visibility resume, low-power, 1279px, reduced-motion chunk check, awaited `threeChunks`, chunk pathname, renderer-throws case).
+- [x] `[defer]` recorded in `deferred-work.md` and `docs/launch-checklist.md` (Design decisions).
 
 **Acceptance Criteria:**
 - Given `/` is requested, then the HTML already contains the hero fallback still (`data-decor-state="fallback"`, `chrome-ring`) and no canvas, and `check:static` lists `/` as static.
@@ -100,9 +105,46 @@ context:
 
 ## Implementation Notes
 
+- Gate: `decorGate` composes `webgl2 && !reducedMotion && !motionOff && !isLowPower(env)`; `useDecorGate` probes WebGL2 once per mount (cached in a closure var, never re-probed), then re-evaluates on the reduced-motion `MediaQueryList` `change` event and a `MutationObserver` of `html[data-motion]`. The first evaluation is deferred one `queueMicrotask`: `MotionSync` mirrors a stored `ambientMotion:false` onto `data-motion` from its own mount effect, and store hydration (`useAppStore`'s own effect) can still be mid-flight on the very first synchronous effect pass, so an un-deferred read raced ahead of that sync and fired the dynamic import before the attribute landed (caught by `e2e/decor.spec.ts`'s "stored Motion OFF" case).
+- Dynamic load: `Decor.tsx` declares `const DecorScene = dynamic(() => import("./DecorScene"), { ssr: false })` at module scope; `requested` is a one-way latch held in `useState` and advanced with React's documented render-time "adjust state while rendering" pattern (`if (next !== requested) setRequested(next)`), not an Effect — `shouldRequestScene`'s own recursive-on-itself shape (`requested || ...`) would otherwise read as the classic "setState synchronously in an effect" the React Compiler's `react-hooks/set-state-in-effect` rule flags. `DecorScene` keeps its renderer/tick/mode in refs assigned only inside effects (never during render), per the same rule family (`react-hooks/refs`).
+- Scene structure: `scenes/hero.ts` builds a `Group` of three tilted `TorusGeometry` rings plus one `IcosahedronGeometry` blob, lit by a `HemisphereLight` and three `PointLight`s in the foil tokens; cursor depth eases the group's position with `1 - exp(-dt*1000/depthEaseMs)`. `scenes/shuffle.ts` places `starCount` octahedra in the two bands outside the measured `[data-decor-keep-out]` probe (deterministic golden-ratio spread, not `Math.random`), drifting and wrapping vertically; it ignores the pointer. Colors come only from `readDecorColors()` reading the CSS custom properties at runtime — no hex literals in `src/decor`.
+- Deviation: `SetupHero`'s art column uses `xl:grid-cols-[80fr_20fr]`, not the spec's literal `[46fr_54fr]`. At 1280px a 54fr art column leaves column 1 only ~515px wide, and the headline/Mediums/select rows wrap onto extra lines, pushing "Get a challenge" to ~910px — below the existing `setup-mediums-and-challenge.spec.ts` "visible without scrolling" budget (800px). `80fr_20fr` (measured identically across chromium/webkit/firefox) keeps column 1 at 896px, landing the button at 784.8px (~15px of margin) while still showing the hero art at every tested width.
+
+- Review pass (crash): `DecorScene` renders only a container `div`; its mount effect creates and appends a fresh `<canvas>` and removes it on cleanup, so Strict Mode's mount/cleanup/mount never builds a renderer on a force-lost context. Renderer, `readDecorColors`, and scene construction sit in one `try`; a throw (or a throw inside a frame) reports `"failed"`. `Decor` wraps the `next/dynamic` scene in `SceneBoundary` (class error boundary: renders nothing, calls `onFail`) for chunk-load and effect errors; both paths set a `failed` latch, so the still stays and the scene is never requested again for that mount.
+- Review pass (loop): one closure-owned `sync()` decides `setAnimationLoop(tick | null)` from mode, `document.hidden`, and context loss; `setMode` arrives through a ref from the mode effect (idempotent). `"running"` is reported by the first painted tick after each start; `"frozen"` by `setMode`, which also paints one still frame. Resize re-applies `setPixelRatio`, refits the camera (`z = 2 / sin(fov/2) / min(1, aspect)`; R=2 rather than 1.8 to leave room for the 40px cursor shift), and paints a frame when stopped.
+- Review pass (box): `Decor` observes its own box with a `ResizeObserver`; until it measures non-zero, the scene mode is `frozen`, so below `xl` (aside `display:none`) three is never fetched. `DecorView` takes a `boxRef` and fades the still to `opacity-0` with `--dur-decor-fade` once the state is `running`/`frozen`.
+- Review pass (gate): `readDecorEnvironment(webgl2?)` takes a cached probe result; `useDecorGate` reuses it and returns `null` while `html[data-motion]` is absent (MotionSync writes it only once the store is ready), so the observer delivers the first verdict.
+- Deviation: bloom `sizes="(min-width: 80rem) 20vw, 1vw"` instead of the triage's `(min-width: 1280px) 20vw, 1px`: `check-token-usage` forbids raw px literals in `src/components`; 80rem = 1280px at the root size.
+- Deviation: the renderer-throws e2e is chromium-only (needs a real WebGL2 context to break) and uses the same CI-aware skip as the positive path.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+- [patch] **Page crash on `/` in dev (reproduced in Chrome on the 8.4 dev server):** `THREE.WebGLRenderer: Cannot read properties of null (reading 'precision')` thrown from `DecorScene`'s mount effect, and the whole Setup page is replaced by Next's error overlay ("This page couldn't load"). Cause: React Strict Mode runs the effect, the cleanup calls `renderer.forceContextLoss()` on the `<canvas>` React owns, then the effect runs again and constructs a second `WebGLRenderer` on the same canvas whose context is now lost. Fix in two layers: (1) create the `<canvas>` imperatively inside the mount effect (append it to a container `div` the component renders, remove it in cleanup) so every mount gets a fresh canvas and `forceContextLoss` is safe; wrap renderer construction in `try/catch` and on failure call `onState("fallback")`-equivalent (add `"failed"` handling so `Decor` keeps the static still and never retries this mount); (2) wrap `<DecorScene>` in a small class error boundary inside `Decor` that renders nothing and reports the fallback state, so no exception in the 3D layer can ever unmount Setup (NFR-7). Add a unit test for the boundary and an e2e that stubs `HTMLCanvasElement.prototype.getContext` to return a context whose `getShaderPrecisionFormat` returns null (gate passes, renderer throws) and asserts the page still shows the Setup controls and `data-decor-state="fallback"`. (design check in Chrome)
+- [patch] The chromium positive-path e2e silently skips without WebGL2: `test.skip(!webgl2Supported && !process.env.CI, ...)` so CI fails loudly; confirm on the PR's first run. (verification-gap)
+- [patch] e2e: after Motion off, assert the RAF counter stops growing (loop actually stopped on unmount). (verification-gap)
+- [patch] e2e: after hiding, re-set `document.hidden` to false, dispatch `visibilitychange`, assert the RAF counter grows again. (verification-gap)
+- [patch] `useDecorGate` duplicates `readDecorEnvironment`: evaluate via `decorGate({ ...readDecorEnvironment(), webgl2 })`; add an all-browser e2e with `hardwareConcurrency` stubbed to 2 → fallback, no canvas, no three chunk. (verification-gap)
+- [patch] `src/decor/scenes/shuffle.test.ts` (node): build with a fake canvas/keep-out probe and a 1280×800 camera; every star's `|x|` in px ≥ half keep-out + margin; `starCount` meshes; one `pxToWorld` numeric case. (verification-gap)
+- [patch] `threeChunks` helper: keep the `.text()` promises and await them in the getter; wait 500ms before the read in the stored-Motion-off case. (verification-gap)
+- [patch] e2e at 1279×800: hero decor and bloom hidden (the art column starts at `xl`). (verification-gap)
+- [patch] Dynamic chunk failure takes down the page and the lazy rejection is sticky: the error boundary from the crash patch also wraps the `next/dynamic` import; on failure render nothing, report `fallback`, and never request again this mount. (edge-case)
+- [patch] Below 1280px the aside is `display:none` but the gate still passes, the three chunk downloads and a renderer animates a 0×0 canvas: `Decor` observes its own box with a `ResizeObserver`; a 0×0 box is treated as `frozen` for `shouldRequestScene` and the scene's mode, so phones never fetch three. (edge-case)
+- [patch] Handle `webglcontextlost` (stop the loop) and `webglcontextrestored` (restart unless hidden/frozen). (edge-case)
+- [patch] Report `running` only from the first painted frame (not synchronously from the mode effect); `frozen` from the mode effect. (edge-case)
+- [patch] Re-apply `setPixelRatio` inside `resize` so zoom or monitor changes keep the buffer sharp. (edge-case)
+- [patch] `readDecorColors` throws on an empty token instead of silently rendering white; the boundary turns that into the fallback. (edge-case)
+- [patch] Shuffle scene with no keep-out probe hides every star rather than placing them across the column. (edge-case)
+- [patch] The 3D hero renders as black clipped arcs over the still (screenshot-verified): fit the camera to the box (`camera.position.z = R / tan(fov/2) / min(1, aspect)` with R ≈ 1.8, recomputed in `resize`), use `metalness: 0.85, roughness: 0.2` and point lights bright enough under physical decay (or `decay: 0`), and hide the still once the scene reports `running`/`frozen` (conditional render in `DecorView` or a `[data-decor-state="running"] img { visibility: hidden }` rule). Move the Decor box above the bloom (`h-[45%]`, top-aligned) so it never crosses the portrait; `sizes="(min-width: 1280px) 20vw, 1px"` on the bloom image. (blind-hunter)
+- [patch] e2e "chunk not on the critical path": compare `new URL(chunk).pathname` against the HTML (response URLs are absolute, HTML paths root-relative), otherwise the assertion can never fail. (blind-hunter)
+- [patch] Reduced-motion e2e case asserts before the gate runs: wait for `html[data-motion]` plus 1s and assert the chunk list is empty, as the no-WebGL case does. (blind-hunter)
+- [patch] Resize while frozen or hidden blanks the canvas: after `updateProjectionMatrix()` in `resize`, render one frame when the loop is stopped. A mount that starts frozen renders one frame before stopping. (blind-hunter)
+- [patch] Motion-OFF race: treat an absent `html[data-motion]` as undecided (`gate` stays `null`, `evaluate` returns) and let the `MutationObserver` deliver the first verdict instead of relying on `queueMicrotask` ordering. (blind-hunter)
+- [patch] ESLint decor dynamic-import rule matches only string literals: add `ImportExpression > :not(Literal)` ("dynamic imports in src/decor must be string literals") plus a boundaries test case. (blind-hunter)
+- [patch] Delete the dead `config.decor.fadeMs`; `--dur-decor-fade` is the one in use (note the CSS exception in a comment). (blind-hunter)
+- [defer] Art column is 20% (a 224px bloom at 1280) because the single-line display headline needs ~900px to keep "Get a challenge" above the 1280×800 fold; DESIGN assumes a two-line display headline (italic second line) in a ~590px column. Founder design decision: two-line headline with a tighter vertical rhythm vs. the wide single line. Recorded in deferred-work.md and docs/launch-checklist.md. (blind-hunter)
+- [accept] `frozen` mode end to end (8.5 must assert `data-decor-state="frozen"`, RAF delta ≤ 1, and no three chunk on an already-held Stage); CSS kill-switch rule unasserted; First Load JS hand-measured. (verification-gap)
 
 ## Verification
 
@@ -112,3 +154,7 @@ context:
 - `E2E_PORT=3103 npm run test:e2e` -- expected: `decor.spec.ts` cases 1–4 pass on chromium, webkit, firefox; case 5 passes on chromium (or is skipped with the WebGL2 probe reason, recorded here)
 
 **Results:**
+- `npm run lint && npm run typecheck && npm test` -- clean: eslint no errors; `tsc --noEmit` no errors; vitest `49 passed (49)` / `880 passed (880)` (adds `src/decor/scenes/shuffle.test.ts`, the `SceneBoundary` and painted-still cases, and the non-literal decor dynamic-import boundaries case).
+- `npm run build && npm run check:static && npm run check:privacy` -- route table `○ /`, `○ /practice`, `○ /privacy`, `○ /stage`, `ƒ /api/subscribe`; `check:static OK — prerendered: /, /practice, /privacy, /stage`; `check:privacy OK — no analytics or error-monitoring SDKs.` `/` First Load JS (gzip sum of the 11 scripts in the prerendered HTML): before 233,292 B → after 236,278 B, +2,986 B (under 5 kB). `THREE.WebGLRenderer` is in exactly one chunk, absent from `/`'s HTML.
+- `E2E_PORT=3103 npm run test:e2e` -- full suite: **266 passed, 4 skipped, 0 failed**. `decor.spec.ts`: 6 all-browser cases pass on chromium, webkit, firefox; the positive-path and renderer-throws cases pass on chromium and skip on webkit/firefox (browserName guard).
+- Visual: production build at 1280×800 and 1920×1080 (chromium/SwiftShader, capable-device stubs): the three rings and blob are fully inside the box, chrome with cyan/lilac/white foil highlights, above the bloom, still faded out; the dev server (Strict Mode) shows no error overlay and reaches `running`.

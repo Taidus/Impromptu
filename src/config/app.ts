@@ -30,6 +30,14 @@ export const config = {
     },
   },
   reflection: { maxChars: 280 },
+  // Story 8.4: the <Decor> gate and 3D hero/shuffle scenes. The canvas
+  // fade is CSS-only, so its duration lives in tokens.css (--dur-decor-fade).
+  decor: {
+    lowPower: { maxDeviceMemoryGb: 4, maxHardwareConcurrency: 4 },
+    maxPixelRatio: 1.5,
+    hero: { depthPx: 40, depthEaseMs: 900, spinRadPerSec: 0.2 },
+    shuffle: { keepOutMarginPx: 48, spinRadPerSec: 2.4, driftPxPerSec: 60, starCount: 10 },
+  },
   storage: { schemaVersions: { setup: 1, session: 1, history: 1 } },
   // Version of copy.signup.consent (src/components/copy.ts); bump when that line changes.
   signup: { consentTextVersion: "2026-10-09" },

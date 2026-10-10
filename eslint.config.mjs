@@ -94,7 +94,25 @@ const eslintConfig = defineConfig([
   },
   layer(["src/config"], [], "src/config imports nothing from @/."),
   layer(["src/shared"], [], "src/shared imports only zod."),
-  layer(["src/decor"], ["config"], "src/decor imports only @/config."),
+  {
+    files: ["src/decor/**/*.{ts,tsx}"],
+    rules: {
+      ...restrictImports(allowLayers(["config"], "src/decor imports only @/config.")),
+      // Story 8.4: closes the dynamic import() bypass of the layer boundaries for
+      // the one layer that now uses import() (next/dynamic's DecorScene load).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression > Literal[value=/^@\\/(?!config\\b)/]",
+          message: "src/decor may dynamically import only its own files and @/config.",
+        },
+        {
+          selector: "ImportExpression > :not(Literal)",
+          message: "Dynamic imports in src/decor must be string literals (so the boundary rule above can check them).",
+        },
+      ],
+    },
+  },
   layer(["src/adapters"], ["domain", "config", "generated"], "src/adapters imports only @/domain, @/config, @/generated."),
   layer(["src/store"], ["domain", "adapters", "config", "shared"], "src/store imports only @/domain, @/adapters, @/config, @/shared."),
   layer(

@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId } from "react";
 import { copy } from "@/components/copy";
 import { SunButton } from "@/components/SunButton";
+import { Decor } from "@/decor";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Setup } from "@/domain/session/schema";
 import { getAppStore, useAppStore, type StoreState } from "@/store";
@@ -34,18 +36,41 @@ export function SetupHero() {
       {/* Story 8.2 wraps the page in decorative layers (Ticker, ChromePiece,
           OrbitThread, Grain) behind a `relative` ancestor; this column must stay on top.
           The header band itself is journey/SetupHeader (Story 8.3), rendered above. */}
-      <div className="relative z-10 mx-auto flex max-w-content-max flex-col">
-        <NoticeBanners state={state} />
-        <div className="flex flex-col gap-6">
-          <h1 className="text-display-phone [overflow-wrap:anywhere] desktop:text-display-setup">
-            {setupCopy.headline}
-          </h1>
-          <p className="text-lede text-cream-dim">{setupCopy.explanation}</p>
-          {/* Reserves the dial row's real height so hydration doesn't shift the page. */}
-          <div className="min-h-52 desktop:min-h-56" aria-busy={state.status === "loading"}>
-            <SetupControls state={state} />
+      <div className="relative z-10 mx-auto flex max-w-content-max flex-col xl:grid xl:grid-cols-[80fr_20fr] xl:gap-12">
+        <div className="flex flex-col">
+          <NoticeBanners state={state} />
+          <div className="flex flex-col gap-6">
+            <h1 className="text-display-phone [overflow-wrap:anywhere] desktop:text-display-setup">
+              {setupCopy.headline}
+            </h1>
+            <p className="text-lede text-cream-dim">{setupCopy.explanation}</p>
+            {/* Reserves the dial row's real height so hydration doesn't shift the page. */}
+            <div className="min-h-52 desktop:min-h-56" aria-busy={state.status === "loading"}>
+              <SetupControls state={state} />
+            </div>
           </div>
         </div>
+        {/* Desktop-only art column (Story 8.4): adds no row height, so the
+            1280x800 "Get a challenge visible without scrolling" budget is
+            unchanged. No wordmark behind the art, no hero art below xl.
+            80/20, not the spec's 46/54: at 1280px a 54fr art column leaves
+            column 1 too narrow and the headline/controls wrap onto extra
+            lines, pushing Get a challenge below the fold (see spec
+            Implementation Notes). */}
+        <aside aria-hidden="true" className="relative hidden xl:block">
+          <Image
+            src="/decor/artwork/hero-bloom-orange.webp"
+            alt=""
+            aria-hidden="true"
+            data-decor
+            width={671}
+            height={1000}
+            sizes="(min-width: 80rem) 20vw, 1vw"
+            className="absolute inset-0 h-full w-full object-contain object-bottom"
+          />
+          {/* Top 45%: above the bottom-aligned bloom, never across the portrait. */}
+          <Decor scene="hero" mode="ambient" className="inset-x-0 top-0 h-[45%]" />
+        </aside>
       </div>
     </section>
   );
