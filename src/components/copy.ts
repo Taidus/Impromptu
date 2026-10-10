@@ -76,6 +76,12 @@ export const copy = {
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
   },
+  // Story 6.1: the Practice page shell (empty and storage-unavailable states).
+  practice: {
+    title: "Practice",
+    loading: "Loading your practice…",
+    storageUnavailable: "This browser isn't saving data, so there's no history to show.",
+  },
   privacy: {
     title: "privacy.",
     lede: "What this site keeps, where it lives, and how to leave.",
