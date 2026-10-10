@@ -10,45 +10,68 @@
 // uses CSS's native `border-style: double` -- both token-only, no image
 // request. Replace with the real texture/mask once Story 8.2 (or a future
 // asset story) adds them.
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { copy } from "@/components/copy";
+import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import type { RevealedKind } from "@/domain/session/schema";
-import { emptySlotLabel } from "./reveal-logic";
+import { emptySlotLabel, isPastTwoLines } from "./reveal-logic";
 
-/** Negates a `"<n>deg"` string so a tilted piece's inner content counter-rotates back to level. */
+type InputKind = Exclude<RevealedKind, "brief">;
+
+/** The CSS transform that counter-rotates a tilted piece's inner content back to level. */
 function counter(tiltDeg: number): string {
   return `rotate(${-tiltDeg}deg)`;
 }
 
-interface PieceLabelValueProps {
-  label: string;
-  value: ReactNode;
+/**
+ * The visible label is decorative (`aria-hidden`); the value carries an
+ * sr-only "Label: " prefix instead, so each landed piece's list item reads
+ * as "Topic: coming home" (EXPERIENCE.md -> Accessibility Floor).
+ */
+function LabelValue({
+  kind,
+  value,
+  labelClassName,
+  valueClassName,
+  valueRef,
+}: {
+  kind: InputKind;
+  value: string;
   labelClassName: string;
   valueClassName: string;
-}
-
-function LabelValue({ label, value, labelClassName, valueClassName }: PieceLabelValueProps) {
+  valueRef?: Ref<HTMLParagraphElement>;
+}) {
   return (
     <>
       <p aria-hidden="true" className={`text-piece-label-phone uppercase desktop:text-piece-label ${labelClassName}`}>
-        {label}
+        {copy.stage.piece[kind]}
       </p>
-      <p className={valueClassName}>{value}</p>
+      <p ref={valueRef} className={`wrap-anywhere hyphens-auto ${valueClassName}`}>
+        <span className="sr-only">{copy.stage.piece[kind]}: </span>
+        {value}
+      </p>
     </>
   );
 }
 
 /** Not focusable (EXPERIENCE.md -> Component Patterns): a piece's final footprint before it lands. */
-export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: Exclude<RevealedKind, "brief">; tiltDeg: number; className?: string }) {
+export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: InputKind; tiltDeg?: number; className?: string }) {
+  const label = (
+    <>
+      <span aria-hidden="true" className="text-piece-label-phone uppercase text-plum-muted desktop:text-piece-label">
+        {copy.stage.piece[kind]}
+      </span>
+      <span className="sr-only">{emptySlotLabel(kind)}</span>
+    </>
+  );
+  // No tilt: the Topic's slot is the dashed scrap itself, already tilted by ScrapGroup.
+  if (tiltDeg === undefined) return label;
   return (
     <div
       className={`rounded-scrap border border-dashed border-plum-muted px-3 py-2 ${className}`}
       style={{ transform: `rotate(${tiltDeg}deg)` }}
     >
-      <span aria-hidden="true" className="text-piece-label-phone uppercase text-plum-muted desktop:text-piece-label">
-        {copy.stage.piece[kind]}
-      </span>
-      <span className="sr-only">{emptySlotLabel(kind)}</span>
+      {label}
     </div>
   );
 }
@@ -57,12 +80,12 @@ export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: Exclude<Rev
 export function TicketTab({ kind, value, tiltDeg }: { kind: "skill" | "medium"; value: string; tiltDeg: number }) {
   return (
     <div
-      className="rounded-scrap border-l border-dotted border-ink-soft bg-cream px-4 py-2 shadow-lift-soft"
+      className="min-w-0 rounded-scrap border-l border-dotted border-ink-soft bg-cream px-4 py-2 shadow-lift-soft"
       style={{ transform: `rotate(${tiltDeg}deg)` }}
     >
       <div style={{ transform: counter(tiltDeg) }}>
         <LabelValue
-          label={copy.stage.piece[kind]}
+          kind={kind}
           value={value}
           labelClassName="text-vermilion-ink"
           valueClassName="text-tab-value-stage-phone text-ink desktop:text-tab-value-stage"
@@ -72,7 +95,7 @@ export function TicketTab({ kind, value, tiltDeg }: { kind: "skill" | "medium"; 
   );
 }
 
-/** Style, tucked over the paper scrap's top-right corner (DESIGN.md: iridescent foil, tilted 4°). */
+/** Style (DESIGN.md: iridescent foil, tilted 4°). */
 export function FoilSlip({ value, tiltDeg }: { value: string; tiltDeg: number }) {
   return (
     <div
@@ -84,8 +107,8 @@ export function FoilSlip({ value, tiltDeg }: { value: string; tiltDeg: number })
     >
       <div style={{ transform: counter(tiltDeg) }}>
         <LabelValue
-          label={copy.stage.piece.style}
-          value={<span className="italic">{value}</span>}
+          kind="style"
+          value={value}
           labelClassName="text-plum"
           valueClassName="text-style-stage-phone italic text-plum desktop:text-style-stage"
         />
@@ -105,8 +128,8 @@ export function InkStamp({ value, tiltDeg }: { value: string; tiltDeg: number })
     <div className="border-y-4 border-double border-stamp px-3 py-1" style={{ transform: `rotate(${tiltDeg}deg)` }}>
       <div style={{ transform: counter(tiltDeg) }}>
         <LabelValue
-          label={copy.stage.piece.constraint}
-          value={<span className="uppercase">{value}</span>}
+          kind="constraint"
+          value={value}
           labelClassName="text-stamp"
           valueClassName="text-stamp-stage-phone uppercase text-stamp desktop:text-stamp-stage"
         />
@@ -116,76 +139,82 @@ export function InkStamp({ value, tiltDeg }: { value: string; tiltDeg: number })
 }
 
 /**
+ * The landed Topic. DESIGN.md -> Fit rule step 2: on desktop it drops to
+ * `topic-stage-long` once the value runs past two lines. One-way per value
+ * (the caller keys this on the value), so the smaller size can't flip it
+ * back and forth.
+ */
+function TopicValue({ value }: { value: string }) {
+  const valueRef = useRef<HTMLParagraphElement>(null);
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    const el = valueRef.current;
+    if (el === null || long) return;
+    const observer = new ResizeObserver(() => {
+      if (isPastTwoLines(el.getBoundingClientRect().height, parseFloat(getComputedStyle(el).lineHeight))) setLong(true);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [long]);
+  return (
+    <LabelValue
+      kind="topic"
+      value={value}
+      valueRef={valueRef}
+      labelClassName="text-vermilion-ink"
+      valueClassName={`text-topic-stage-phone text-ink ${long ? "desktop:text-topic-stage-long" : "desktop:text-topic-stage"}`}
+    />
+  );
+}
+
+interface ScrapPiece {
+  present: boolean;
+  revealed: boolean;
+  value: string;
+}
+
+/**
  * Topic, plus the Style foil slip (tucked over its top-right corner) and
  * the Constraint ink stamp (pressed into its bottom band) when the
  * Challenge has them. DESIGN.md -> Challenge Stage: "Empty (pre-Reveal):
  * empty slots in their final positions" -- so this group always renders at
- * the same width and corner/band positions, whether Topic/Style/Constraint
- * are each still a dashed footprint or have landed; only their own content
- * toggles as `revealed` grows.
+ * the same width and corner/band positions, whether each piece is still a
+ * dashed footprint or has landed; only its own content toggles.
+ *
+ * The foil floats right inside the scrap, so the Topic text wraps around it
+ * and never sits under it (DESIGN.md: "the scrap reserves 40% of its top row
+ * for it"). Style and Constraint still render on a Topic-less Challenge:
+ * the scrap is then a plain paper band, since the stamp is always on paper.
  */
-export function ScrapGroup({
-  topicRevealed,
-  topicValue,
-  stylePresent,
-  styleRevealed,
-  styleValue,
-  constraintPresent,
-  constraintRevealed,
-  constraintValue,
-}: {
-  topicRevealed: boolean;
-  topicValue: string;
-  stylePresent: boolean;
-  styleRevealed: boolean;
-  styleValue: string;
-  constraintPresent: boolean;
-  constraintRevealed: boolean;
-  constraintValue: string;
-}) {
+export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; style: ScrapPiece; constraint: ScrapPiece }) {
   const scrapTiltDeg = -1.2;
+  const foil = style.present ? (
+    style.revealed ? <FoilSlip value={style.value} tiltDeg={4} /> : <EmptySlot kind="style" tiltDeg={4} />
+  ) : null;
+  if (!topic.present && !constraint.present) return <div className="ml-auto w-2/5 max-w-40">{foil}</div>;
   return (
-    <div className="relative w-full">
-      <div
-        className={`rounded-scrap px-4 py-3 shadow-lift-soft ${topicRevealed ? "bg-paper" : "border border-dashed border-plum-muted"}`}
-        style={{ transform: `rotate(${scrapTiltDeg}deg)` }}
-      >
-        <div style={{ transform: counter(scrapTiltDeg) }}>
-          {topicRevealed ? (
-            <LabelValue
-              label={copy.stage.piece.topic}
-              value={topicValue}
-              labelClassName="text-vermilion-ink"
-              valueClassName="text-topic-stage-phone text-ink desktop:text-topic-stage"
-            />
-          ) : (
-            <>
-              <span aria-hidden="true" className="text-piece-label-phone uppercase text-plum-muted desktop:text-piece-label">
-                {copy.stage.piece.topic}
-              </span>
-              <span className="sr-only">{emptySlotLabel("topic")}</span>
-            </>
-          )}
-          {constraintPresent ? (
-            <div className="mt-2 flex min-h-14 items-center justify-end">
-              {constraintRevealed ? <InkStamp value={constraintValue} tiltDeg={-7} /> : <EmptySlot kind="constraint" tiltDeg={-7} />}
-            </div>
-          ) : null}
-        </div>
+    <div
+      className={`rounded-scrap px-4 py-3 shadow-lift-soft ${topic.present && !topic.revealed ? "border border-dashed border-plum-muted" : "bg-paper"}`}
+      style={{ transform: `rotate(${scrapTiltDeg}deg)` }}
+    >
+      <div className="flow-root" style={{ transform: counter(scrapTiltDeg) }}>
+        {foil !== null ? <div className="float-right -mt-6 -mr-7 ml-3 w-2/5 max-w-40">{foil}</div> : null}
+        {topic.present ? topic.revealed ? <TopicValue key={topic.value} value={topic.value} /> : <EmptySlot kind="topic" /> : null}
+        {constraint.present ? (
+          <div className="clear-both mt-2 flex min-h-14 items-center justify-end">
+            {constraint.revealed ? <InkStamp value={constraint.value} tiltDeg={-7} /> : <EmptySlot kind="constraint" tiltDeg={-7} />}
+          </div>
+        ) : null}
       </div>
-      {stylePresent ? (
-        <div className="absolute right-0 top-0 w-2/5 max-w-40">
-          {styleRevealed ? <FoilSlip value={styleValue} tiltDeg={4} /> : <EmptySlot kind="style" tiltDeg={4} />}
-        </div>
-      ) : null}
     </div>
   );
 }
 
 /** Arrives last; plain, no texture, tilt, or decoration (DESIGN.md: max 34ch). */
-export function BriefBlock({ brief, guidance }: { brief: string; guidance: string | null }) {
+export function BriefBlock({ brief, guidance, ref }: { brief: string; guidance: string | null; ref?: Ref<HTMLDivElement> }) {
+  // tabIndex -1: focus target when the last piece lands and the Reveal next button unmounts.
   return (
-    <div className="max-w-[34ch]">
+    <div ref={ref} tabIndex={-1} className={`max-w-[34ch] ${FOCUS_RING_BASE} ${focusRingClassName("lilac")}`}>
       <p className="text-brief-stage-phone text-plum desktop:text-brief-stage">{brief}</p>
       {guidance !== null ? <p className="mt-2 text-lede text-plum-muted">{guidance}</p> : null}
     </div>

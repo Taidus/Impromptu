@@ -1,15 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/components/copy";
 import { LineButton } from "@/components/LineButton";
 import { StageIconButton } from "@/components/StageIconButton";
+import type { RevealedKind } from "@/domain/session/schema";
 import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
 import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 import { RevealComposition } from "./RevealComposition";
-import { nextKind } from "./reveal-logic";
+import { liveAnnouncement, nextKind } from "./reveal-logic";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -66,7 +67,8 @@ export function StagePage() {
         return;
       }
       if (!isPlainActivationKey(event)) return;
-      if (document.activeElement !== document.body) return;
+      const focused = document.activeElement;
+      if (focused !== null && focused !== document.body && focused !== document.documentElement) return;
       const challenge = store.session.challenge;
       if (store.session.state !== "held" || challenge === null) return;
       if (nextKind(challenge, store.session.revealed) === null) return;
@@ -76,6 +78,29 @@ export function StagePage() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [store.session, goToSetup]);
+
+  // EXPERIENCE.md -> Accessibility Floor: the Stage's one aria-live region.
+  // It lives here, mounted before any Challenge is held, so its text changes
+  // are spoken rather than arriving with the region itself. Text is derived
+  // with React's "store information from previous renders" pattern (a
+  // guarded setState during render; the lint config forbids setState in an
+  // effect body and ref reads during render). The first hydrated render
+  // seeds it silently with whatever was restored -- the reload/restore
+  // announcement is Story 3.11's.
+  const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
+  const [live, setLive] = useState<{ seeded: boolean; challengeId: string | null; revealed: readonly RevealedKind[]; text: string }>({
+    seeded: false,
+    challengeId: null,
+    revealed: [],
+    text: "",
+  });
+  const heldId = heldChallenge?.id ?? null;
+  if (!live.seeded) {
+    if (store.status !== "loading") setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: "" });
+  } else if (heldId !== live.challengeId || store.session.revealed !== live.revealed) {
+    const text = liveAnnouncement(live.challengeId, live.revealed, heldChallenge, store.session.revealed, store.setup?.quickReveal ?? false);
+    setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: text ?? live.text });
+  }
 
   const sound = store.setup?.sound ?? false;
   const meta = stageMeta(store.session.challenge);
@@ -118,7 +143,8 @@ export function StagePage() {
         className="fixed top-header-inset right-header-inset"
       />
 
-      <div className="flex min-h-screen flex-col items-center justify-center px-gutter-phone py-12">
+      {/* Phone: bottom padding clears the fixed action row (RevealComposition). */}
+      <div className="flex min-h-screen flex-col items-center justify-center px-gutter-phone pt-12 pb-[calc(var(--spacing-target-min)+--spacing(8)+env(safe-area-inset-bottom))] desktop:pb-12">
         <div className="flex w-safe-area-width max-w-full flex-col items-start gap-stage-gap">
           {/* Decorative; the h1 above names the page (DESIGN.md -> Stage mark). */}
           <p aria-hidden="true" className="flex items-center gap-2 text-stage-mark text-plum">
@@ -154,6 +180,10 @@ export function StagePage() {
               onRevealNext={() => getAppStore().dispatchSession({ type: "reveal_next" })}
             />
           ) : null}
+
+          <p aria-live="polite" className="sr-only">
+            {live.text}
+          </p>
         </div>
       </div>
     </div>

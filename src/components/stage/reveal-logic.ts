@@ -2,18 +2,8 @@
 // which one lands next, and what the aria-live region says. Kept out of the
 // React components so they're unit-testable without rendering anything.
 import { copy } from "@/components/copy";
-import { config } from "@/config/app";
 import type { Challenge, RevealedKind } from "@/domain/session/schema";
-
-/** Kinds this Challenge actually has, in config.reveal.order, with "brief" always last and always present. Mirrors the session reducer's own private helper (Story 3.4) -- kept separate because the UI needs it without a Session. */
-export function presentKinds(challenge: Challenge): RevealedKind[] {
-  return config.reveal.order.filter((kind) => isPresent(challenge, kind));
-}
-
-function isPresent(challenge: Challenge, kind: RevealedKind): boolean {
-  if (kind === "brief") return true;
-  return challenge.inputs[kind] !== undefined;
-}
+import { presentKinds } from "@/domain/session/session-reducer";
 
 /** The next kind to land, or `null` once every present kind (including the Brief) has. */
 export function nextKind(challenge: Challenge, revealed: readonly RevealedKind[]): RevealedKind | null {
@@ -42,6 +32,36 @@ export function quickRevealAnnouncement(challenge: Challenge): string {
     .filter((kind): kind is Exclude<RevealedKind, "brief"> => kind !== "brief")
     .map((kind) => announcementFor(kind, challenge));
   return [copy.stage.challengeReady, ...inputLines, challenge.brief].join(" ");
+}
+
+/**
+ * What the Stage's live region should say after a session change, or `null`
+ * to leave it as is. `prevChallengeId`/`prevRevealed` are what the region
+ * last saw; the caller seeds them with the restored state on hydration, so a
+ * reload (Story 3.11 owns its announcement) never reaches here as "new".
+ * A new Challenge clears stale text, or -- Quick reveal on, fully landed --
+ * announces "Challenge ready." plus the whole Challenge. Otherwise every
+ * newly landed kind is announced, in reveal order (a multi-kind jump from
+ * another tab announces all of them, not just the last).
+ */
+export function liveAnnouncement(
+  prevChallengeId: string | null,
+  prevRevealed: readonly RevealedKind[],
+  challenge: Challenge | null,
+  revealed: readonly RevealedKind[],
+  quickReveal: boolean,
+): string | null {
+  if (challenge === null) return prevChallengeId === null ? null : "";
+  const isNew = challenge.id !== prevChallengeId;
+  if (isNew && quickReveal && isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
+  const landed = revealed.filter((kind) => isNew || !prevRevealed.includes(kind));
+  if (landed.length === 0) return isNew ? "" : null;
+  return landed.map((kind) => announcementFor(kind, challenge)).join(" ");
+}
+
+/** DESIGN.md -> Typography fit rule: the desktop Topic drops to `topic-stage-long` once it runs past two lines. */
+export function isPastTwoLines(heightPx: number, lineHeightPx: number): boolean {
+  return heightPx > lineHeightPx * 2 + 1; // +1: sub-pixel rounding
 }
 
 /** EXPERIENCE.md -> Component Patterns, Empty slot: "Topic, not revealed yet." */

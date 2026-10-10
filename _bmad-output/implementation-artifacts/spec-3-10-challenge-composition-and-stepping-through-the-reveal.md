@@ -2,7 +2,7 @@
 title: 'Challenge composition and stepping through the Reveal'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '050df6ad4f0fd7c58ef125edae835c22103f8f79'
@@ -50,7 +50,7 @@ context:
 | No Style on this Challenge | `challenge.inputs.style === undefined` | No Style slot (empty or landed) renders at all — the Reveal has one step fewer | N/A |
 | Everything landed | `revealed` contains every present kind incl. `brief` | The sun button disappears; no primary action renders (Reroll/Start creating are later stories) | N/A |
 | Quick reveal commit | A fresh `challenge_committed` with `quickReveal` on | `revealed` already contains every present kind (Story 3.4); this story renders all pieces landed immediately and announces once as `"Challenge ready." + every Input + the Brief` | N/A |
-| Reload mid-Reveal (first mount sees a partial `revealed`) | `revealed` non-empty but not full, never seen by this component before | Pieces render per their actual `revealed` state; the live region stays silent (no invented "whole Challenge" wording — see Design Notes) | N/A |
+| Reload or restore (any `revealed`) | The first hydrated render sees an already-held Challenge | Pieces render per their actual `revealed` state; the live region stays silent (the restore announcement is Story 3.11 — see deferred-work.md) | N/A |
 | Phone (≤ 860px) | viewport width ≤ 860px | The action row is a bottom bar fixed to the column's bottom edge; the Constraint stamp sits in normal flow below the Topic text | N/A |
 
 ## Code Map
@@ -88,26 +88,44 @@ context:
 - Implemented directly (per build-session override), no subagent dispatch.
 - **No asset for the paper scrap or the ink-mask wear:** per DESIGN.md's own Assets fallback table ("Flat `{colors.paper}` scrap" / "plain rule"), `ScrapGroup` uses a flat `bg-paper` fill and `InkStamp` uses CSS's native `border-style: double` (via `border-y-4 border-double`) instead of `ink-mask.png`. Token-only, no image request; swap in the real texture/mask whenever an asset story adds them.
 - **All five empty slots render from the start, not just the ones about to land:** DESIGN.md's "Empty (pre-Reveal): empty slots in their final positions" and the per-piece Empty slot spec ("each piece's final footprint... at the same tilt as the piece it will hold") describe every present kind's footprint existing simultaneously, not only the next one in `config.reveal.order`. `ScrapGroup` therefore always renders its outer wrapper (Topic in normal flow, Style absolutely tucked at the top-right corner, Constraint in the bottom band) regardless of load order, and each of the three independently toggles empty-dashed vs. landed-material as its own kind enters `revealed`.
-- **Announcement state lives in `useState`, not a `useRef`, and is computed during render, not inside a `useEffect`:** this codebase's lint config (`eslint-plugin-react-hooks`'s newer rules, likely paired with the React Compiler) rejects both `setState` inside an effect body (`react-hooks/set-state-in-effect`) and reading/writing a ref during render (`react-hooks/refs`). The React-documented "store information from previous renders" pattern — comparing against a `useState` value during render and conditionally calling its setter — satisfies both: it is not inside `useEffect`, and it touches no ref. The initial state's `challengeId` must be a sentinel (`null`), not the current Challenge's own id — seeding it with the current id would make the very first render's "is this a new Challenge?" check false, silently skipping the Quick reveal announcement on first paint (caught by the Quick reveal e2e test, see Review Triage-equivalent note below).
-- **A reload mid-Reveal stays silent rather than guessing at "whole Challenge announced once":** EXPERIENCE.md's "Reload or Resume in any state" row asks for that announcement, but distinguishing "this is a reload of a partially-revealed session" from "this is Quick reveal's fresh one-shot commit" the *first* time `RevealComposition` ever sees a Challenge is only unambiguous when `revealed` is either empty or complete on first sight (Quick reveal's commit is always all-or-nothing, per Story 3.4). A partial `revealed` on first sight is therefore treated as a reload and stays silent — correct per Story 3.11's ownership of navigation/reload behavior, rather than inventing a "whole Challenge" announcement format here. Recorded as the one open, founder-level question this story defers (see Open Questions).
-- **`SunButton` cannot take a `ref` prop:** it's typed with `ButtonHTMLAttributes<HTMLButtonElement>` (Story 3.1), which — unlike `ComponentProps<"button">` (used by `InkButton`/`LineButton`, which do accept a forwarded `ref` under React 19's ref-as-prop support, e.g. `EmailSignup.tsx`) — does not include `ref`. Rather than edit a Story 3.1-owned file, `RevealComposition` wraps it in a plain `<div ref={actionRowRef}>` and focuses via `actionRowRef.current?.querySelector("button")` on mount.
+- **Announcement state lives in `useState`, not a `useRef`, and is computed during render, not inside a `useEffect`:** this codebase's lint config rejects both `setState` inside an effect body (`react-hooks/set-state-in-effect`) and reading/writing a ref during render (`react-hooks/refs`). The React-documented "store information from previous renders" pattern — comparing against a `useState` value during render and conditionally calling its setter — satisfies both. Since the review patch pass this state lives in `StagePage` (see below).
+- **A reload/restore stays silent:** EXPERIENCE.md's "Reload or Resume in any state" announcement belongs to Story 3.11 (navigation/reload stability). Since the review patch pass the live region is seeded silently with whatever hydration restored, so this holds for partial and fully revealed restores alike; Quick reveal wording comes from `setup.quickReveal` on a fresh commit, not from inference.
+- **`SunButton` cannot take a `ref` prop:** it's typed with `ButtonHTMLAttributes<HTMLButtonElement>` (Story 3.1), which — unlike `ComponentProps<"button">` (used by `InkButton`/`LineButton`, which do accept a forwarded `ref` under React 19's ref-as-prop support, e.g. `EmailSignup.tsx`) — does not include `ref`. Rather than edit a Story 3.1-owned file, `RevealComposition` wraps it in a plain `<div ref={actionRowRef}>` and focuses via `actionRowRef.current?.querySelector("button")` for each new `challenge.id`.
 - **Tilt and counter-rotation:** each tilted piece (ticket tabs ±1.5°, scrap -1.2°, foil 4°, stamp -7°) wraps its label/value in an inner `<div>` rotated by the negated angle, keeping "essential text... always horizontal" (DESIGN.md → Typography) while the piece itself stays askew.
-- **Action row gap before the primary action:** DESIGN.md asks for `{spacing.8}` (32px) between the composition and the action row, distinct from the `{spacing.stage-gap}` (24px) used between other groups. This story keeps one uniform `gap-stage-gap` for the whole column instead of special-casing that one gap — an 8px difference with no visual mockup to verify against and no test asserting it; flagged here rather than guessed at pixel-for-pixel.
-- **Fit-rule cascade (DESIGN.md's compact-mode steps 1–4 for a 160-char Brief at 1280×800) is not implemented:** this story's composition is lighter than DESIGN's "worst case" (no countdown, no Lock toggles, no Reroll yet), and no e2e in this story's scope asserts no-scroll at that viewport — only type minimums. `--typography-topic-stage-long` is wired as a token/utility pair but nothing yet measures a two-line Topic to switch to it. Noted for whichever story first needs the cascade (likely alongside Reroll/the countdown).
-- `npm run lint`, `npm run typecheck`, `npm test` (533 passing), `npm run build`, `npm run check:static`, `npm run check:privacy`, and `npm run test:e2e` (81 across chromium/webkit/firefox) all pass clean.
+- **Action row gap before the primary action:** DESIGN.md's `{spacing.8}` (32px) between the composition and the action row is implemented on desktop as the column's `gap-stage-gap` (24px) plus `desktop:mt-2` (8px) on the action row; on phone the row is a fixed bottom bar, so the gap does not apply.
+- **Fit-rule cascade:** only step 2 is implemented: a landed Topic measures itself (ResizeObserver, `isPastTwoLines`) and switches to `desktop:text-topic-stage-long` once it runs past two lines — one-way per value (keyed on it) so the smaller size cannot flip it back. Steps 1, 3, and 4 (compact gaps, countdown caption/size) wait for the stories that add the countdown and the rest of the Held composition.
+- `npm run lint`, `npm run typecheck`, `npm test` (539 passing after the review patch pass), `npm run build`, `npm run check:static`, `npm run check:privacy`, and `npm run test:e2e` (93 across chromium/webkit/firefox after the review patch pass) all pass clean.
 
-## Open Questions
+- **Review patch pass (triage #1–#9):**
+  - The polite live region now lives in `StagePage`, mounted before any Challenge is held; its text is set after mount. The first hydrated render seeds it silently with whatever was restored (reload/restore announcement deferred to Story 3.11, recorded in `deferred-work.md`). `liveAnnouncement` (pure, unit-tested) picks the Quick reveal wording only for a new Challenge with `setup.quickReveal` on, clears stale text on a new `challenge.id`, and announces every newly landed kind in order on a multi-kind jump.
+  - Focus: the Brief block is `tabIndex={-1}` and takes focus when it lands (the Reveal next button unmounts at that moment); Reveal next is refocused for every new `challenge.id`, not only on mount. Repeated Enter/Space keydown on the sun button is `preventDefault`ed, so a held key reveals once. The body fallback also treats `activeElement` null or `documentElement` as "no control focused".
+  - Each landed value carries an sr-only "Label: " prefix (the visible label stays `aria-hidden`), so it reads "Topic: coming home".
+  - Style and Constraint render on a Topic-less Challenge (the scrap becomes a plain paper band, so the stamp stays on paper). The foil now floats right inside the scrap, so the Topic text wraps around it instead of sitting under it.
+  - Phone action row: column-width, `bg-lilac`, bottom padding `max(spacing 4, safe-area-inset-bottom)`; the column's bottom padding reserves the bar's height. Ticket tabs wrap (`flex-wrap`, `min-w-0`); values wrap with `overflow-wrap: anywhere`.
+  - `presentKinds` is now exported from `src/domain/session/session-reducer.ts` and reused by `reveal-logic.ts` (a one-word `export` — the only edit to the reducer, overriding the "do not modify" boundary at the reviewer's request).
+- **Decisions on the former Open Questions:** (1) reload mid-Reveal announcement deferred to Story 3.11 (deferred-work.md); (2) the 32px composition-to-actions gap is implemented (above); (3) the paper-scrap and ink-mask asset fallbacks (flat `bg-paper`, native double rule) are accepted per DESIGN.md's own Assets fallback column.
 
-- **Reload mid-Reveal announcement wording** (EXPERIENCE.md "Reload or Resume in any state: the whole Challenge is announced once"): deferred to Story 3.11, which owns navigation/reload stability. This story's live region stays silent for that case rather than invent the exact combined wording — see Implementation Notes. Conservative, reversible (additive) choice; continuing per the "keep building" checkpoint.
-- **Action row's 32px vs. 24px gap** before the primary action (no visual mockup, no test): kept uniform at 24px. Reversible one-class change if the founder wants the distinction.
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Live region inserted with Quick reveal text (likely unspoken); restored full reveal mis-announced as Quick reveal; stale text on new Challenge; multi-kind jump announces only the last | medium | Region mounts with composition; `wasAlreadyFull` inference | patch |
+| 2 | blind, edge | Focus drops to body when the Brief lands; entry focus only on mount; held Enter bursts reveals | medium | Button unmounts when `next === null`; `[]` deps; native auto-repeat | patch |
+| 3 | blind | Filled pieces have no accessible label | medium | Visible label `aria-hidden`; list reads values only | patch |
+| 4 | blind, edge, verif-gap | Topic-less Challenge hides Style/Constraint | low | Schema allows no Topic; `ScrapGroup` gated on `topicPresent` | patch |
+| 5 | blind, edge | Phone action row spans viewport, no safe area, covers content; tabs overflow; foil covers Topic | medium | `fixed inset-x-0 bottom-0`; no column padding | patch |
+| 6 | orchestrator | DESIGN 32px gap before action row; long-Topic fit step unwired | low | Open Question 2; `text-topic-stage-long` unused | patch |
+| 7 | blind | `presentKinds` duplicates the reducer helper; `pieces.tsx` duplication | low | Docstring admits the copy | patch |
+| 8 | verif-gap, blind | Body-focus Space/Enter, final announcement text, Style minimum size untested | low | Pre-verified: deleting the fallback branch passes CI | patch |
+| 9 | edge | `activeElement` null/`documentElement` skips the fallback | low | Browser-dependent focus root | patch |
 
 ## Verification
 
 **Commands:**
 - `npm run lint` -- no errors
 - `npm run typecheck` -- no errors
-- `npm test` -- all Vitest suites pass (533 tests, including `reveal-logic.test.ts` and the new `logic.test.ts` cases)
+- `npm test` -- all Vitest suites pass (539 tests, including `reveal-logic.test.ts` and the new `logic.test.ts` cases)
 - `npm run build` -- production build succeeds; `/stage` still prerendered
 - `npm run check:static` -- `/stage` still listed as statically prerendered
 - `npm run check:privacy` -- no analytics/error-monitoring SDKs
-- `npm run test:e2e` -- all Playwright specs pass (81 tests across chromium/webkit/firefox), including the six new Story 3.10 scenarios in `e2e/stage.spec.ts`
+- `npm run test:e2e` -- all Playwright specs pass (93 tests across chromium/webkit/firefox), including the Story 3.10 scenarios (plus the review pass's body-focus, final-announcement, Brief-focus, held-Enter, Style-size, and phone-overlap checks) in `e2e/stage.spec.ts`

@@ -52,3 +52,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-1-practice-page-with-empty-and-storage-states.md`
   summary: Give the store a history-only readiness signal (e.g. `historyStatus`) so /practice stops showing the loading placeholder as soon as the Repository is read, instead of waiting for the idle-scheduled library load.
   evidence: `status` stays `loading` on a first visit until the library resolves and a default Setup is persisted; the Practice page never needs the library.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-10-challenge-composition-and-stepping-through-the-reveal.md`
+  summary: Announce the whole held Challenge once through the Stage's aria-live region on reload/restore (EXPERIENCE.md -> State Patterns, "Reload or Resume in any state"), in Story 3.11.
+  evidence: Story 3.10's `StagePage` seeds its live region silently with whatever hydration restored, so a reload (partial or fully revealed) says nothing; only fresh commits and later landings announce.

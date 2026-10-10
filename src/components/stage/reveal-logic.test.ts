@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { baseChallenge, fullChallenge } from "@/domain/session/session-fixture";
-import { announcementFor, emptySlotLabel, isFullyRevealed, nextKind, presentKinds, quickRevealAnnouncement } from "./reveal-logic";
+import { presentKinds } from "@/domain/session/session-reducer";
+import { copy } from "@/components/copy";
+import {
+  announcementFor,
+  emptySlotLabel,
+  isFullyRevealed,
+  isPastTwoLines,
+  liveAnnouncement,
+  nextKind,
+  quickRevealAnnouncement,
+} from "./reveal-logic";
 
 describe("presentKinds", () => {
   it("is skill, medium, topic, brief for a Challenge with no Style or Constraint", () => {
@@ -75,5 +85,46 @@ describe("emptySlotLabel", () => {
   it("reads \"Label, not revealed yet.\"", () => {
     expect(emptySlotLabel("topic")).toBe("Topic, not revealed yet.");
     expect(emptySlotLabel("style")).toBe("Style, not revealed yet.");
+  });
+});
+
+describe("liveAnnouncement", () => {
+  const all = presentKinds(fullChallenge);
+
+  it("announces one newly landed kind", () => {
+    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill", "medium"], false)).toBe(
+      announcementFor("medium", fullChallenge),
+    );
+  });
+
+  it("announces every kind of a multi-kind jump, in order", () => {
+    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill", "medium", "topic"], false)).toBe(
+      `${announcementFor("medium", fullChallenge)} ${announcementFor("topic", fullChallenge)}`,
+    );
+  });
+
+  it("leaves the text alone when nothing new landed", () => {
+    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill"], false)).toBeNull();
+    expect(liveAnnouncement(null, [], null, [], false)).toBeNull();
+  });
+
+  it("clears stale text for a new Challenge with nothing landed, or when the Challenge goes away", () => {
+    expect(liveAnnouncement("old", all, fullChallenge, [], false)).toBe("");
+    expect(liveAnnouncement("old", all, null, [], false)).toBe("");
+  });
+
+  it("uses the Quick reveal wording only for a new, fully landed Challenge with Quick reveal on", () => {
+    const text = liveAnnouncement("old", [], fullChallenge, all, true);
+    expect(text).toBe(quickRevealAnnouncement(fullChallenge));
+    expect(text?.startsWith(copy.stage.challengeReady)).toBe(true);
+    expect(liveAnnouncement("old", [], fullChallenge, all, false)).not.toContain(copy.stage.challengeReady);
+  });
+});
+
+describe("isPastTwoLines", () => {
+  it("is false up to two lines (with sub-pixel slack) and true past them", () => {
+    expect(isPastTwoLines(96, 48)).toBe(false);
+    expect(isPastTwoLines(96.5, 48)).toBe(false);
+    expect(isPastTwoLines(144, 48)).toBe(true);
   });
 });
