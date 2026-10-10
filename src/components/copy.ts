@@ -25,6 +25,12 @@ export const copy = {
     worked: "What worked",
     change: "What I'd change",
   },
+  // Story 5.6: ReflectionPanel's field labels (EXPERIENCE.md -> Finished) and live character counter.
+  reflection: {
+    workedLabel: "What worked?",
+    changeLabel: "What would you change?",
+    charsLeft: (n: number) => `${n} left`,
+  },
   skill: {
     observation: "Notice what's actually there.",
     ideaGeneration: "Come up with many options, fast.",
@@ -103,6 +109,28 @@ export const copy = {
     // Empty slot screen-reader text, joined as "{piece}, not revealed yet."
     // (EXPERIENCE.md -> Component Patterns -> Empty slot).
     notRevealedYet: "not revealed yet.",
+    // Story 5.2/5.3: the Countdown's own caption and time's-up copy.
+    countdown: {
+      caption: (minutes: number) => `TIME LIMIT ${minutes} MIN`,
+      pausedCaption: "PAUSED",
+      timesUpTitle: "time's up.",
+      timesUpBody: "Finish when you're ready.",
+      // CountdownAnnouncer's polite region -- only ever one of these at a time.
+      pausedAnnounced: "Paused.",
+      resumedAnnounced: "Resumed.",
+      timeUpAnnounced: "Time's up.",
+      oneMinuteLeftAnnounced: "1 minute left.",
+      minutesLeftAnnounced: (minutes: number) => `${minutes} minutes left.`,
+    },
+    // Story 5.5: the RepDoneStamp's decorative "REP DONE" stamp text (visually uppercased by CSS).
+    repDoneStamp: "Rep done",
+    // Story 5.8: VariationPicker's prompt, option labels, and messages (EXPERIENCE.md -> Variation pick).
+    variation: {
+      prompt: "Keep your strongest choice. Change one other thing.",
+      nothingChosen: "Pick one thing to change.",
+      noAlternative: "Nothing else fits here. Pick a different one.",
+      changeLabel: (label: string) => `Change ${label}`,
+    },
   },
   button: {
     getAChallenge: "Get a challenge",
@@ -116,20 +144,27 @@ export const copy = {
     discard: "Discard",
     resume: "Resume",
     pause: "Pause",
+    changeIt: "Change it",
     changeItAgain: "Change it again",
     backToYourChallenge: "Back to your challenge",
     keepMyData: "Keep my data",
     clearEverything: "Clear everything",
+    // Story 6.4: the Practice History export control.
+    export: "Export",
   },
   state: {
-    timesUp: "Time's up. Finish when you're ready.",
     repSaved: "Rep saved.",
     reflectionSaved: "Reflection saved.",
     keepAtLeastOneMediumOn: "Keep at least one medium on.",
     progressSavedInBrowserOnly: "Your progress is saved in this browser only.",
+    // FR-29: the Saved view's variant of the above when storageAvailable is false.
+    repNotKept: "This browser isn't saving data, so this rep won't be kept.",
     challengeInProgress: "You have a challenge in progress.",
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
+    // Story 6.4: announced after the export download fires.
+    exported: "Exported.",
+    exportFailed: "Export failed.",
   },
   // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
   // banner). More than one can show at once -- see activeNoticeBanners.

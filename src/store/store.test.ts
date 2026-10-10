@@ -5,7 +5,9 @@ import { fakeClock, seededRandom } from "@/domain/test-doubles";
 import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
-import type { Setup } from "@/domain/session/schema";
+import type { Rep, Session, Setup } from "@/domain/session/schema";
+import { attemptSession, baseChallenge } from "@/domain/session/session-fixture";
+import { presentKinds } from "@/domain/session/session-reducer";
 import { config } from "@/config/app";
 import { buildDefaultSetup } from "./defaults";
 import { createStore } from "./store";
@@ -466,5 +468,298 @@ describe("createStore — cross-tab storage event", () => {
     target.fire("impromptu:session", storage); // simulates the native cross-tab storage event
 
     expect(storeB.getState().session.lastComposeError).toEqual({ reason: "no_compatible", blockingLock: "topic" });
+  });
+});
+
+/** A started Attempt: composes, lands every piece (Quick reveal on), then starts. */
+function startedStore(overrides: { repository?: Repository } = {}) {
+  const repository = overrides.repository ?? createRepository({ storage: createMemoryRawStore() });
+  repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal: true } });
+  const deps = makeDeps({ repository });
+  const store = createStore(deps);
+  return { store, repository, deps };
+}
+
+async function startAttempt(store: ReturnType<typeof createStore>) {
+  store.hydrate();
+  await vi.runAllTimersAsync();
+  store.dispatch({ type: "new_challenge" });
+  store.dispatchSession({ type: "start", nowMs: 0 });
+}
+
+describe("createStore — finish_rep command", () => {
+  it("is a no-op outside an Attempt", async () => {
+    const { store } = startedStore();
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "finish_rep" });
+    expect(store.getState().history).toHaveLength(0);
+    expect(store.getState().session.state).toBe("none");
+  });
+
+  it("appends one Rep to history, sets lastRepId, and moves the session to Finished", async () => {
+    const { store, repository } = startedStore();
+    await startAttempt(store);
+    expect(store.getState().session.state).toBe("attempt");
+
+    store.dispatch({ type: "finish_rep" });
+
+    expect(store.getState().session.state).toBe("finished");
+    expect(store.getState().history).toHaveLength(1);
+    const repId = store.getState().session.lastRepId;
+    expect(repId).not.toBeNull();
+    expect(store.getState().history[0]?.id).toBe(repId);
+    const stored = repository.load<Rep[]>("history");
+    expect(stored.ok && stored.value?.data).toHaveLength(1);
+  });
+
+  it("is idempotent: a second finish_rep once Finished does not append another Rep", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+
+    store.dispatch({ type: "finish_rep" });
+    store.dispatch({ type: "finish_rep" });
+
+    expect(store.getState().history).toHaveLength(1);
+  });
+});
+
+describe("createStore — save_rep command", () => {
+  it("attaches the reflection draft to the Rep and moves the session to Saved", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    store.dispatchSession({ type: "update_reflection_draft", reflection: { worked: "good light", change: "" } });
+
+    store.dispatch({ type: "save_rep" });
+
+    expect(store.getState().session.state).toBe("saved");
+    expect(store.getState().session.attempt).toBeNull();
+    expect(store.getState().history[0]?.reflection).toEqual({ worked: "good light", change: "" });
+  });
+
+  it("stores null when both fields are blank", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+
+    store.dispatch({ type: "save_rep" });
+
+    expect(store.getState().history[0]?.reflection).toBeNull();
+  });
+
+  it("is idempotent: saving twice keeps one upserted reflection", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    store.dispatchSession({ type: "update_reflection_draft", reflection: { worked: "a", change: "b" } });
+
+    store.dispatch({ type: "save_rep" });
+    store.dispatch({ type: "save_rep" });
+
+    expect(store.getState().history).toHaveLength(1);
+    expect(store.getState().history[0]?.reflection).toEqual({ worked: "a", change: "b" });
+  });
+
+  it("is a no-op outside Finished", async () => {
+    const { store } = startedStore();
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "save_rep" });
+    expect(store.getState().history).toHaveLength(0);
+  });
+});
+
+describe("createStore — retry command", () => {
+  it("copies the Rep's Challenge under a new id with origin retry, and commits to Held without composing", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    store.dispatch({ type: "save_rep" });
+
+    const fromRep = store.getState().history[0];
+    const fromRepId = fromRep?.id as string;
+    const originalChallengeId = fromRep?.challenge.id;
+
+    store.dispatch({ type: "retry", fromRepId });
+
+    const { session } = store.getState();
+    expect(session.state).toBe("held");
+    expect(session.challenge?.origin).toEqual({ kind: "retry", fromRepId });
+    expect(session.challenge?.id).not.toBe(originalChallengeId);
+    expect(session.challenge?.brief).toBe(fromRep?.challenge.brief);
+    // Retry never plays a Reveal: every present kind lands at once.
+    expect(session.revealed).toEqual(presentKinds(session.challenge!));
+  });
+
+  it("is a no-op when fromRepId matches no Rep", async () => {
+    const { store } = startedStore();
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    const before = store.getState().session;
+
+    store.dispatch({ type: "retry", fromRepId: "does-not-exist" });
+
+    expect(store.getState().session).toBe(before);
+  });
+});
+
+describe("createStore — new_challenge guarded during Attempt/Finished", () => {
+  it("does not compose a new Challenge while an Attempt is running or just Finished", async () => {
+    const { store, deps } = startedStore();
+    await startAttempt(store);
+    const challengeDuringAttempt = store.getState().session.challenge;
+    const next = vi.spyOn(deps.random, "next");
+
+    store.dispatch({ type: "new_challenge" });
+    expect(store.getState().session.challenge).toBe(challengeDuringAttempt);
+    expect(store.getState().session.state).toBe("attempt");
+
+    store.dispatch({ type: "finish_rep" });
+    store.dispatch({ type: "new_challenge" });
+    expect(store.getState().session.state).toBe("finished");
+    expect(next).not.toHaveBeenCalled(); // compose() never ran
+  });
+});
+
+const START_MS = 1_700_000_000_000;
+const timedAttempt: Session = {
+  ...attemptSession,
+  challenge: { ...baseChallenge, timeLimitSec: 300 },
+  attempt: { startedAt: START_MS, pausedAt: null, pausedTotalMs: 0, timeLimitSec: 300 },
+};
+
+/** A store hydrated straight into a stored timed Attempt, with the fake clock in hand. */
+function attemptStore(overrides: { repository?: Repository; library?: ComposeLibrary | "reject" } = {}) {
+  const repository = overrides.repository ?? createRepository({ storage: createMemoryRawStore() });
+  repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+  repository.save("session", { v: 1, rev: 1, data: timedAttempt });
+  const clock = fakeClock(START_MS);
+  const store = createStore({ ...makeDeps({ repository, library: overrides.library }), clock });
+  return { store, repository, clock };
+}
+
+describe("createStore — finish/save/retry gating", () => {
+  it("finish_rep works while libraryStatus is 'error' (needs hydration only)", async () => {
+    const { store } = attemptStore({ library: "reject" });
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().libraryStatus).toBe("error");
+
+    store.dispatch({ type: "finish_rep" });
+
+    expect(store.getState().session.state).toBe("finished");
+    expect(store.getState().history).toHaveLength(1);
+  });
+
+  it("a finish_rep dispatched before hydrate runs once hydrated, without waiting for the library", () => {
+    const { store } = attemptStore();
+    store.dispatch({ type: "finish_rep" });
+    store.hydrate();
+    expect(store.getState().libraryStatus).toBe("loading");
+    expect(store.getState().session.state).toBe("finished");
+  });
+});
+
+describe("createStore — finish_rep timing and rev conflicts", () => {
+  it("records timeUsedSec from the fake clock and finishedAt as its ISO time", () => {
+    const { store, clock } = attemptStore();
+    store.hydrate();
+    clock.advance(65_400);
+
+    store.dispatch({ type: "finish_rep" });
+
+    const rep = store.getState().history[0];
+    expect(rep?.timeUsedSec).toBe(65);
+    expect(rep?.finishedAt).toBe(new Date(START_MS + 65_400).toISOString());
+  });
+
+  it("re-applies the append onto another tab's history write instead of overwriting it", () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    const other = createRepository({ storage });
+    const { store } = attemptStore({ repository });
+    store.hydrate();
+    const otherRep: Rep = {
+      id: "523e4567-e89b-42d3-a456-426614174000",
+      challenge: baseChallenge,
+      finishedAt: "2026-10-09T12:00:00.000Z",
+      timeUsedSec: null,
+      reflection: null,
+    };
+    other.save("history", { v: 1, rev: 1, data: [otherRep] }); // written between hydrate and finish_rep
+
+    store.dispatch({ type: "finish_rep" });
+
+    const repId = store.getState().session.lastRepId;
+    const stored = repository.load<Rep[]>("history");
+    expect(stored.ok && stored.value?.data.map((r) => r.id)).toEqual([otherRep.id, repId]);
+    expect(store.getState().history).toHaveLength(2);
+    expect(store.getState().saveFailed).toBe(false);
+  });
+
+  it("appends no Rep when another tab already moved the session on (lost race)", () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    const other = createRepository({ storage });
+    const { store } = attemptStore({ repository });
+    store.hydrate();
+    other.save("session", { v: 1, rev: 2, data: { ...timedAttempt, state: "none", challenge: null, attempt: null } }); // discarded elsewhere
+
+    store.dispatch({ type: "finish_rep" });
+
+    expect(store.getState().session.state).toBe("none");
+    expect(store.getState().history).toHaveLength(0);
+    expect(repository.load("history")).toEqual({ ok: true, value: null });
+  });
+});
+
+describe("createStore — save_rep edge cases", () => {
+  it("stores null for a whitespace-only reflection and trims real text", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    store.dispatchSession({ type: "update_reflection_draft", reflection: { worked: "   ", change: "\n\t" } });
+    store.dispatch({ type: "save_rep" });
+    expect(store.getState().history[0]?.reflection).toBeNull();
+  });
+
+  it("trims each field before storing", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    store.dispatchSession({ type: "update_reflection_draft", reflection: { worked: "  good light ", change: " " } });
+    store.dispatch({ type: "save_rep" });
+    expect(store.getState().history[0]?.reflection).toEqual({ worked: "good light", change: "" });
+  });
+
+  it("sets saveFailed and stays Finished when the Rep is missing from history", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repository.save("session", {
+      v: 1,
+      rev: 1,
+      data: { ...timedAttempt, state: "finished", lastRepId: "623e4567-e89b-42d3-a456-426614174000", reflectionDraft: { worked: "", change: "" } },
+    });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    store.dispatch({ type: "save_rep" });
+
+    expect(store.getState().saveFailed).toBe(true);
+    expect(store.getState().session.state).toBe("finished");
+  });
+});
+
+describe("createStore — retry outside Saved", () => {
+  it("is a no-op from Finished even with a real Rep id", async () => {
+    const { store } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    const before = store.getState().session;
+
+    store.dispatch({ type: "retry", fromRepId: before.lastRepId as string });
+
+    expect(store.getState().session).toBe(before);
   });
 });
