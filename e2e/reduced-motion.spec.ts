@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { copy } from "../src/components/copy";
 import { config } from "../src/config/app";
 import { announcementFor } from "../src/components/stage/reveal-logic";
 import { fullChallenge } from "../src/domain/session/session-fixture";
@@ -106,7 +107,8 @@ async function revealAllByKeyboard(page: Page, reduced: boolean): Promise<Record
     await expect(actionRow(page)).toHaveAttribute("data-motion-kind", kind);
     entrances[kind] = await entranceOf(page, kind);
     await page.clock.runFor(reduced ? config.reveal.motion.reducedLandMs : config.reveal.motion.landMs[kind]);
-    if (kind === "brief") await expect(actionRow(page)).toHaveCount(0);
+    // Fully landed: the action row stays (it now holds Reroll, Story 4.3) but Reveal next is gone.
+    if (kind === "brief") await expect(page.getByRole("button", { name: copy.button.revealNext })).toHaveCount(0);
     else await expect(actionRow(page)).toHaveAttribute("data-motion-status", "idle");
     await expect(live(page)).toHaveText(announcementFor(kind, fullChallenge));
   }
@@ -210,7 +212,7 @@ test("Quick reveal under reduced motion: every piece lands with the fade, in the
     await page.goto("/stage");
     await expect(meta(page)).toContainText("·", { timeout: 15_000 });
     await expect(piece(page, "brief")).toBeVisible();
-    await expect(actionRow(page)).toHaveCount(0); // landed in full at once
+    await expect(page.getByRole("button", { name: copy.button.revealNext })).toHaveCount(0); // landed in full at once
     const kinds: string[] = [];
     for (const kind of KINDS) if ((await piece(page, kind).count()) > 0) kinds.push(kind);
     const names = Object.fromEntries(await Promise.all(kinds.map(async (k) => [k, (await entranceOf(page, k)).name])));

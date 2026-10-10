@@ -5,10 +5,11 @@ import { copy } from "@/components/copy";
 import { LineButton } from "@/components/LineButton";
 import { SunButton } from "@/components/SunButton";
 import type { Challenge, InputKind, Locks, RevealedKind } from "@/domain/session/schema";
-import { presentKinds } from "@/domain/session/session-reducer";
-import type { RevealMotion } from "./useRevealMotion";
+import type { RerollShuffle, RevealMotion } from "./useRevealMotion";
 import { BriefBlock, EmptySlot, landingMotion, LockToggle, revealedMotion, ScrapGroup, ShufflingPiece, TicketTab } from "./pieces";
 import { nextKind } from "./reveal-logic";
+
+const NO_RESHUFFLE: RerollShuffle = { active: false, flickText: {} };
 
 /** Native auto-repeat on a held Enter would click the focused button once per repeat -- one reveal per press only. */
 function ignoreRepeatedActivation(event: KeyboardEvent<HTMLButtonElement>) {
@@ -32,6 +33,7 @@ export function RevealComposition({
   revealed,
   motion,
   locks,
+  reshuffle = NO_RESHUFFLE,
   onToggleLock,
   onReroll,
 }: {
@@ -40,6 +42,8 @@ export function RevealComposition({
   motion: RevealMotion;
   /** Story 4.3: the held Locks, and the Lock/Reroll actions -- RevealComposition decides when to show them. */
   locks: Locks;
+  /** Story 4.3: the changed pieces' reshuffle after a Reroll (`useRerollShuffle`, owned by StagePage). */
+  reshuffle?: RerollShuffle;
   onToggleLock: (kind: InputKind) => void;
   onReroll: () => void;
 }) {
@@ -69,7 +73,28 @@ export function RevealComposition({
 
   const next = nextKind(challenge, revealed);
 
+  // Story 4.3: Lock toggles + Reroll render only once fully revealed, for a
+  // `new`/`reroll` origin -- never for `retry`/(future) `variation`, whose
+  // Challenge must stay exactly as it is (EXPERIENCE.md -> Retry). The
+  // reducer and store gate the same way (`canLockOrReroll`).
+  const isLockableOrigin = challenge.origin.kind === "new" || challenge.origin.kind === "reroll";
+  const held = isLockableOrigin && next === null;
+
+  /** DESIGN.md -> Lock toggle: a disc on the piece's own outer left edge; only "locked" when the Lock is on this exact value. */
+  function lock(kind: InputKind) {
+    if (!held || challenge.inputs[kind] === undefined) return null;
+    return <LockToggle kind={kind} locked={locks[kind] === challenge.inputs[kind]?.id} onToggle={() => onToggleLock(kind)} />;
+  }
+
   function tab(kind: "skill" | "medium", tiltDeg: number) {
+    const rerollFlick = reshuffle.flickText[kind];
+    if (rerollFlick !== undefined) {
+      return (
+        <ShufflingPiece kind={kind}>
+          <TicketTab kind={kind} value={rerollFlick} tiltDeg={tiltDeg} />
+        </ShufflingPiece>
+      );
+    }
     if (has(kind) || landingKind === kind) {
       return (
         <TicketTab
@@ -78,6 +103,7 @@ export function RevealComposition({
           value={challenge.inputs[kind].revealText}
           tiltDeg={tiltDeg}
           motion={landingKind === kind ? landingMotion(kind, motion.reduced) : revealedMotion(motion.reduced)}
+          lock={lock(kind)}
         />
       );
     }
@@ -92,35 +118,29 @@ export function RevealComposition({
   }
 
   function scrapPiece(kind: "topic" | "style" | "constraint") {
+    const rerollFlick = reshuffle.flickText[kind];
     return {
       present: challenge.inputs[kind] !== undefined,
-      revealed: has(kind),
+      revealed: has(kind) && rerollFlick === undefined,
       landing: landingKind === kind,
-      shufflingText: shufflingKind === kind ? motion.flickText : null,
+      shufflingText: rerollFlick ?? (shufflingKind === kind ? motion.flickText : null),
       value: challenge.inputs[kind]?.revealText ?? "",
+      lock: lock(kind),
     };
   }
   const scrap = { topic: scrapPiece("topic"), style: scrapPiece("style"), constraint: scrapPiece("constraint") };
 
   const briefShowing = briefTrulyLanded || landingKind === "brief";
 
-  // Story 4.3: Lock toggles + Reroll render only once fully revealed, for a
-  // `new`/`reroll` origin -- never for `retry`/(future) `variation`, whose
-  // Challenge must stay exactly as it is (EXPERIENCE.md -> Retry). A
-  // `reroll`-origin Challenge keeps the Reroll button mounted through its
-  // own changed-kinds catch-up too (`next !== null` mid-walk): Reroll is a
-  // single explicit action, its catch-up auto-advances (StagePage), and
-  // nothing should ever need to move focus off Reroll for it. The sun
-  // button never shows for that catch-up -- there is nothing for it to do.
-  const isLockableOrigin = challenge.origin.kind === "new" || challenge.origin.kind === "reroll";
-  const showSunButton = next !== null && challenge.origin.kind !== "reroll";
-  const showReroll = isLockableOrigin && (next === null || challenge.origin.kind === "reroll");
-  const showLocks = isLockableOrigin && next === null;
+  const showSunButton = next !== null;
 
   return (
     <>
-      <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact desktop:gap-stage-gap">
-        <li className="flex flex-wrap gap-stage-gap-compact">
+      {/* pl-14 / gap-x-14: the left gutter each piece's Lock toggle (and its
+          LOCKED caption) sits in, reserved from the start so nothing reflows
+          when Held arrives (DESIGN.md -> Piece anatomy and keep-outs). */}
+      <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap">
+        <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact">
           {tab("skill", 1.5)}
           {tab("medium", -1.5)}
         </li>
@@ -141,7 +161,7 @@ export function RevealComposition({
         />
       ) : null}
 
-      {showSunButton || showReroll ? (
+      {showSunButton || held ? (
         // DESIGN.md -> Layout & Spacing -> Phone: "The action row becomes a
         // bottom bar fixed to the column's bottom edge, within thumb reach"
         // -- column width, on the lilac ground, clear of the home indicator;
@@ -159,27 +179,21 @@ export function RevealComposition({
               {copy.button.revealNext}
             </SunButton>
           ) : (
-            // Reroll comes first in the DOM, not just visually: the existing
-            // "focus the action row's first button" effect above (keyed on
-            // `challenge.id`) re-grabs it here, which is exactly what keeps
-            // focus on Reroll (EXPERIENCE.md -> Focus targets) rather than
-            // the first Lock toggle, every time a reroll commits.
-            <div className="flex flex-col items-start gap-3">
-              <LineButton ground="lilac" onClick={onReroll}>
-                {copy.button.reroll}
-              </LineButton>
-              {showLocks ? (
-                <ul className="flex flex-col gap-2">
-                  {presentKinds(challenge)
-                    .filter((kind): kind is InputKind => kind !== "brief")
-                    .map((kind) => (
-                      <li key={kind}>
-                        <LockToggle kind={kind} locked={locks[kind] !== undefined} onToggle={() => onToggleLock(kind)} />
-                      </li>
-                    ))}
-                </ul>
-              ) : null}
-            </div>
+            // The "focus the action row's first button" effect above (keyed
+            // on `challenge.id`) lands on Reroll after each Reroll commit, so
+            // focus stays on it (EXPERIENCE.md -> Focus targets). While the
+            // reshuffle plays it is aria-disabled and ignores presses rather
+            // than truly `disabled`, which would drop its focus.
+            <LineButton
+              ground="lilac"
+              aria-disabled={reshuffle.active || undefined}
+              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+              onClick={() => {
+                if (!reshuffle.active) onReroll();
+              }}
+            >
+              {copy.button.reroll}
+            </LineButton>
           )}
         </div>
       ) : null}

@@ -33,7 +33,7 @@ export function sessionReducer(session: Session, event: SessionEvent, setup: Pic
     case "reveal_next":
       return session.state === "held" ? revealNext(session) : session;
     case "toggle_lock":
-      return isFullyRevealedHeld(session) ? toggleLock(session, event.kind) : session;
+      return canLockOrReroll(session) ? toggleLock(session, event.kind) : session;
     case "start":
       return canStart(session) ? startAttempt(session, event.nowMs) : session;
     case "pause": {
@@ -72,24 +72,35 @@ export function isFullyRevealedHeld(session: Session): boolean {
   return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
 }
 
+/**
+ * Story 4.3: Locks and Reroll exist only for a fully revealed held Challenge
+ * whose origin is `new` or `reroll` -- a Retry (and a future Variation) must
+ * stay exactly as it is (EXPERIENCE.md -> Retry). Shared by `toggle_lock`
+ * here and the store's `reroll` command.
+ */
+export function canLockOrReroll(session: Session): boolean {
+  if (!isFullyRevealedHeld(session) || session.challenge === null) return false;
+  const origin = session.challenge.origin.kind;
+  return origin === "new" || origin === "reroll";
+}
+
 /** Held -> Attempt only once every present kind of the held Challenge has landed. */
 function canStart(session: Session): boolean {
   return isFullyRevealedHeld(session);
 }
 
-/** Toggles a Lock for `kind` to the held Challenge's own current value for it (or releases it); a no-op kind the Challenge doesn't have. Gated by `isFullyRevealedHeld` in the reducer above. */
+/**
+ * Locks `kind` to the held Challenge's own current value (or releases a Lock
+ * already on that value); a no-op for a kind the Challenge doesn't have.
+ * Clears `lastComposeError`: a failed Reroll's conflict no longer describes
+ * the new set of Locks. Gated by `canLockOrReroll` in the reducer above.
+ */
 function toggleLock(session: Session, kind: InputKind): Session {
-  const challenge = session.challenge;
-  if (challenge === null) return session;
-  if (session.locks[kind] !== undefined) {
-    const nextLocks = { ...session.locks };
-    delete nextLocks[kind];
-    return { ...session, locks: nextLocks };
-  }
-  const input = challenge.inputs[kind];
+  const input = session.challenge?.inputs[kind];
   if (input === undefined) return session;
-  const nextLocks: Locks = { ...session.locks, [kind]: input.id };
-  return { ...session, locks: nextLocks };
+  const { [kind]: current, ...others } = session.locks;
+  const locks: Locks = current === input.id ? others : { ...others, [kind]: input.id };
+  return { ...session, locks, lastComposeError: null };
 }
 
 function startAttempt(session: Session, nowMs: number): Session {
@@ -111,41 +122,23 @@ function commitChallenge(
     event.recentKey === null || event.recentKey.length === 0
       ? session.recent
       : [...session.recent, event.recentKey].slice(-config.generator.recentWindow);
-  // Retry never plays a Reveal (AD-3): every present kind lands at once, regardless of Quick reveal.
-  const revealAll = quickReveal || event.challenge.origin.kind === "retry";
-  const revealed = revealAll
-    ? presentKinds(event.challenge)
-    : event.challenge.origin.kind === "reroll"
-      ? unchangedKinds(session, event.challenge)
-      : [];
+  // Retry never plays a Reveal (AD-3); a Reroll lands everything at once too
+  // (EXPERIENCE.md -> Rerolling: the changed pieces' reshuffle is purely
+  // decorative, played by the Stage, and the result is Held right away).
+  const origin = event.challenge.origin.kind;
+  const revealAll = quickReveal || origin === "retry" || origin === "reroll";
 
   return {
     ...session,
     state: "held",
     challenge: event.challenge,
-    revealed,
+    revealed: revealAll ? presentKinds(event.challenge) : [],
+    // Locks belong to the Challenge they were set on: only a Reroll (which
+    // holds every locked value fixed) carries them over.
+    locks: origin === "reroll" ? session.locks : {},
     recent,
     lastComposeError: null,
   };
-}
-
-/**
- * Reroll only (AD-18): the kinds the previous held Challenge had already
- * landed whose value is identical in the new one -- these stay landed
- * (locked kinds always qualify, since `compose()` holds them fixed; an
- * unlocked kind that happens to redraw the same value qualifies too, with
- * nothing to show either way). Everything else, including the Brief
- * whenever its text changed, re-lands through the ordinary Reveal.
- */
-function unchangedKinds(session: Session, next: Challenge): RevealedKind[] {
-  const prev = session.challenge;
-  if (prev === null) return [];
-  return presentKinds(next).filter((kind) => session.revealed.includes(kind) && sameValue(prev, next, kind));
-}
-
-function sameValue(prev: Challenge, next: Challenge, kind: RevealedKind): boolean {
-  if (kind === "brief") return prev.brief === next.brief;
-  return prev.inputs[kind]?.id === next.inputs[kind]?.id;
 }
 
 /**

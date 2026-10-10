@@ -6,7 +6,7 @@ import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
 import type { Rep, RevealedKind, Session, Setup } from "@/domain/session/schema";
-import { attemptSession, baseChallenge, heldSession, noneSession } from "@/domain/session/session-fixture";
+import { attemptSession, baseChallenge, finishedSession, heldSession, noneSession, savedSession } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
 import { config } from "@/config/app";
 import { buildDefaultSetup } from "./defaults";
@@ -655,7 +655,95 @@ describe("createStore — reroll command", () => {
     const session = store.getState().session;
     expect(session.challenge).toBe(before);
     expect(session.state).toBe("held");
-    expect(session.lastComposeError).not.toBeNull();
+    expect(session.lastComposeError).toEqual({ reason: "no_compatible", blockingLock: "medium" });
+  });
+
+  it("is a no-op from Attempt, Finished, and Saved, and for a Retry-origin Challenge", async () => {
+    const retryHeld: Session = {
+      ...heldSession,
+      challenge: { ...baseChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } },
+      revealed: presentKinds(baseChallenge),
+    };
+    for (const seeded of [attemptSession, finishedSession, savedSession, retryHeld]) {
+      const repository = createRepository({ storage: createMemoryRawStore() });
+      repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+      repository.save("session", { v: 1, rev: 1, data: seeded });
+      const deps = makeDeps({ repository });
+      const store = createStore(deps);
+      store.hydrate();
+      await vi.runAllTimersAsync();
+      const before = store.getState().session;
+      const next = vi.spyOn(deps.random, "next");
+
+      store.dispatch({ type: "reroll" });
+
+      expect(store.getState().session).toBe(before);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it("dispatched before the library loads, runs once it arrives", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    store.dispatch({ type: "reroll" }); // hydrated, library still loading
+    expect(store.getState().session.challenge?.id).toBe(baseChallenge.id);
+
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+  });
+
+  it("dispatched before the library loads, is dropped when the library fails", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal: true } });
+    const seeded: Session = { ...heldSession, challenge: baseChallenge, revealed: presentKinds(baseChallenge) };
+    repository.save("session", { v: 1, rev: 1, data: seeded });
+    const store = createStore(makeDeps({ repository, library: "reject" }));
+    store.hydrate();
+    store.dispatch({ type: "reroll" });
+
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().libraryStatus).toBe("error");
+    expect(store.getState().session.challenge?.id).toBe(baseChallenge.id);
+  });
+
+  /** A fully revealed `new` Challenge composed from `library` (Quick reveal on). */
+  async function composedStore(library: ComposeLibrary) {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal: true } });
+    const store = createStore(makeDeps({ repository, library }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+    return store;
+  }
+
+  it("asks every unlocked kind to differ: with Skill and Medium locked, the Topic always changes", async () => {
+    const store = await composedStore(workingLibrary);
+    store.dispatchSession({ type: "toggle_lock", kind: "skill" });
+    store.dispatchSession({ type: "toggle_lock", kind: "medium" });
+    for (let i = 0; i < 5; i++) {
+      const before = store.getState().session.challenge;
+      store.dispatch({ type: "reroll" });
+      const after = store.getState().session.challenge;
+      expect(after?.inputs.topic?.id).not.toBe(before?.inputs.topic?.id);
+      expect(after?.inputs.medium.id).toBe(before?.inputs.medium.id);
+      expect(store.getState().session.locks).toEqual({ skill: before?.inputs.skill.id, medium: before?.inputs.medium.id });
+    }
+  });
+
+  it("falls back to the Locks alone when nothing can differ, instead of failing", async () => {
+    const oneOfEach: ComposeLibrary = { ...workingLibrary, mediums: [medium("med.a")], topics: [topic("top.one", ["place"])] };
+    const store = await composedStore(oneOfEach);
+    const before = store.getState().session.challenge;
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.lastComposeError).toBeNull();
+    expect(session.challenge?.id).not.toBe(before?.id);
+    expect(session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+    expect(session.challenge?.inputs).toEqual(before?.inputs);
   });
 });
 

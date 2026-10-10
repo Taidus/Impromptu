@@ -167,33 +167,56 @@ export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: InputKind; 
 }
 
 /**
- * DESIGN.md -> Lock toggle: unlocked an outline plum-muted padlock disc;
- * locked an ink disc with a cream padlock plus a "LOCKED" caption beside it.
- * The accessible name is fixed (AC: "fixed name such as 'Lock Topic'") --
- * only `aria-pressed` and the caption carry state. Shown only once a
- * Challenge is fully revealed and held, before Start creating (Story 4.3 --
- * RevealComposition decides when).
+ * DESIGN.md -> Lock toggle: a 52px disc on the piece's outer left edge,
+ * centered vertically. Unlocked an outline plum-muted padlock; locked an ink
+ * disc with a cream padlock plus a "LOCKED" caption beside it (below the
+ * disc, right-aligned to it, so it stays in the same left gutter). The
+ * accessible name is fixed ("Lock Topic") -- only `aria-pressed` and the
+ * caption carry state. RevealComposition decides when it shows (Held, before
+ * Start creating, never for a Retry/Variation); each piece places it via
+ * `LockSlot`.
  */
 export function LockToggle({ kind, locked, onToggle }: { kind: InputKind; locked: boolean; onToggle: () => void }) {
   const tone = locked
     ? "border-ink bg-ink text-cream"
-    : "border-plum-muted text-plum-muted hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]";
+    : "border-plum-muted bg-lilac text-plum-muted hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]";
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="relative block">
       <button
         type="button"
         aria-pressed={locked}
         aria-label={copy.stage.lock.toggleLabel(copy.stage.piece[kind])}
         onClick={onToggle}
+        data-lock={kind}
         className={`flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${tone}`}
       >
         <LockIcon />
       </button>
       {locked ? (
-        <span aria-hidden="true" className="text-piece-label-phone uppercase text-plum desktop:text-piece-label">
+        <span
+          aria-hidden="true"
+          className="absolute top-full right-0 mt-1 text-piece-label-phone whitespace-nowrap text-plum uppercase desktop:text-piece-label"
+        >
           {copy.stage.lock.lockedCaption}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+/** How far a Lock disc reaches into its piece: never past the piece's own padding, so it overlaps only the border (DESIGN.md -> keep-outs). */
+const LOCK_OVERLAP_PX = 8;
+
+/**
+ * Anchors a Lock toggle on a piece's outer left edge, vertically centered.
+ * Rendered inside the piece's level (counter-rotated) content box, so
+ * `insetPx` is the piece's own left padding -- the distance back out to its edge.
+ */
+function LockSlot({ insetPx, children }: { insetPx: number; children: ReactNode }) {
+  if (children === null || children === undefined) return null;
+  return (
+    <span className="absolute top-1/2 z-10 -translate-y-1/2" style={{ right: `calc(100% + ${insetPx - LOCK_OVERLAP_PX}px)` }}>
+      {children}
     </span>
   );
 }
@@ -204,11 +227,13 @@ export function TicketTab({
   value,
   tiltDeg,
   motion = NO_MOTION,
+  lock = null,
 }: {
   kind: "skill" | "medium";
   value: string;
   tiltDeg: number;
   motion?: PieceMotion;
+  lock?: ReactNode;
 }) {
   motion = useMountMotion(motion);
   return (
@@ -217,7 +242,8 @@ export function TicketTab({
       className={`min-w-0 rounded-scrap border-l border-dotted border-ink-soft bg-cream px-4 py-2 shadow-lift-soft ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      <div className="relative" style={{ transform: counter(tiltDeg) }}>
+        <LockSlot insetPx={16}>{lock}</LockSlot>
         <LabelValue
           kind={kind}
           value={value}
@@ -230,7 +256,17 @@ export function TicketTab({
 }
 
 /** Style (DESIGN.md: iridescent foil, tilted 4°). */
-export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+export function FoilSlip({
+  value,
+  tiltDeg,
+  motion = NO_MOTION,
+  lock = null,
+}: {
+  value: string;
+  tiltDeg: number;
+  motion?: PieceMotion;
+  lock?: ReactNode;
+}) {
   motion = useMountMotion(motion);
   return (
     <div
@@ -242,7 +278,8 @@ export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string
         background: "linear-gradient(120deg, var(--color-foil-a), var(--color-foil-b), var(--color-foil-c), var(--color-foil-d))",
       }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      <div className="relative" style={{ transform: counter(tiltDeg) }}>
+        <LockSlot insetPx={12}>{lock}</LockSlot>
         <LabelValue
           kind="style"
           value={value}
@@ -260,7 +297,17 @@ export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * rule is CSS's native `border-style: double`, not `ink-mask.png` wear --
  * see the file header note.
  */
-export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+export function InkStamp({
+  value,
+  tiltDeg,
+  motion = NO_MOTION,
+  lock = null,
+}: {
+  value: string;
+  tiltDeg: number;
+  motion?: PieceMotion;
+  lock?: ReactNode;
+}) {
   motion = useMountMotion(motion);
   return (
     <div
@@ -269,7 +316,8 @@ export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
       {/* The level label/value would cross the tilted rules at its far corners: pad it by the tilt's rise over its own width. */}
-      <div style={{ transform: counter(tiltDeg), paddingBlock: tiltRise(tiltDeg) }}>
+      <div className="relative" style={{ transform: counter(tiltDeg), paddingBlock: tiltRise(tiltDeg) }}>
+        <LockSlot insetPx={12}>{lock}</LockSlot>
         <LabelValue
           kind="constraint"
           value={value}
@@ -287,7 +335,7 @@ export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * (the caller keys this on the value), so the smaller size can't flip it
  * back and forth. Not keyed during a shuffle, so the size stays put across flicks.
  */
-function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: PieceMotion }) {
+function TopicValue({ value, motion = NO_MOTION, lock = null }: { value: string; motion?: PieceMotion; lock?: ReactNode }) {
   motion = useMountMotion(motion);
   const valueRef = useRef<HTMLParagraphElement>(null);
   const [long, setLong] = useState(false);
@@ -301,7 +349,9 @@ function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: Pie
     return () => observer.disconnect();
   }, [long]);
   return (
-    <div data-kind="topic" className={motion.className} style={motion.style}>
+    <div data-kind="topic" className={`relative ${motion.className}`} style={motion.style}>
+      {/* The scrap's own px-4 is the way back out to the piece's edge. */}
+      <LockSlot insetPx={16}>{lock}</LockSlot>
       <LabelValue
         kind="topic"
         value={value}
@@ -327,6 +377,8 @@ interface ScrapPiece {
   landing: boolean;
   shufflingText: string | null;
   value: string;
+  /** Story 4.3: this piece's Lock toggle, or `null` when none shows. */
+  lock?: ReactNode;
 }
 
 function hasMaterial(piece: ScrapPiece): boolean {
@@ -369,6 +421,7 @@ export function ScrapGroup({
             value={style.value}
             tiltDeg={4}
             motion={style.landing ? landingMotion("style", reduced) : revealedMotion(reduced)}
+            lock={style.lock}
           />
         )
       : style.shufflingText !== null
@@ -385,10 +438,18 @@ export function ScrapGroup({
       style={{ transform: `rotate(${scrapTiltDeg}deg)` }}
     >
       <div className="flow-root" style={{ transform: counter(scrapTiltDeg) }}>
-        {foil !== null ? <div className="float-right -mt-6 -mr-7 ml-3 w-2/5 max-w-40">{foil}</div> : null}
+        {/* ml-14/mb-4: the Topic text keeps clear of the foil's Lock disc and caption (DESIGN.md -> keep-outs). */}
+        {foil !== null ? <div className="relative z-10 float-right -mt-6 -mr-7 mb-4 ml-14 w-2/5 max-w-40">{foil}</div> : null}
         {topic.present
           ? topic.revealed || topic.landing
-            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic", reduced) : revealedMotion(reduced)} />
+            ? (
+                <TopicValue
+                  key={topic.value}
+                  value={topic.value}
+                  motion={topic.landing ? landingMotion("topic", reduced) : revealedMotion(reduced)}
+                  lock={topic.lock}
+                />
+              )
             : topic.shufflingText !== null
               ? (
                   <ShufflingPiece kind="topic">
@@ -406,6 +467,7 @@ export function ScrapGroup({
                 value={constraint.value}
                 tiltDeg={stampTiltDeg}
                 motion={constraint.landing ? landingMotion("constraint", reduced) : revealedMotion(reduced)}
+                lock={constraint.lock}
               />
             ) : constraint.shufflingText !== null ? (
               <ShufflingPiece kind="constraint">

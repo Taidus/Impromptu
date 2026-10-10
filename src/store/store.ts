@@ -3,8 +3,8 @@ import { loadLibrary, prefetchOnIdle } from "@/adapters/library";
 import { config } from "@/config/app";
 import { compose, recentKeyFor, type ComposeLibrary, type ComposeRequest } from "@/domain/compose/compose";
 import type { Envelope, StorageKey } from "@/domain/ports";
-import { Rep, Session, Setup, type Challenge, type Reflection } from "@/domain/session/schema";
-import { finishRep, isFullyRevealedHeld, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
+import { Rep, Session, Setup, type Challenge, InputKind, type Locks, type Reflection } from "@/domain/session/schema";
+import { canLockOrReroll, finishRep, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
 import { setupReducer, type SetupEvent, type SetupReducerResult } from "@/domain/session/setup-reducer";
 import { buildDefaultSetup, emptySession } from "./defaults";
 import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
@@ -211,16 +211,17 @@ export function createStore(deps: StoreDeps): Store {
     return state.status === "ready" && state.libraryStatus === "ready" && state.setup !== null && library !== null;
   }
 
-  /**
-   * `new_challenge` and `reroll` compose, so only they wait for the library; finish/save/retry need
-   * hydration alone. `clear_all_data` doesn't read or depend on setup/session validity at all --
-   * it only needs the Repository hydrate() has already set up, so it runs as soon as that's done,
-   * even from `status: 'loading'` or `'error'`.
-   */
+  /** `new_challenge` and `reroll` compose, so only they wait for the library. */
   function needsLibrary(type: StoreCommand["type"]): boolean {
     return type === "new_challenge" || type === "reroll";
   }
 
+  /**
+   * Composing commands wait for the library; finish/save/retry need
+   * hydration alone. `clear_all_data` doesn't read or depend on setup/session validity at all --
+   * it only needs the Repository hydrate() has already set up, so it runs as soon as that's done,
+   * even from `status: 'loading'` or `'error'`.
+   */
   function canRun(command: StoreCommand): boolean {
     if (needsLibrary(command.type)) return isReadyToCompose();
     if (command.type === "clear_all_data") return hydrated;
@@ -398,16 +399,25 @@ export function createStore(deps: StoreDeps): Store {
   /**
    * Reroll (Story 4.3): composes with every locked kind held fixed, same
    * request shape as `runNewChallenge`, but `locks: session.locks` and
-   * `origin: {kind:'reroll'}`. Gated on `isFullyRevealedHeld` (AD-7:
-   * "toggle_lock/reroll are no-ops before the reveal completes") before
+   * `origin: {kind:'reroll'}`. Gated on `canLockOrReroll` (AD-7: a no-op
+   * before the reveal completes, and for a Retry/Variation) before
    * composing, so a premature press never spends a Random draw or touches
-   * the recent ring.
+   * the recent ring. It first asks every unlocked kind to change
+   * (`mustDiffer`), so a Reroll visibly rerolls whenever the library allows;
+   * only if nothing satisfies that does it fall back to the Locks alone --
+   * so only a genuine Lock conflict surfaces as `compose_failed`.
    */
   function runReroll(): void {
-    if (!isFullyRevealedHeld(state.session) || state.session.challenge === null) return;
+    const session = state.session;
+    const held = session.challenge;
+    if (!canLockOrReroll(session) || held === null) return;
     const setup = state.setup;
     if (setup === null || library === null) return; // isReadyToCompose() guarantees this in practice
-    const session = state.session;
+    let mustDiffer: Locks = {};
+    for (const kind of InputKind.options) {
+      const id = held.inputs[kind]?.id;
+      if (id !== undefined && session.locks[kind] === undefined) mustDiffer = { ...mustDiffer, [kind]: id };
+    }
     const request: ComposeRequest = {
       level: setup.level,
       performTiming: setup.performTiming,
@@ -415,10 +425,11 @@ export function createStore(deps: StoreDeps): Store {
       medium: setup.medium,
       skillFocus: setup.skillFocus,
       locks: session.locks,
-      mustDiffer: {},
+      mustDiffer,
       origin: { kind: "reroll", fromRepId: null },
     };
-    const result = compose(request, library, session.recent, clock, random);
+    let result = compose(request, library, session.recent, clock, random);
+    if (!result.ok) result = compose({ ...request, mustDiffer: {} }, library, session.recent, clock, random);
     const event: SessionEvent = result.ok
       ? {
           type: "challenge_committed",

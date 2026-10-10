@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import { baseChallenge, fullChallenge } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
 import { copy } from "@/components/copy";
+import type { Challenge } from "@/domain/session/schema";
 import {
   announcementFor,
+  changedInputKinds,
   emptySlotLabel,
   isFullyRevealed,
   isPastTwoLines,
   liveAnnouncement,
   nextKind,
+  nextLiveText,
   quickRevealAnnouncement,
   restoreAnnouncement,
 } from "./reveal-logic";
@@ -89,36 +92,77 @@ describe("emptySlotLabel", () => {
   });
 });
 
+const oldChallenge: Challenge = { ...fullChallenge, id: "old" };
+
 describe("liveAnnouncement", () => {
   const all = presentKinds(fullChallenge);
 
   it("announces one newly landed kind", () => {
-    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill", "medium"], false)).toBe(
+    expect(liveAnnouncement(fullChallenge, ["skill"], fullChallenge, ["skill", "medium"], false)).toBe(
       announcementFor("medium", fullChallenge),
     );
   });
 
   it("announces every kind of a multi-kind jump, in order", () => {
-    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill", "medium", "topic"], false)).toBe(
+    expect(liveAnnouncement(fullChallenge, ["skill"], fullChallenge, ["skill", "medium", "topic"], false)).toBe(
       `${announcementFor("medium", fullChallenge)} ${announcementFor("topic", fullChallenge)}`,
     );
   });
 
   it("leaves the text alone when nothing new landed", () => {
-    expect(liveAnnouncement(fullChallenge.id, ["skill"], fullChallenge, ["skill"], false)).toBeNull();
+    expect(liveAnnouncement(fullChallenge, ["skill"], fullChallenge, ["skill"], false)).toBeNull();
     expect(liveAnnouncement(null, [], null, [], false)).toBeNull();
   });
 
   it("clears stale text for a new Challenge with nothing landed, or when the Challenge goes away", () => {
-    expect(liveAnnouncement("old", all, fullChallenge, [], false)).toBe("");
-    expect(liveAnnouncement("old", all, null, [], false)).toBe("");
+    expect(liveAnnouncement(oldChallenge, all, fullChallenge, [], false)).toBe("");
+    expect(liveAnnouncement(oldChallenge, all, null, [], false)).toBe("");
   });
 
   it("uses the Quick reveal wording only for a new, fully landed Challenge with Quick reveal on", () => {
-    const text = liveAnnouncement("old", [], fullChallenge, all, true);
+    const text = liveAnnouncement(oldChallenge, [], fullChallenge, all, true);
     expect(text).toBe(quickRevealAnnouncement(fullChallenge));
     expect(text?.startsWith(copy.stage.challengeReady)).toBe(true);
-    expect(liveAnnouncement("old", [], fullChallenge, all, false)).not.toContain(copy.stage.challengeReady);
+    expect(liveAnnouncement(oldChallenge, [], fullChallenge, all, false)).not.toContain(copy.stage.challengeReady);
+  });
+});
+
+describe("reroll announcement (Story 4.3)", () => {
+  const rerolled: Challenge = {
+    ...fullChallenge,
+    id: "rerolled",
+    brief: "A new brief.",
+    inputs: { ...fullChallenge.inputs, topic: { id: "top.other", revealText: "Something else" } },
+    origin: { kind: "reroll", fromRepId: null },
+  };
+
+  it("says \"Rerolled.\", then only the changed Inputs, then the Brief", () => {
+    expect(changedInputKinds(fullChallenge, rerolled)).toEqual(["topic"]);
+    expect(liveAnnouncement(fullChallenge, presentKinds(fullChallenge), rerolled, presentKinds(rerolled), false)).toBe(
+      `${copy.stage.rerolled} Topic: Something else. A new brief.`,
+    );
+  });
+
+  it("is the same with Quick reveal on, and still names the Brief when no Input changed", () => {
+    const same: Challenge = { ...fullChallenge, id: "same", origin: { kind: "reroll", fromRepId: null } };
+    expect(liveAnnouncement(fullChallenge, [], same, presentKinds(same), true)).toBe(`${copy.stage.rerolled} ${same.brief}`);
+  });
+
+  it("is never used to restore a reroll-origin Challenge", () => {
+    expect(restoreAnnouncement(rerolled, presentKinds(rerolled), false)).not.toContain(copy.stage.rerolled);
+    expect(restoreAnnouncement(rerolled, presentKinds(rerolled), true)).not.toContain(copy.stage.rerolled);
+  });
+});
+
+describe("nextLiveText", () => {
+  it("sets new text straight away and leaves the region alone for null", () => {
+    expect(nextLiveText("a", "b")).toEqual({ text: "b", pending: null });
+    expect(nextLiveText("a", null)).toEqual({ text: "a", pending: null });
+  });
+
+  it("clears and re-queues text identical to what the region already says, so it is spoken again", () => {
+    expect(nextLiveText("Rerolled. X", "Rerolled. X")).toEqual({ text: "", pending: "Rerolled. X" });
+    expect(nextLiveText("", "")).toEqual({ text: "", pending: null });
   });
 });
 

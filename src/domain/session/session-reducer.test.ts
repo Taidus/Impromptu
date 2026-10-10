@@ -161,7 +161,7 @@ describe("sessionReducer", () => {
       expect(result.lastComposeError).toBeNull();
     });
 
-    it("commit from a Held session with locks and a lastRepId keeps both untouched", () => {
+    it("a non-reroll commit from a Held session clears its Locks (they belonged to the old Challenge) and keeps lastRepId", () => {
       const held: Session = {
         ...heldSession,
         locks: { skill: "skl.observation" },
@@ -172,8 +172,17 @@ describe("sessionReducer", () => {
         { type: "challenge_committed", challenge: fullChallenge, recentKey: "k3" },
         quickOff,
       );
-      expect(result.locks).toEqual({ skill: "skl.observation" });
+      expect(result.locks).toEqual({});
       expect(result.lastRepId).toBe("223e4567-e89b-42d3-a456-426614174000");
+    });
+
+    it("clears Locks on new and retry commits alike", () => {
+      const held: Session = { ...heldSession, locks: { skill: "skl.observation" } };
+      const retry: Challenge = { ...fullChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } };
+      for (const challenge of [fullChallenge, retry]) {
+        const result = sessionReducer(held, { type: "challenge_committed", challenge, recentKey: null }, quickOff);
+        expect(result.locks).toEqual({});
+      }
     });
 
     it("is a no-op during an Attempt or Finished (new_challenge stays rejected mid-Attempt)", () => {
@@ -222,7 +231,7 @@ describe("sessionReducer", () => {
     });
   });
 
-  describe("challenge_committed with a reroll origin (AD-18: un-land only what changed)", () => {
+  describe("challenge_committed with a reroll origin (EXPERIENCE.md -> Rerolling: Held at once)", () => {
     const prevRevealed = presentKinds(fullChallenge);
     const rerollingHeld: Session = {
       ...heldSession,
@@ -231,7 +240,7 @@ describe("sessionReducer", () => {
       locks: { skill: fullChallenge.inputs.skill.id },
     };
 
-    it("keeps unchanged kinds landed and re-lands only the kinds (and Brief) that changed", () => {
+    it("lands every kind at once (Quick reveal off too) and keeps the locked ids", () => {
       const rerolled: Challenge = {
         ...fullChallenge,
         id: "423e4567-e89b-42d3-a456-426614174000",
@@ -242,9 +251,9 @@ describe("sessionReducer", () => {
       const result = sessionReducer(rerollingHeld, { type: "challenge_committed", challenge: rerolled, recentKey: "k-reroll" }, quickOff);
       expect(result.state).toBe("held");
       expect(result.challenge).toBe(rerolled);
-      expect(result.revealed).toEqual(["skill", "medium", "style", "constraint"]);
+      expect(result.revealed).toEqual(presentKinds(rerolled));
       expect(result.recent).toEqual(["k-reroll"]);
-      expect(result.locks).toEqual({ skill: fullChallenge.inputs.skill.id }); // untouched by the commit itself
+      expect(result.locks).toEqual({ skill: fullChallenge.inputs.skill.id });
     });
 
     it("stays fully revealed when the reroll happens to redraw identical values everywhere", () => {
@@ -268,9 +277,35 @@ describe("sessionReducer", () => {
   describe("toggle_lock", () => {
     const fullyRevealed: Session = { ...heldSession, revealed: presentKinds(baseChallenge) };
 
-    it("locks a present kind to its current value", () => {
+    it("accepts Held + fully revealed: locks a present kind to its current value", () => {
+      expect(fullyRevealed.state).toBe("held");
       const result = sessionReducer(fullyRevealed, { type: "toggle_lock", kind: "skill" }, quickOff);
+      expect(result).not.toBe(fullyRevealed);
       expect(result.locks).toEqual({ skill: baseChallenge.inputs.skill.id });
+    });
+
+    it("accepts a reroll-origin Challenge too", () => {
+      const rerolled: Session = { ...fullyRevealed, challenge: { ...baseChallenge, origin: { kind: "reroll", fromRepId: null } } };
+      expect(sessionReducer(rerolled, { type: "toggle_lock", kind: "topic" }, quickOff).locks).toEqual({ topic: baseChallenge.inputs.topic?.id });
+    });
+
+    it("is a no-op for a retry- or variation-origin Challenge (origin gating, not just UI hiding)", () => {
+      const fromRepId = "223e4567-e89b-42d3-a456-426614174000";
+      for (const origin of [{ kind: "retry", fromRepId }, { kind: "variation", fromRepId }] as const) {
+        const session: Session = { ...fullyRevealed, challenge: { ...baseChallenge, origin } };
+        expect(sessionReducer(session, { type: "toggle_lock", kind: "skill" }, quickOff)).toBe(session);
+      }
+    });
+
+    it("re-locks a stale Lock (another value's id) to the current value, and clears lastComposeError", () => {
+      const stale: Session = {
+        ...fullyRevealed,
+        locks: { skill: "skl.other" },
+        lastComposeError: { reason: "no_compatible", blockingLock: "skill" },
+      };
+      const result = sessionReducer(stale, { type: "toggle_lock", kind: "skill" }, quickOff);
+      expect(result.locks).toEqual({ skill: baseChallenge.inputs.skill.id });
+      expect(result.lastComposeError).toBeNull();
     });
 
     it("unlocks an already-locked kind", () => {

@@ -10,9 +10,9 @@ import { useEffect, useMemo, useState } from "react";
 import { config } from "@/config/app";
 import { prefersReducedMotion, usePrefersReducedMotion } from "@/components/motion";
 import type { ComposeLibrary } from "@/domain/compose/compose";
-import type { Challenge, RevealedKind, Setup } from "@/domain/session/schema";
+import type { Challenge, InputKind, RevealedKind, Setup } from "@/domain/session/schema";
 import { getAppStore } from "@/store";
-import { nextKind } from "./reveal-logic";
+import { changedInputKinds, nextKind } from "./reveal-logic";
 import { createMotionDriver, flickPool, idleMotion, isStillNext, type MotionState } from "./reveal-motion";
 
 export interface RevealMotion {
@@ -98,4 +98,62 @@ export function useRevealMotion(
     () => ({ state, flickText, canPress, reduced, press: driver.press }),
     [state, flickText, canPress, reduced, driver],
   );
+}
+
+/** Story 4.3: the changed pieces' one decorative reshuffle after a Reroll. */
+export interface RerollShuffle {
+  /** True while the reshuffle plays; Reroll ignores presses (and says so via `aria-disabled`) until it ends. */
+  active: boolean;
+  /** The current aria-hidden flick text per reshuffling kind; a kind with no other candidate (or under reduced motion) has none and just shows its value. */
+  flickText: Partial<Record<InputKind, string>>;
+}
+
+/**
+ * EXPERIENCE.md -> Rerolling: a Reroll commits fully landed (the reducer),
+ * then its changed pieces "reshuffle together using Quick reveal timing"
+ * while locked pieces stay still -- one flick run of at most
+ * `config.reveal.quickMaxMs`, from the same Story 4.1 flick pools. Under
+ * reduced motion there are no flicks: the changed pieces remount (they are
+ * keyed on their value) with the Story 4.2 fade, and this only spans that
+ * fade. Purely decorative: `revealed` and the announcement never wait on it.
+ * Only a new `reroll`-origin Challenge seen while mounted starts one -- a
+ * restore or reload never does.
+ */
+export function useRerollShuffle(challenge: Challenge | null, library: ComposeLibrary | null, setup: Setup | null): RerollShuffle {
+  const liveReduced = usePrefersReducedMotion();
+  const [seen, setSeen] = useState<{ challenge: Challenge | null; kinds: InputKind[]; reduced: boolean }>({
+    challenge,
+    kinds: [],
+    reduced: false,
+  });
+  if (challenge?.id !== seen.challenge?.id) {
+    const kinds =
+      challenge !== null && seen.challenge !== null && challenge.origin.kind === "reroll"
+        ? changedInputKinds(seen.challenge, challenge)
+        : [];
+    setSeen({ challenge, kinds, reduced: liveReduced });
+  }
+
+  const active = seen.kinds.length > 0;
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const { motion, quickMaxMs } = config.reveal;
+    const ms = seen.reduced ? motion.reducedLandMs : Math.min(motion.shuffleMs, quickMaxMs);
+    const done = setTimeout(() => setSeen((prev) => ({ ...prev, kinds: [] })), ms);
+    const flick = seen.reduced ? undefined : setInterval(() => setTick((t) => t + 1), motion.flickIntervalMs);
+    return () => {
+      clearTimeout(done);
+      clearInterval(flick);
+    };
+  }, [active, seen.challenge, seen.reduced]);
+
+  const flickText: Partial<Record<InputKind, string>> = {};
+  if (active && !seen.reduced && challenge !== null && library !== null && setup !== null) {
+    seen.kinds.forEach((kind, i) => {
+      const pool = flickPool(kind, challenge, library, setup);
+      if (pool.length > 1) flickText[kind] = pool[(tick + i) % pool.length];
+    });
+  }
+  return { active, flickText };
 }
