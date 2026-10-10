@@ -8,11 +8,12 @@ const render = (props: PracticeViewProps) => renderToStaticMarkup(createElement(
 // Copy as it appears in markup (React escapes apostrophes to &#x27;).
 const escaped = (text: string) => renderToStaticMarkup(createElement(Fragment, null, text));
 
+const action = createElement("a", { href: "/stage" }, copy.button.getAChallenge);
 const base: PracticeViewProps = {
   status: "ready",
   storageAvailable: true,
   repCount: 0,
-  attemptActive: false,
+  action,
 };
 
 describe("PracticeView — loading", () => {
@@ -43,15 +44,6 @@ describe("PracticeView — empty (no Reps)", () => {
 
   it("shows no storage note", () => {
     expect(html).not.toContain(copy.state.progressSavedInBrowserOnly);
-  });
-});
-
-describe("PracticeView — empty, Attempt active", () => {
-  const html = render({ ...base, repCount: 0, attemptActive: true });
-
-  it("shows Resume instead of Get a challenge", () => {
-    expect(html).toContain(copy.button.resume);
-    expect(html).not.toContain(copy.button.getAChallenge);
   });
 });
 

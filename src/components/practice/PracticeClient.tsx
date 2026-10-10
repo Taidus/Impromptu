@@ -1,5 +1,6 @@
 "use client";
 
+import { GetAChallengeButton } from "@/components/GetAChallengeButton";
 import { SiteFooter } from "@/components/journey/SiteFooter";
 import { useAppStore } from "@/store";
 import { PracticeHeader } from "./PracticeHeader";
@@ -8,7 +9,7 @@ import { PracticeView } from "./PracticeView";
 // Story 6.1: the Practice page body, driven by the store (AD-10: the server
 // snapshot and first client render are the neutral loading state).
 export function PracticeClient() {
-  const { status, storageAvailable, session, history } = useAppStore();
+  const { status, storageAvailable, history } = useAppStore();
 
   return (
     <>
@@ -19,7 +20,7 @@ export function PracticeClient() {
             status={status}
             storageAvailable={storageAvailable}
             repCount={history.length}
-            attemptActive={session.state === "attempt"}
+            action={<GetAChallengeButton ground="paper" />}
           />
         </div>
       </main>
