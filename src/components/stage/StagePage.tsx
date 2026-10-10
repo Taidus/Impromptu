@@ -221,6 +221,7 @@ export function StagePage() {
               motion={motion}
               locks={store.session.locks}
               reshuffle={reshuffle}
+              skills={store.library?.skills ?? []}
               onToggleLock={(kind) => getAppStore().dispatchSession({ type: "toggle_lock", kind })}
               onReroll={() => getAppStore().dispatch({ type: "reroll" })}
             />

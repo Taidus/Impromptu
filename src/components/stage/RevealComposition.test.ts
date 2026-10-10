@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { copy } from "@/components/copy";
+import type { Skill } from "@/domain/library/schema";
 import type { Challenge, Locks, RevealedKind } from "@/domain/session/schema";
 import { baseChallenge, fullChallenge } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
@@ -15,9 +16,11 @@ import type { RevealMotion } from "./useRevealMotion";
 
 const idleMotion: RevealMotion = { state: { status: "idle" }, flickText: null, canPress: false, reduced: false, press: () => {} };
 
-function render(challenge: Challenge, revealed: RevealedKind[] = presentKinds(challenge), locks: Locks = {}) {
+const fixtureSkills: Skill[] = [{ id: "skl.observation", revealText: "Observation", info: "Notice what's actually there.", tags: [] }];
+
+function render(challenge: Challenge, revealed: RevealedKind[] = presentKinds(challenge), locks: Locks = {}, skills: readonly Skill[] = []) {
   return renderToStaticMarkup(
-    createElement(RevealComposition, { challenge, revealed, motion: idleMotion, locks, onToggleLock: () => {}, onReroll: () => {} }),
+    createElement(RevealComposition, { challenge, revealed, motion: idleMotion, locks, skills, onToggleLock: () => {}, onReroll: () => {} }),
   );
 }
 
@@ -78,5 +81,32 @@ describe("RevealComposition -- Lock toggles + Reroll (Story 4.3)", () => {
     expect(html).toContain("Flicker");
     expect(html).not.toContain(fullChallenge.inputs.topic?.revealText ?? "-");
     expect(html).toContain(fullChallenge.inputs.skill.revealText);
+  });
+});
+
+describe("RevealComposition -- Skill info button (Story 4.5)", () => {
+  it("is absent mid-Reveal even when skills are loaded", () => {
+    const html = render(baseChallenge, ["skill"], {}, fixtureSkills);
+    expect(html).not.toContain(copy.setup.skillInfoLabel);
+  });
+
+  it("is absent once Held when the library hasn't loaded (no skills)", () => {
+    const html = render(fullChallenge, presentKinds(fullChallenge), {}, []);
+    expect(html).not.toContain(copy.setup.skillInfoLabel);
+  });
+
+  it("appears beside the Skill tab once Held, collapsed (never auto-opened)", () => {
+    const html = render(fullChallenge, presentKinds(fullChallenge), {}, fixtureSkills);
+    expect(html).toContain(copy.setup.skillInfoLabel);
+    expect(html).toMatch(/aria-expanded="false"/);
+    expect(html).not.toContain('role="dialog"');
+    expect(html).not.toContain(fixtureSkills[0].info);
+  });
+
+  it("appears once Held for a retry-origin Challenge too (Lock/Reroll stay hidden)", () => {
+    const retryChallenge: Challenge = { ...fullChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } };
+    const html = render(retryChallenge, presentKinds(retryChallenge), {}, fixtureSkills);
+    expect(html).toContain(copy.setup.skillInfoLabel);
+    expect(html).not.toContain(copy.button.reroll);
   });
 });

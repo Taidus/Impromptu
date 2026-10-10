@@ -77,7 +77,7 @@ development_status:
   4-2-reduced-motion-parity-for-the-reveal: review
   4-3-lock-inputs-and-reroll-the-rest: review
   4-4-name-the-lock-to-release-when-nothing-fits: backlog
-  4-5-hold-the-composition-still-with-skill-info-on-request: backlog
+  4-5-hold-the-composition-still-with-skill-info-on-request: done
   4-6-optional-reveal-sounds: backlog
   4-7-filming-contract-fit-rule-and-automated-legibility-checks: backlog
   epic-4-retrospective: optional
