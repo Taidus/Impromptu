@@ -2,7 +2,7 @@
 title: 'Reduced-motion parity for the Reveal'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '05b19107ceb16410958bfdd1fc2f3c4d7f79db28'
