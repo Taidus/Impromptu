@@ -2,7 +2,7 @@
 title: 'Shuffle and landing motion for each reveal piece'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 story_key: '4-1-shuffle-and-landing-motion-for-each-reveal-piece'
