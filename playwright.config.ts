@@ -1,7 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Dedicated port so a local `next dev` on :3000 is never reused or clobbered.
-const baseURL = "http://localhost:3100";
+// Each worktree can run e2e on its own port (E2E_PORT), so parallel runs never
+// share a server. Never reuse a running server: it could be another worktree's build.
+const port = process.env.E2E_PORT ?? "3100";
+const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "e2e",
@@ -16,9 +19,9 @@ export default defineConfig({
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
   ],
   webServer: {
-    command: process.env.CI ? "npm run start -- -p 3100" : "npm run build && npm run start -- -p 3100",
+    command: process.env.CI ? `npm run start -- -p ${port}` : `npm run build && npm run start -- -p ${port}`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });
