@@ -136,6 +136,35 @@ describe("createStore — hydrate, brand-new visitor", () => {
   });
 });
 
+describe("createStore — library on state", () => {
+  it("is null initially, set to the loaded library on ready, and stays null on 'error'", async () => {
+    const store = createStore(makeDeps());
+    expect(store.getState().library).toBeNull();
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().library).toEqual(workingLibrary);
+
+    const failing = createStore(makeDeps({ library: "reject" }));
+    failing.hydrate();
+    await vi.runAllTimersAsync();
+    expect(failing.getState().libraryStatus).toBe("error");
+    expect(failing.getState().library).toBeNull();
+  });
+});
+
+describe("createStore — dispatchSetup notice", () => {
+  it("returns the reducer's last_medium notice when the last Medium toggle is blocked, undefined otherwise", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, enabledMediums: ["med.a"] } });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    expect(store.dispatchSetup({ type: "toggle_medium", mediumId: "med.a" })).toBe("last_medium");
+    expect(store.getState().setup?.enabledMediums).toEqual(["med.a"]);
+    expect(store.dispatchSetup({ type: "toggle_medium", mediumId: "med.b" })).toBeUndefined();
+  });
+});
+
 describe("createStore — library load failure", () => {
   it("sets libraryStatus and (with no Setup) status to 'error', and drops queued commands", async () => {
     const store = createStore(makeDeps({ library: "reject" }));

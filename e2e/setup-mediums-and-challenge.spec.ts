@@ -1,5 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../src/components/copy";
+
+const heldChallenge = (page: Page) =>
+  page.evaluate(() => JSON.parse(localStorage.getItem("impromptu:session") ?? "null")?.data?.challenge ?? null);
 
 test("Medium chips toggle, and disabling the last enabled one is blocked with an inline message", async ({ page }) => {
   await page.goto("/");
@@ -38,6 +41,8 @@ test('"This time" lists Random plus each enabled Medium, and falls back to Rando
   expect(await thisTime.locator("option").allTextContents()).toEqual(["Random", "Writing", "Drawing", "Photography", "Spoken storytelling"]);
 
   await thisTime.selectOption({ label: "Drawing" });
+  await expect(thisTime).toHaveValue("med.drawing");
+  await page.reload();
   await expect(thisTime).toHaveValue("med.drawing");
 
   await page.getByRole("button", { name: "Drawing", exact: true }).click(); // disable it
@@ -93,6 +98,7 @@ test("the Skill info popover opens on click, shows every Skill's info, closes on
   await expect(infoButton).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("heading", { level: 1 }).click();
   await expect(infoButton).toHaveAttribute("aria-expanded", "false");
+  await expect(infoButton).not.toBeFocused();
 });
 
 test("Quick reveal switches on and the state survives a reload", async ({ page }) => {
@@ -115,11 +121,51 @@ test("Get a challenge dispatches a new Challenge and navigates to /stage", async
   await expect(page).toHaveURL("/stage");
 });
 
+test("with a Challenge already held, Get a challenge on Setup replaces it with a different one", async ({ page }) => {
+  // Seed a held session through the real app: opening /stage with nothing held composes one.
+  await page.goto("/stage");
+  await expect.poll(() => heldChallenge(page), { timeout: 15_000 }).not.toBeNull();
+  const before = await heldChallenge(page);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: copy.button.getAChallenge }).click();
+  await expect(page).toHaveURL("/stage");
+  const after = await heldChallenge(page);
+  expect(after).not.toBeNull();
+  expect(after).not.toEqual(before);
+});
+
+test("a compose failure keeps the user on Setup with the inline message", async ({ page }) => {
+  await page.goto("/");
+  // Spoken storytelling has no Templates yet, so with only it on nothing can compose.
+  for (const name of ["Writing", "Drawing", "Photography"]) {
+    await page.getByRole("button", { name, exact: true }).click();
+  }
+  const button = page.getByRole("button", { name: copy.button.getAChallenge });
+  await button.click();
+
+  const message = page.getByRole("status").filter({ hasText: copy.stage.composeError });
+  await expect(message).toBeVisible();
+  await expect(button).toHaveAttribute("aria-describedby", (await message.getAttribute("id")) ?? "");
+  await expect(page).toHaveURL("/");
+});
+
 test.describe("1280x800", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test("the whole section 01 stack, including Get a challenge, is visible without scrolling", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("button", { name: copy.button.getAChallenge })).toBeInViewport({ ratio: 1 });
+    const controls = [
+      page.getByRole("slider"),
+      ...["Writing", "Drawing", "Photography", "Spoken storytelling"].map((name) => page.getByRole("button", { name, exact: true })),
+      page.getByLabel(copy.setup.thisTimeLabel, { exact: true }),
+      page.getByLabel(copy.setup.skillLabel, { exact: true }),
+      page.getByRole("button", { name: copy.setup.skillInfoLabel }),
+      page.getByText(copy.setup.quickRevealLabel, { exact: true }),
+      page.getByRole("button", { name: copy.button.getAChallenge }),
+    ];
+    for (const control of controls) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+    }
   });
 });

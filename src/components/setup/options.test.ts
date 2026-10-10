@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Medium, Skill } from "@/domain/library/schema";
-import { mediumSelectOptions, skillSelectOptions } from "./options";
+import { mediumSelectOptions, optionOrRandom, skillSelectOptions } from "./options";
 
 const mediums: Medium[] = [
   { id: "med.writing", revealText: "Writing", info: "...", tags: [] },
@@ -46,4 +46,13 @@ describe("skillSelectOptions", () => {
   it("is just Random when the library has no Skills", () => {
     expect(skillSelectOptions([], "Random")).toEqual([{ value: "random", label: "Random" }]);
   });
+});
+
+describe("optionOrRandom", () => {
+  const options = [
+    { value: "random", label: "Random" },
+    { value: "med.a", label: "A" },
+  ];
+  it("keeps a value that is an option", () => expect(optionOrRandom(options, "med.a")).toBe("med.a"));
+  it("falls back to random for a stale id", () => expect(optionOrRandom(options, "med.gone")).toBe("random"));
 });

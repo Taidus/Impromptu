@@ -2,7 +2,7 @@
 title: 'Mediums, Skill focus, Quick reveal, and Get a challenge'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6a601f01c08885fa78491ca3374b304a3576ce50'
@@ -105,11 +105,26 @@ context:
   - Clicking the Quick reveal switch via `getByRole("switch").click()` fails in all three browsers (`sr-only` input's own hit-box is covered by its wrapping `<label>`) -- same as `PerformTiming`'s `sr-only` radios; fixed the test to click the visible label text (`e2e/difficulty-dial.spec.ts` already does this for the radios), not the component.
   - The Skill info popover's "Notice what's actually there." text collided with Journey section 02's static Skill-description copy (`copy.skill.observation`, same wording, same page) under Playwright's strict mode; scoped the popover assertions to the panel via the Info button's `aria-controls` id.
 - `npm run lint`, `npm run typecheck`, `npm test` (505/505, 32 files), `npm run build`, `npm run check:static`, and `npm run test:e2e` (78/78 across chromium/webkit/firefox) all pass.
+- Review patch pass: **Get a challenge** now goes through an exported `useGetAChallenge()` hook (`src/components/setup/useGetAChallenge.ts`) that ignores re-entry, composes on Setup, and opens `/stage` only once the session holds the new Challenge (`challenge !== null && lastComposeError === null`); on failure it stays on Setup with `copy.stage.composeError` as an inline message `aria-describedby`-linked to the button. The store's `dispatchSetup` now returns the reducer notice, and `MediumsRow` derives its block from `last_medium` (plus a library-only count so stale stored ids can't let the last visible chip turn off), clears it once it no longer holds, and keeps its `role="status"` element always mounted (new shared `InlineStatus.tsx`). `SetupSelect` is generic, the selects show and write back `random` for a stored id that isn't an option (`optionOrRandom`), and the unused `className` prop is gone. `SkillInfo` closes on focus leaving button+panel, is a non-modal `role="dialog"` labelled by its button, is right-aligned and capped at the phone content width, and Esc/second activation explicitly refocus the button while an outside click leaves focus where it landed. The reserved blocks get `aria-busy` while loading and the load error has one render site. Added store tests (`library` null → set on ready, null on error; `dispatchSetup` notice), `optionOrRandom` tests, and e2e for a held-Challenge replacement, compose failure staying on Setup, "This time" across reload, every section-01 control in the 1280×800 viewport, and outside click leaving focus off the info button. Note this supersedes the I/O Matrix "Get a challenge" row's unconditional `router.push`. lint, typecheck, `npm test` (564/564, 34 files), build, check:static, and `test:e2e` (138/138) pass.
 
 ## Design Notes
 
 - **Why `library` on `StoreState` instead of a parallel fetch:** the store already loads and holds the full `ComposeLibrary` to run `compose()`; adding a second loader in `src/components/setup` would duplicate `loadLibrary`/`prefetchOnIdle` and risk the UI and `compose()` disagreeing about which Mediums/Skills exist. Exposing the same object read-only is the smaller, single-source-of-truth change.
 - **Why the last-Medium notice is a derived boolean, not a reducer call:** `Setup.enabledMediums` is schema-guaranteed `min(1)` with no duplicates, so "this chip is the only one enabled" is exactly `active && enabledMediums.length === 1` — no need to call `setupReducer` just to predict its own invariant back.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, verif-gap | Get a challenge navigates on compose failure, composes twice on double click, and its e2e passes with the dispatch deleted | medium | Handler dispatches then always pushes; test asserts only the URL | patch |
+| 2 | blind, edge, verif-gap | Last-Medium rule duplicated in UI; stale `blockedId`; status region mounted with text; stale ids defeat the guard | medium | `MediumsRow` recomputes the rule; reducer `notice` unused | patch |
+| 3 | blind, edge | Stale `medium`/`skillFocus` shows Random but composes with hidden id; unchecked casts; unused prop | medium | Select value cast; options filtered by library | patch |
+| 4 | blind, edge | SkillInfo: no focusout close, phone overflow, focus return, no accessible name, effect deps | low | 280px panel anchored left at 320px; `aria-controls` target unlabeled | patch |
+| 5 | blind | Loading block silent; load error may render twice | low | `null` in reserved box; two `loadError` branches | patch |
+| 6 | blind | New `library` store field untested; doc wrong on error path | low | No store test covers it | patch |
+| 7 | blind, verif-gap | "This time" persistence and full 1280×800 stack untested; outside-click focus unasserted | low | Test names claim more than they check | patch |
+| 8 | verif-gap | Setup load-error branch never rendered in a test | low | Needs a failure-injection seam for the generated chunk | defer |
+| 9 | verif-gap | Journey ClosingCall and Practice "Get a challenge" are plain links that reopen a held Challenge | low | Owned by the other session; shared `useGetAChallenge()` offered | defer (peer) |
 
 ## Verification
 

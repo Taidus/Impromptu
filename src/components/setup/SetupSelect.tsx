@@ -4,12 +4,12 @@ import { useId } from "react";
 import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import type { SelectOption } from "./options";
 
-export interface SetupSelectProps {
+export interface SetupSelectProps<T extends string> {
   label: string;
-  value: string;
-  options: readonly SelectOption[];
-  onChange: (value: string) => void;
-  className?: string;
+  /** Must be one of `options` (see `optionOrRandom`). */
+  value: T;
+  options: readonly SelectOption<T>[];
+  onChange: (value: T) => void;
 }
 
 /**
@@ -18,10 +18,10 @@ export interface SetupSelectProps {
  * (EXPERIENCE.md -> Component Patterns -> Select field) so both selects
  * stay visually and behaviorally identical.
  */
-export function SetupSelect({ label, value, options, onChange, className = "" }: SetupSelectProps) {
+export function SetupSelect<T extends string>({ label, value, options, onChange }: SetupSelectProps<T>) {
   const id = useId();
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-label">
         {label}
       </label>
@@ -29,7 +29,10 @@ export function SetupSelect({ label, value, options, onChange, className = "" }:
         <select
           id={id}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            const picked = options.find((option) => option.value === event.target.value);
+            if (picked) onChange(picked.value);
+          }}
           className={`min-h-target-min w-full appearance-none rounded-full border border-cream-dim bg-night px-4 pr-10 text-button uppercase text-cream ${FOCUS_RING_BASE} ${focusRingClassName("night")}`}
         >
           {options.map((option) => (

@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useEffect, useId } from "react";
 import { copy } from "@/components/copy";
 import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import { SunButton } from "@/components/SunButton";
-import type { MediumId, SkillId } from "@/domain/library/schema";
+import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Setup } from "@/domain/session/schema";
 import { getAppStore, useAppStore, type StoreState } from "@/store";
 import { DifficultyDial } from "./DifficultyDial";
 import { MediumsRow } from "./MediumsRow";
-import { mediumSelectOptions, skillSelectOptions } from "./options";
+import { InlineStatus } from "./InlineStatus";
+import { mediumSelectOptions, optionOrRandom, skillSelectOptions } from "./options";
 import { PerformTimingControl } from "./PerformTiming";
 import { QuickRevealSwitch } from "./QuickRevealSwitch";
 import { SetupSelect } from "./SetupSelect";
 import { SkillInfo } from "./SkillInfo";
+import { useGetAChallenge } from "./useGetAChallenge";
 
 const { setup: setupCopy, journey } = copy;
 const linkClass = `${FOCUS_RING_BASE} ${focusRingClassName("night")} rounded-sm`;
@@ -39,7 +41,7 @@ export function SetupHero() {
           </h1>
           <p className="text-lede text-cream-dim">{setupCopy.explanation}</p>
           {/* Reserves the dial row's real height so hydration doesn't shift the page. */}
-          <div className="min-h-52 desktop:min-h-56">
+          <div className="min-h-52 desktop:min-h-56" aria-busy={state.status === "loading"}>
             <SetupControls state={state} />
           </div>
         </div>
@@ -69,11 +71,12 @@ function SetupControls({ state }: { state: StoreState }) {
   if (state.status === "loading") {
     return null;
   }
+  const loadError = <p className="text-body text-cream-dim">{setupCopy.loadError}</p>;
   if (state.status === "error" || state.setup === null) {
-    return <p className="text-body text-cream-dim">{setupCopy.loadError}</p>;
+    return loadError;
   }
 
-  const { setup } = state;
+  const { setup, library } = state;
   const store = getAppStore();
 
   return (
@@ -89,29 +92,35 @@ function SetupControls({ state }: { state: StoreState }) {
           />
         )}
       </DifficultyDial>
-      {/* Reserves the Mediums/selects/switch/button block's real height so library hydration doesn't shift the page. */}
-      <div className="min-h-64 desktop:min-h-48">
-        <MediumsAndChallenge state={state} setup={setup} />
+      {/* Reserves the Mediums/selects/switch/button block's real height so library hydration doesn't shift the page.
+          AD-10: `libraryStatus` can still be 'loading' on a returning visit (setup resolves from storage
+          synchronously; the library loads async), so this block waits on `state.library` separately. */}
+      <div className="min-h-64 desktop:min-h-48" aria-busy={library === null && state.libraryStatus !== "error"}>
+        {library !== null ? (
+          <MediumsAndChallenge library={library} setup={setup} />
+        ) : state.libraryStatus === "error" ? (
+          loadError
+        ) : null}
       </div>
     </div>
   );
 }
 
-function MediumsAndChallenge({ state, setup }: { state: StoreState; setup: Setup }) {
+function MediumsAndChallenge({ library, setup }: { library: ComposeLibrary; setup: Setup }) {
   const store = getAppStore();
-  const router = useRouter();
+  const { getAChallenge, failed } = useGetAChallenge();
+  const challengeErrorId = useId();
 
-  // AD-10: `libraryStatus` can still be 'loading' on a returning visit (setup
-  // resolves from storage synchronously; the library loads async), so this
-  // block waits on `state.library` separately from the Dial above it.
-  if (state.library === null) {
-    if (state.libraryStatus === "error") {
-      return <p className="text-body text-cream-dim">{setupCopy.loadError}</p>;
-    }
-    return null;
-  }
-
-  const { library } = state;
+  const mediumOptions = mediumSelectOptions(library.mediums, setup.enabledMediums, setupCopy.randomOption);
+  const skillOptions = skillSelectOptions(library.skills, setupCopy.randomOption);
+  // A stored id the options no longer offer (e.g. dropped from the library) shows as Random, and is
+  // written back as Random so compose never uses the hidden stale id.
+  const medium = optionOrRandom(mediumOptions, setup.medium);
+  const skillFocus = optionOrRandom(skillOptions, setup.skillFocus);
+  useEffect(() => {
+    if (medium !== setup.medium) store.dispatchSetup({ type: "choose_medium", medium });
+    if (skillFocus !== setup.skillFocus) store.dispatchSetup({ type: "set_skill_focus", skillFocus });
+  }, [store, medium, skillFocus, setup.medium, setup.skillFocus]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,36 +132,34 @@ function MediumsAndChallenge({ state, setup }: { state: StoreState; setup: Setup
       <div className="flex flex-col gap-4 desktop:flex-row desktop:items-end">
         <SetupSelect
           label={setupCopy.thisTimeLabel}
-          value={setup.medium}
-          options={mediumSelectOptions(library.mediums, setup.enabledMediums, setupCopy.randomOption)}
-          onChange={(value) => store.dispatchSetup({ type: "choose_medium", medium: value as MediumId | "random" })}
+          value={medium}
+          options={mediumOptions}
+          onChange={(value) => store.dispatchSetup({ type: "choose_medium", medium: value })}
         />
         <div className="flex items-end gap-2">
-          <SetupSelect
-            label={setupCopy.skillLabel}
-            value={setup.skillFocus}
-            options={skillSelectOptions(library.skills, setupCopy.randomOption)}
-            onChange={(value) => store.dispatchSetup({ type: "set_skill_focus", skillFocus: value as SkillId | "random" })}
-          />
+          {/* flex-1 puts the info button at the row's end on phones, so its right-aligned popover stays on screen. */}
+          <div className="min-w-0 flex-1">
+            <SetupSelect
+              label={setupCopy.skillLabel}
+              value={skillFocus}
+              options={skillOptions}
+              onChange={(value) => store.dispatchSetup({ type: "set_skill_focus", skillFocus: value })}
+            />
+          </div>
           <SkillInfo skills={library.skills} />
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <QuickRevealSwitch
-          checked={setup.quickReveal}
-          onChange={(quickReveal) => store.dispatchSetup({ type: "set_quick_reveal", quickReveal })}
-        />
-        <SunButton
-          onClick={() => {
-            // Compose now so the Challenge is already held when `/stage` opens;
-            // Story 3.9's own "compose if nothing held" check then skips, so this
-            // never composes twice.
-            store.dispatch({ type: "new_challenge" });
-            router.push("/stage");
-          }}
-        >
-          {copy.button.getAChallenge}
-        </SunButton>
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <QuickRevealSwitch
+            checked={setup.quickReveal}
+            onChange={(quickReveal) => store.dispatchSetup({ type: "set_quick_reveal", quickReveal })}
+          />
+          <SunButton onClick={getAChallenge} aria-describedby={failed ? challengeErrorId : undefined}>
+            {copy.button.getAChallenge}
+          </SunButton>
+        </div>
+        <InlineStatus id={challengeErrorId} message={failed ? copy.stage.composeError : null} />
       </div>
     </div>
   );
