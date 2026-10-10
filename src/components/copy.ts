@@ -2,12 +2,28 @@
 // later stories add entries here as they need them. Seeded from
 // EXPERIENCE.md -> Voice and Tone: Level one-liners, button labels, and the
 // literal state strings from its Do/Don't table.
+const levelName = {
+  explore: "Explore",
+  experiment: "Experiment",
+  develop: "Develop",
+  perform: "Perform",
+} as const;
+
 export const copy = {
   level: {
     explore: "One task, one simple rule.",
     experiment: "Try more than one way in.",
     develop: "Aim for an effect, then revise.",
     perform: "Everything at once. Timed if you want.",
+  },
+  // Story 6.2: the Rep card's meta row (names, not one-liners -- see `level` above for those).
+  levelName,
+  // Story 6.2: Practice History Rep card -- the Retry/Variation pill and the Reflection question labels.
+  rep: {
+    retry: "RETRY",
+    variation: "VARIATION",
+    worked: "What worked",
+    change: "What I'd change",
   },
   skill: {
     observation: "Notice what's actually there.",
@@ -55,12 +71,7 @@ export const copy = {
     // Keyed by src/domain/library/schema's Level enum; "mode" is derived from
     // a held Challenge's timeLimitSec (Perform's Timed/Untimed/Either setup
     // choice resolves to one or the other per generated Challenge).
-    levelName: {
-      explore: "Explore",
-      experiment: "Experiment",
-      develop: "Develop",
-      perform: "Perform",
-    },
+    levelName,
     mode: {
       timed: "TIMED",
       untimed: "UNTIMED",
@@ -125,6 +136,8 @@ export const copy = {
     title: "Practice",
     loading: "Loading your practice…",
     storageUnavailable: "This browser isn't saving data, so there's no history to show.",
+    // Story 6.2: visually hidden h2 above the Rep card list.
+    historyTitle: "Practice history",
   },
   privacy: {
     title: "privacy.",
