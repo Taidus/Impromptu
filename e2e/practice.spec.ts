@@ -263,3 +263,134 @@ test("/practice never scrolls horizontally at 320px", async ({ page }) => {
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
+
+// Story 6.5 AC: Escape cancels the Clear all data dialog back to the opener,
+// with no data touched.
+test("/practice Clear all data: Escape cancels back to the opener", async ({ page }) => {
+  const rep = Rep.parse({
+    id: "623e4567-e89b-42d3-a456-426614174000",
+    challenge: baseChallenge,
+    finishedAt: "2026-10-09T12:00:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  const session = Session.parse(attemptSession);
+  await seed(page, {
+    "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [rep] },
+    "impromptu:session": { v: config.storage.schemaVersions.session, rev: 1, data: session },
+  });
+  await page.goto("/practice");
+
+  const main = page.locator("main");
+  const opener = main.getByRole("button", { name: copy.button.clearAllData });
+  await expect(opener).toBeVisible({ timeout: 15_000 });
+
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: copy.practice.clearAllTitle });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: copy.button.keepMyData })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+
+  // Nothing was cleared.
+  await expect(main.getByText(copy.state.progressSavedInBrowserOnly)).toBeVisible();
+});
+
+// Story 6.5 AC: confirming clears setup/session/history, wipes every
+// impromptu:* key, shows the Empty state and "All data cleared.", and
+// drops any held Challenge/Attempt -- /stage then composes a fresh one.
+test("/practice Clear all data: confirming clears everything and announces it", async ({ page }) => {
+  const rep = Rep.parse({
+    id: "723e4567-e89b-42d3-a456-426614174000",
+    challenge: baseChallenge,
+    finishedAt: "2026-10-09T12:00:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  const session = Session.parse(attemptSession);
+  await seed(page, {
+    "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [rep] },
+    "impromptu:session": { v: config.storage.schemaVersions.session, rev: 1, data: session },
+  });
+  await page.goto("/practice");
+
+  const main = page.locator("main");
+  const opener = main.getByRole("button", { name: copy.button.clearAllData });
+  await expect(opener).toBeVisible({ timeout: 15_000 });
+  await opener.click();
+
+  const dialog = page.getByRole("dialog", { name: copy.practice.clearAllTitle });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: copy.button.clearEverything }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(main.getByText(copy.state.nothingHereYet)).toBeVisible();
+  const status = main.getByRole("status").filter({ hasText: copy.state.allDataCleared });
+  await expect(status).toBeVisible();
+  await expect(status).toBeFocused();
+
+  const keys = await page.evaluate(() => Object.keys(window.localStorage).filter((k) => k.startsWith("impromptu:")));
+  expect(keys).toEqual([]);
+
+  // /stage finds nothing held, so it composes a fresh Challenge (the production library).
+  await page.goto("/stage");
+  await expect(page.getByText(copy.stage.loadError)).toHaveCount(0);
+  const heldChallenge = () =>
+    page.evaluate(() => JSON.parse(localStorage.getItem("impromptu:session") ?? "null")?.data?.challenge ?? null);
+  await expect.poll(heldChallenge, { timeout: 15_000 }).not.toBeNull();
+});
+
+async function seedOneRep(page: Page, idPrefix: string) {
+  const rep = Rep.parse({
+    id: `${idPrefix}e4567-e89b-42d3-a456-426614174000`,
+    challenge: baseChallenge,
+    finishedAt: "2026-10-09T12:00:00.000Z",
+    timeUsedSec: null,
+    reflection: null,
+  });
+  await seed(page, {
+    "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: [rep] },
+  });
+}
+
+// Story 6.5 review: "Keep my data" closes the dialog back to the opener, nothing cleared.
+test("/practice Clear all data: Keep my data cancels back to the opener", async ({ page }) => {
+  await seedOneRep(page, "823");
+  await page.goto("/practice");
+
+  const main = page.locator("main");
+  const opener = main.getByRole("button", { name: copy.button.clearAllData });
+  await expect(opener).toBeEnabled({ timeout: 15_000 });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: copy.practice.clearAllTitle });
+  await dialog.getByRole("button", { name: copy.button.keepMyData }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await expect(main.getByText(copy.state.progressSavedInBrowserOnly)).toBeVisible();
+  const keys = await page.evaluate(() => Object.keys(window.localStorage).filter((k) => k.startsWith("impromptu:")));
+  expect(keys).toContain("impromptu:history");
+});
+
+// Story 6.5 review: preflight zeroes <dialog>'s UA margin -- the dialog must stay centred and inside the viewport.
+for (const width of [1280, 320]) {
+  test(`/practice Clear all data: the dialog is centred in the viewport at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await seedOneRep(page, "923");
+    await page.goto("/practice");
+
+    const opener = page.locator("main").getByRole("button", { name: copy.button.clearAllData });
+    await expect(opener).toBeEnabled({ timeout: 15_000 });
+    await opener.click();
+    const dialog = page.getByRole("dialog", { name: copy.practice.clearAllTitle });
+    await expect(dialog).toBeVisible();
+
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.abs(box!.x + box!.width / 2 - width / 2)).toBeLessThanOrEqual(3);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+  });
+}

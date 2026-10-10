@@ -3,8 +3,8 @@ import { loadLibrary, prefetchOnIdle } from "@/adapters/library";
 import { config } from "@/config/app";
 import { compose, recentKeyFor, type ComposeLibrary, type ComposeRequest } from "@/domain/compose/compose";
 import type { Envelope, StorageKey } from "@/domain/ports";
-import { Rep, Session, Setup, type Challenge, type Reflection } from "@/domain/session/schema";
-import { finishRep, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
+import { Rep, Session, Setup, type Challenge, InputKind, type Locks, type Reflection } from "@/domain/session/schema";
+import { canLockOrReroll, finishRep, sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
 import { setupReducer, type SetupEvent, type SetupReducerResult } from "@/domain/session/setup-reducer";
 import { buildDefaultSetup, emptySession } from "./defaults";
 import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
@@ -93,6 +93,9 @@ export function createStore(deps: StoreDeps): Store {
       if (result.ok) return { data: currentData, rev: result.value.rev, saved: true };
       if (result.reason !== "rev_conflict") return { data: currentData, rev: currentRev, saved: false }; // keep this in memory only
       const fresh: Envelope<unknown> | null = result.fresh;
+      // The key vanished under a write that expected rev > 0: another tab cleared all data (Story 6.5).
+      // Re-applying would resurrect the pre-clear slice, so keep it in memory only.
+      if (fresh === null && currentRev > 0) return { data: currentData, rev: 0, saved: false };
       const parsed = fresh ? schema.safeParse(fresh.data) : null;
       currentRev = fresh ? fresh.rev : 0;
       currentData = reapply(parsed?.success ? parsed.data : null);
@@ -170,8 +173,8 @@ export function createStore(deps: StoreDeps): Store {
         library = result.library;
         onLibraryReady(result.library);
       } catch {
-        // No retry this story: report it and drop what was waiting on the library (only new_challenge needs it).
-        removePending((c) => c.type === "new_challenge");
+        // No retry this story: report it and drop what was waiting on the library (new_challenge/reroll only).
+        removePending((c) => needsLibrary(c.type));
         setState({ ...state, libraryStatus: "error", status: state.setup === null ? "error" : state.status });
       }
     });
@@ -208,9 +211,21 @@ export function createStore(deps: StoreDeps): Store {
     return state.status === "ready" && state.libraryStatus === "ready" && state.setup !== null && library !== null;
   }
 
-  /** Only `new_challenge` composes, so only it waits for the library; finish/save/retry need hydration alone. */
+  /** `new_challenge` and `reroll` compose, so only they wait for the library. */
+  function needsLibrary(type: StoreCommand["type"]): boolean {
+    return type === "new_challenge" || type === "reroll";
+  }
+
+  /**
+   * Composing commands wait for the library; finish/save/retry need
+   * hydration alone. `clear_all_data` doesn't read or depend on setup/session validity at all --
+   * it only needs the Repository hydrate() has already set up, so it runs as soon as that's done,
+   * even from `status: 'loading'` or `'error'`.
+   */
   function canRun(command: StoreCommand): boolean {
-    return command.type === "new_challenge" ? isReadyToCompose() : state.status === "ready";
+    if (needsLibrary(command.type)) return isReadyToCompose();
+    if (command.type === "clear_all_data") return hydrated;
+    return state.status === "ready";
   }
 
   function dispatch(command: StoreCommand): void {
@@ -218,8 +233,8 @@ export function createStore(deps: StoreDeps): Store {
       runCommand(command);
       return;
     }
-    // A library error means nothing will ever drain a new_challenge; the others can still drain once a Setup arrives.
-    if (command.type === "new_challenge" && (state.status === "error" || state.libraryStatus === "error")) return;
+    // A library error means nothing will ever drain a composing command; the others can still drain once a Setup arrives.
+    if (needsLibrary(command.type) && (state.status === "error" || state.libraryStatus === "error")) return;
     if (!pendingCommands.some((c) => c.type === command.type)) pendingCommands.push(command); // at most one per type
   }
 
@@ -228,6 +243,39 @@ export function createStore(deps: StoreDeps): Store {
     else if (command.type === "finish_rep") runFinishRep();
     else if (command.type === "save_rep") runSaveRep();
     else if (command.type === "retry") runRetry(command.fromRepId);
+    else if (command.type === "reroll") runReroll();
+    else runClearAllData();
+  }
+
+  /**
+   * Clear all data (Story 6.5, FR-28): wipes every `impromptu:*` key, empties session/history,
+   * resets every slice rev to 0 (AD-9: the next write after a clear starts a fresh rev chain), and
+   * drops any queued `new_challenge` (it would otherwise compose against the just-cleared state
+   * the moment the library arrives). Setup goes back to the library default in memory only --
+   * nothing is persisted here -- when the library is ready; otherwise it goes to `null` and the
+   * existing first-visit path (`onLibraryReady` -> `ensureSetup`) builds and persists one once the
+   * library resolves, exactly as it would for a brand-new visitor.
+   */
+  function runClearAllData(): void {
+    // A failed clear changes nothing but the save-failed flag (the caller announces the failure).
+    if (!repository.clearAll().ok) {
+      setState({ ...state, saveFailed: true });
+      return;
+    }
+    removePending((c) => c.type === "new_challenge");
+    setupRev = 0;
+    sessionRev = 0;
+    historyRev = 0;
+    const setup = library !== null ? buildDefaultSetup(library) : null;
+    setState({
+      ...state,
+      setup,
+      status: setup !== null ? "ready" : state.libraryStatus === "error" ? "error" : "loading",
+      session: emptySession,
+      history: [],
+      saveFailed: false,
+      migrationFailed: false,
+    });
   }
 
   function runNewChallenge(): void {
@@ -346,6 +394,50 @@ export function createStore(deps: StoreDeps): Store {
     if (fromRep === undefined) return;
     const challenge: Challenge = { ...fromRep.challenge, id: random.uuid(), origin: { kind: "retry", fromRepId } };
     applySessionEvent({ type: "challenge_committed", challenge, recentKey: null });
+  }
+
+  /**
+   * Reroll (Story 4.3): composes with every locked kind held fixed, same
+   * request shape as `runNewChallenge`, but `locks: session.locks` and
+   * `origin: {kind:'reroll'}`. Gated on `canLockOrReroll` (AD-7: a no-op
+   * before the reveal completes, and for a Retry/Variation) before
+   * composing, so a premature press never spends a Random draw or touches
+   * the recent ring. It first asks every unlocked kind to change
+   * (`mustDiffer`), so a Reroll visibly rerolls whenever the library allows;
+   * only if nothing satisfies that does it fall back to the Locks alone --
+   * so only a genuine Lock conflict surfaces as `compose_failed`.
+   */
+  function runReroll(): void {
+    const session = state.session;
+    const held = session.challenge;
+    if (!canLockOrReroll(session) || held === null) return;
+    const setup = state.setup;
+    if (setup === null || library === null) return; // isReadyToCompose() guarantees this in practice
+    let mustDiffer: Locks = {};
+    for (const kind of InputKind.options) {
+      const id = held.inputs[kind]?.id;
+      if (id !== undefined && session.locks[kind] === undefined) mustDiffer = { ...mustDiffer, [kind]: id };
+    }
+    const request: ComposeRequest = {
+      level: setup.level,
+      performTiming: setup.performTiming,
+      enabledMediums: setup.enabledMediums,
+      medium: setup.medium,
+      skillFocus: setup.skillFocus,
+      locks: session.locks,
+      mustDiffer,
+      origin: { kind: "reroll", fromRepId: null },
+    };
+    let result = compose(request, library, session.recent, clock, random);
+    if (!result.ok) result = compose({ ...request, mustDiffer: {} }, library, session.recent, clock, random);
+    const event: SessionEvent = result.ok
+      ? {
+          type: "challenge_committed",
+          challenge: result.challenge,
+          recentKey: recentKeyFor(result.challenge.templateId, result.challenge.inputs.topic?.id ?? null),
+        }
+      : { type: "compose_failed", reason: result.reason, blockingLock: result.blockingLock };
+    applySessionEvent(event);
   }
 
   function dispatchSetup(event: SetupEvent): SetupReducerResult["notice"] {

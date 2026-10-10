@@ -40,6 +40,9 @@
   --color-vermilion-ink: #a8361f;
   --color-stamp: #a92e1c;
 
+  /* Story 6.5: the Dialog's night scrim (DESIGN.md -> dialog.scrim) -- night at 72% alpha. */
+  --color-scrim: rgb(18 16 16 / 0.72);
+
   /* Signatures */
   --color-grape: #7a2cff;
   --color-grape-deep: #5414c9;
@@ -679,13 +682,23 @@
   }
 }
 
+/* Story 6.5: the Dialog's backdrop (DESIGN.md -> dialog.scrim), drawn on the
+   native <dialog>'s own ::backdrop pseudo-element rather than an app-level
+   overlay -- showModal() creates and removes it automatically. */
+dialog::backdrop {
+  background-color: var(--color-scrim);
+}
+
+/* Story 6.5: no page scroll behind the open modal's scrim. */
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
 /* Story 4.1: the Reveal's landing entrance, per material (UX-DR22). A
    soft settle for the ticket tabs and the Topic scrap; a punchier "thump"
    for the Constraint stamp; the foil reuses the soft settle (its own
-   shimmer, below, is the material cue). `motion-reduce:` pairs every one
-   of these at its call site (pieces.tsx), matching the SunButton/Ticker
-   precedent -- Story 4.2 owns the full reduced-motion fade, but a landing
-   transition still shouldn't play under it. */
+   shimmer, below, is the material cue). Under reduced motion pieces.tsx
+   picks `reduced-fade` (below) instead, never one of these. */
 @keyframes piece-land {
   from {
     opacity: 0;
@@ -744,4 +757,25 @@
 
 @utility animate-foil-shimmer {
   animation: foil-shimmer var(--motion-ms) ease-in-out infinite;
+}
+
+/* Story 4.2: the one entrance every piece gets under
+   `prefers-reduced-motion: reduce` -- opacity only, so a piece's position
+   and size never move during or after it (AC: identical to the motion
+   version). pieces.tsx picks it in JS instead of the land/thump animations
+   above (from the reduced value captured at the press), and for a piece that
+   mounts already revealed (Quick reveal's instant landing, which plays no
+   animation of its own under full motion). The foil shimmer has no reduced
+   variant: it only plays mid-shuffle, and reduced motion never shuffles. */
+@keyframes reduced-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@utility animate-reduced-fade {
+  animation: reduced-fade var(--motion-ms) ease-out;
 }

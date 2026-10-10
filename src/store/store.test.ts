@@ -5,8 +5,8 @@ import { fakeClock, seededRandom } from "@/domain/test-doubles";
 import type { Medium, Skill, Template, Topic } from "@/domain/library/schema";
 import type { ComposeLibrary } from "@/domain/compose/compose";
 import type { Repository } from "@/domain/ports";
-import type { Rep, Session, Setup } from "@/domain/session/schema";
-import { attemptSession, baseChallenge } from "@/domain/session/session-fixture";
+import type { Rep, RevealedKind, Session, Setup } from "@/domain/session/schema";
+import { attemptSession, baseChallenge, finishedSession, heldSession, noneSession, savedSession } from "@/domain/session/session-fixture";
 import { presentKinds } from "@/domain/session/session-reducer";
 import { config } from "@/config/app";
 import { buildDefaultSetup } from "./defaults";
@@ -284,7 +284,9 @@ describe("createStore — setup events, rev conflict", () => {
 });
 
 describe("createStore — setup events, fresh === null conflict", () => {
-  it("re-applies the event once to the pre-event base, saving at rev 1", () => {
+  // Story 6.5: a null reread under a rev > 0 write means another tab cleared all data --
+  // the write stays in memory only so the cleared slice is never resurrected.
+  it("applies the event once in memory and does not write the cleared key back", () => {
     const storage = createMemoryRawStore();
     const repository = createRepository({ storage });
     repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
@@ -297,7 +299,8 @@ describe("createStore — setup events, fresh === null conflict", () => {
 
     const expected = { ...concreteSetup, enabledMediums: ["med.a"] };
     expect(store.getState().setup).toEqual(expected); // applied once, not toggled back on
-    expect(repository.load("setup")).toEqual({ ok: true, value: { v: 1, rev: 1, data: expected } });
+    expect(repository.load("setup")).toEqual({ ok: true, value: null });
+    expect(store.getState().saveFailed).toBe(true);
   });
 });
 
@@ -604,6 +607,146 @@ describe("createStore — retry command", () => {
   });
 });
 
+describe("createStore — reroll command", () => {
+  /** A Held session seeded straight into storage (no need to run new_challenge/reveal first) -- `baseChallenge`'s own ids (skl.observation, med.drawing, top.near-object) only need to exist in `workingLibrary` for the kind a test locks. */
+  function heldStore(quickReveal: boolean, revealed: RevealedKind[]) {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal } });
+    const session: Session = { ...heldSession, challenge: baseChallenge, revealed };
+    repository.save("session", { v: 1, rev: 1, data: session });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    return store;
+  }
+
+  it("composes with locks for every locked kind, keeps them identical, and pushes the recent key", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    await vi.runAllTimersAsync();
+    store.dispatchSession({ type: "toggle_lock", kind: "skill" });
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.state).toBe("held");
+    expect(session.challenge?.id).not.toBe(baseChallenge.id);
+    expect(session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+    expect(session.challenge?.inputs.skill.id).toBe("skl.observation");
+    expect(session.recent).toHaveLength(1);
+  });
+
+  it("is a no-op before the reveal completes (AD-7)", async () => {
+    const store = heldStore(false, ["skill"]); // partially revealed
+    await vi.runAllTimersAsync();
+    const before = store.getState().session;
+
+    store.dispatch({ type: "reroll" });
+
+    expect(store.getState().session).toBe(before);
+  });
+
+  it("sets compose_failed and keeps the held Challenge when Locks leave nothing composable", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    await vi.runAllTimersAsync();
+    store.dispatchSession({ type: "toggle_lock", kind: "medium" }); // "med.drawing" isn't in workingLibrary's mediums
+    const before = store.getState().session.challenge;
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.challenge).toBe(before);
+    expect(session.state).toBe("held");
+    expect(session.lastComposeError).toEqual({ reason: "no_compatible", blockingLock: "medium" });
+  });
+
+  it("is a no-op from Attempt, Finished, and Saved, and for a Retry-origin Challenge", async () => {
+    const retryHeld: Session = {
+      ...heldSession,
+      challenge: { ...baseChallenge, origin: { kind: "retry", fromRepId: "223e4567-e89b-42d3-a456-426614174000" } },
+      revealed: presentKinds(baseChallenge),
+    };
+    for (const seeded of [attemptSession, finishedSession, savedSession, retryHeld]) {
+      const repository = createRepository({ storage: createMemoryRawStore() });
+      repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+      repository.save("session", { v: 1, rev: 1, data: seeded });
+      const deps = makeDeps({ repository });
+      const store = createStore(deps);
+      store.hydrate();
+      await vi.runAllTimersAsync();
+      const before = store.getState().session;
+      const next = vi.spyOn(deps.random, "next");
+
+      store.dispatch({ type: "reroll" });
+
+      expect(store.getState().session).toBe(before);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it("dispatched before the library loads, runs once it arrives", async () => {
+    const store = heldStore(true, presentKinds(baseChallenge));
+    store.dispatch({ type: "reroll" }); // hydrated, library still loading
+    expect(store.getState().session.challenge?.id).toBe(baseChallenge.id);
+
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+  });
+
+  it("dispatched before the library loads, is dropped when the library fails", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal: true } });
+    const seeded: Session = { ...heldSession, challenge: baseChallenge, revealed: presentKinds(baseChallenge) };
+    repository.save("session", { v: 1, rev: 1, data: seeded });
+    const store = createStore(makeDeps({ repository, library: "reject" }));
+    store.hydrate();
+    store.dispatch({ type: "reroll" });
+
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().libraryStatus).toBe("error");
+    expect(store.getState().session.challenge?.id).toBe(baseChallenge.id);
+  });
+
+  /** A fully revealed `new` Challenge composed from `library` (Quick reveal on). */
+  async function composedStore(library: ComposeLibrary) {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, quickReveal: true } });
+    const store = createStore(makeDeps({ repository, library }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+    return store;
+  }
+
+  it("asks every unlocked kind to differ: with Skill and Medium locked, the Topic always changes", async () => {
+    const store = await composedStore(workingLibrary);
+    store.dispatchSession({ type: "toggle_lock", kind: "skill" });
+    store.dispatchSession({ type: "toggle_lock", kind: "medium" });
+    for (let i = 0; i < 5; i++) {
+      const before = store.getState().session.challenge;
+      store.dispatch({ type: "reroll" });
+      const after = store.getState().session.challenge;
+      expect(after?.inputs.topic?.id).not.toBe(before?.inputs.topic?.id);
+      expect(after?.inputs.medium.id).toBe(before?.inputs.medium.id);
+      expect(store.getState().session.locks).toEqual({ skill: before?.inputs.skill.id, medium: before?.inputs.medium.id });
+    }
+  });
+
+  it("falls back to the Locks alone when nothing can differ, instead of failing", async () => {
+    const oneOfEach: ComposeLibrary = { ...workingLibrary, mediums: [medium("med.a")], topics: [topic("top.one", ["place"])] };
+    const store = await composedStore(oneOfEach);
+    const before = store.getState().session.challenge;
+
+    store.dispatch({ type: "reroll" });
+
+    const session = store.getState().session;
+    expect(session.lastComposeError).toBeNull();
+    expect(session.challenge?.id).not.toBe(before?.id);
+    expect(session.challenge?.origin).toEqual({ kind: "reroll", fromRepId: null });
+    expect(session.challenge?.inputs).toEqual(before?.inputs);
+  });
+});
+
 describe("createStore — new_challenge guarded during Attempt/Finished", () => {
   it("does not compose a new Challenge while an Attempt is running or just Finished", async () => {
     const { store, deps } = startedStore();
@@ -761,5 +904,214 @@ describe("createStore — retry outside Saved", () => {
     store.dispatch({ type: "retry", fromRepId: before.lastRepId as string });
 
     expect(store.getState().session).toBe(before);
+  });
+});
+
+/** A minimal persisted Rep for seeding history. */
+const rep = (id: string): Rep => ({
+  id: `${id}-e89b-42d3-a456-426614174000`,
+  challenge: baseChallenge,
+  finishedAt: "2026-10-09T12:00:00.000Z",
+  timeUsedSec: null,
+  reflection: null,
+});
+
+describe("createStore — clear_all_data command", () => {
+  it("empties setup/session/history and removes every impromptu:* key", async () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+    expect(store.getState().session.state).toBe("held");
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().session).toEqual(noneSession);
+    expect(store.getState().history).toEqual([]);
+    expect(storage.length).toBe(0);
+  });
+
+  it("runs synchronously once hydrated, before any timer advances", () => {
+    const storage = createMemoryRawStore();
+    const repository = createRepository({ storage });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repository.save("session", { v: config.storage.schemaVersions.session, rev: 1, data: attemptSession });
+    repository.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().history).toHaveLength(1);
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(storage.length).toBe(0);
+    expect(store.getState().session).toEqual(noneSession);
+    expect(store.getState().history).toEqual([]);
+  });
+
+  it("resets every slice rev to 0 -- the next write to each slice after a clear lands at rev 1", async () => {
+    const { store, repository } = startedStore();
+    await startAttempt(store);
+    store.dispatch({ type: "finish_rep" });
+    expect(store.getState().history).toHaveLength(1);
+
+    store.dispatch({ type: "clear_all_data" });
+    store.dispatchSetup({ type: "set_quick_reveal", quickReveal: true });
+    store.dispatch({ type: "new_challenge" });
+    store.dispatchSession({ type: "start", nowMs: 0 });
+    store.dispatch({ type: "finish_rep" });
+
+    const revOf = (key: "setup" | "session" | "history") => {
+      const stored = repository.load<unknown>(key);
+      return stored.ok ? stored.value?.rev : undefined;
+    };
+    expect(revOf("setup")).toBe(1);
+    expect(revOf("history")).toBe(1);
+    // new_challenge, start and finish_rep each write the session once.
+    expect(revOf("session")).toBe(3);
+    expect(store.getState().history).toHaveLength(1);
+  });
+
+  it("lands in status 'error' with setup null after a library failure, even with a persisted setup", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    const store = createStore(makeDeps({ repository, library: "reject" }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    expect(store.getState().status).toBe("ready");
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup).toBeNull();
+    expect(store.getState().status).toBe("error");
+  });
+
+  it("resets migrationFailed", () => {
+    const real = createRepository({ storage: createMemoryRawStore() });
+    const repository: Repository = { ...real, migrationFailed: () => true };
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    expect(store.getState().migrationFailed).toBe(true);
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().migrationFailed).toBe(false);
+  });
+
+  it("sets saveFailed and changes nothing else when the wipe fails", () => {
+    const memory = createMemoryRawStore();
+    const storage: RawStore = {
+      ...memory,
+      get length() {
+        return memory.length;
+      },
+      removeItem: (key) => {
+        if (key.startsWith("impromptu:")) throw new Error("denied");
+        memory.removeItem(key);
+      },
+    };
+    const repository = createRepository({ storage });
+    repository.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repository.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    const before = store.getState();
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState()).toEqual({ ...before, saveFailed: true });
+    expect(memory.length).toBe(2);
+  });
+
+  it("does not resurrect cleared data when another tab writes from its pre-clear state", () => {
+    const storage = createMemoryRawStore();
+    const repoA = createRepository({ storage });
+    const repoB = createRepository({ storage });
+    repoA.save("setup", { v: 1, rev: 1, data: concreteSetup });
+    repoA.save("session", { v: config.storage.schemaVersions.session, rev: 1, data: attemptSession });
+    repoA.save("history", { v: config.storage.schemaVersions.history, rev: 1, data: [rep("12345678")] });
+    const storeA = createStore(makeDeps({ repository: repoA }));
+    const storeB = createStore(makeDeps({ repository: repoB }));
+    storeA.hydrate();
+    storeB.hydrate();
+
+    storeA.dispatch({ type: "clear_all_data" });
+    storeB.dispatchSession({ type: "compose_failed", reason: "no_compatible", blockingLock: "topic" });
+    storeB.dispatchSetup({ type: "set_sound", sound: true });
+
+    const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter((k) => k?.startsWith("impromptu:"));
+    expect(keys).toEqual([]);
+    expect(storeB.getState().saveFailed).toBe(true);
+  });
+
+  it("rebuilds setup from the library default once the library is ready", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup?.enabledMediums).toEqual(["med.a", "med.b"]);
+    expect(store.getState().status).toBe("ready");
+    // Persisted nothing: a clear's rebuilt default lives in memory only.
+    expect(repository.load("setup")).toEqual({ ok: true, value: null });
+  });
+
+  it("leaves setup null (status loading) when the library hasn't resolved yet", () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate(); // library load kicked off but pending -- fake timers not advanced
+
+    store.dispatch({ type: "clear_all_data" });
+
+    expect(store.getState().setup).toBeNull();
+    expect(store.getState().status).toBe("loading");
+  });
+
+  it("persists a fresh default setup at rev 1 when the library resolves after a clear", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    repository.save("setup", { v: 1, rev: 1, data: { ...concreteSetup, sound: true } });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+
+    store.dispatch({ type: "clear_all_data" });
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().status).toBe("ready");
+    expect(store.getState().setup?.sound).toBe(false);
+    const stored = repository.load<unknown>("setup");
+    expect(stored.ok && stored.value?.rev).toBe(1);
+  });
+
+  it("drops a queued new_challenge so it never runs once the library arrives", async () => {
+    const repository = createRepository({ storage: createMemoryRawStore() });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    store.dispatch({ type: "new_challenge" }); // library still loading -> queued
+
+    store.dispatch({ type: "clear_all_data" }); // hydrated -> runs immediately, drops the queued command
+
+    await vi.runAllTimersAsync();
+    expect(store.getState().session.state).toBe("none");
+  });
+
+  it("still treats a cross-tab reread of a missing key as a first visit after clearing", async () => {
+    const storage = createMemoryRawStore();
+    const target = fakeEventTarget();
+    const repository = createRepository({ storage, eventTarget: target });
+    const store = createStore(makeDeps({ repository }));
+    store.hydrate();
+    await vi.runAllTimersAsync();
+    store.dispatch({ type: "new_challenge" });
+
+    store.dispatch({ type: "clear_all_data" });
+    target.fire("impromptu:setup", storage); // another tab's (or this repository's own) notification arrives
+
+    expect(store.getState().setup).not.toBeNull();
+    expect(store.getState().status).toBe("ready");
+    const stored = repository.load<unknown>("setup");
+    expect(stored.ok && stored.value?.rev).toBe(1); // the first-visit path (ensureSetup) persisted it
   });
 });

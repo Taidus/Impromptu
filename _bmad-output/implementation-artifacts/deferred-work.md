@@ -70,6 +70,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-0-epic-5-domain-and-creating-components.md`
   summary: In the phase 2 Stage wiring, announce CountdownAnnouncer minute marks on crossing (previous tick's `remainingSec` above the mark, this tick's at or below it) instead of `announceFor`'s exact-equality check, and announce "Resumed." (`copy.stage.countdown.resumedAnnounced`) when the Stage dispatches `resume`.
   evidence: `announceFor` is a stateless per-instant selector, so a late tick that skips from 61 to 59 misses the 1:00 mark, and resume is never announced; the React Compiler lint rules forbid tracking the previous tick inside the component, and the Stage already owns the tick loop and the resume dispatch.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-lock-inputs-and-reroll-the-rest.md`
+  summary: Story 4.7 must re-check the Held Stage fit and phone layout now that Lock discs reserve a 56px left indent (and 56px Topic/foil clearance) — at 390px with a Style the Topic text gets ~130px width; tighten per DESIGN fit-rule steps if a 160-char Brief or long Topic no longer fits.
+  evidence: Reported by the 4.3 fix pass; together with the stamp-rule fix (+45px scrap height) this is the main fit-rule risk.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-lock-inputs-and-reroll-the-rest.md`
+  summary: Story 4.4 adds the test that the generic compose-error banner stays hidden while a Challenge is held (lock conflict path).
+  evidence: Triage row 11.
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-4-decor-component-gate-and-the-3d-hero.md`
   summary: Founder design decision on the Setup hero art column: keep the wide single-line display headline (art column 20%, a ~224px bloom at 1280) or move to DESIGN's two-line headline (italic second line) with a tighter vertical rhythm in a ~590px column, which frees room for a larger bloom and 3D hero.
   evidence: Story 8.4 shipped `xl:grid-cols-[80fr_20fr]` instead of the spec's `[46fr_54fr]` because the single-line headline needs ~900px to keep "Get a challenge" above the 1280x800 fold (`setup-mediums-and-challenge.spec.ts`); recorded in the 8.4 Review Triage Log as `[defer]`.

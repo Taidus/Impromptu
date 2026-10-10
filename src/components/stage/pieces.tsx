@@ -15,6 +15,7 @@ import { config } from "@/config/app";
 import { copy } from "@/components/copy";
 import { FOCUS_RING_BASE, focusRingClassName } from "@/components/ground";
 import type { RevealedKind } from "@/domain/session/schema";
+import { LockIcon } from "./icons";
 import { emptySlotLabel, isPastTwoLines } from "./reveal-logic";
 
 type InputKind = Exclude<RevealedKind, "brief">;
@@ -22,6 +23,15 @@ type InputKind = Exclude<RevealedKind, "brief">;
 /** The CSS transform that counter-rotates a tilted piece's inner content back to level. */
 function counter(tiltDeg: number): string {
   return `rotate(${-tiltDeg}deg)`;
+}
+
+/**
+ * How far a box tilted by `tiltDeg` rises past its own level edges: half its
+ * width times sin|tilt|. As a padding/margin percentage it resolves against
+ * the containing block's width, so it covers any box up to that width.
+ */
+function tiltRise(tiltDeg: number): string {
+  return `${Math.ceil(Math.abs(Math.sin((tiltDeg * Math.PI) / 180)) * 5000) / 100}%`;
 }
 
 /** A piece's entrance or shimmer: the utility class plus its `animation-duration`, as an inline CSS variable. */
@@ -37,21 +47,49 @@ const durationVar = (ms: number) => ({ "--motion-ms": `${ms}ms` }) as CSSPropert
 /**
  * Story 4.1 / UX-DR22: the landing entrance per material. Durations come
  * from `config.reveal.motion` (the same values `useRevealMotion`'s timers
- * use), never CSS literals. `motion-reduce:` mirrors this codebase's
- * per-animation guard (SunButton, Ticker) -- Story 4.2 owns the full
- * reduced-motion fade.
+ * use), never CSS literals.
  */
 const LAND_CLASS: Record<RevealedKind, string> = {
-  skill: "animate-land-tabs motion-reduce:animate-none",
-  medium: "animate-land-tabs motion-reduce:animate-none",
-  topic: "animate-land-tabs motion-reduce:animate-none",
-  style: "animate-land-foil motion-reduce:animate-none",
-  constraint: "animate-land-stamp motion-reduce:animate-none",
-  brief: "animate-land-brief motion-reduce:animate-none",
+  skill: "animate-land-tabs",
+  medium: "animate-land-tabs",
+  topic: "animate-land-tabs",
+  style: "animate-land-foil",
+  constraint: "animate-land-stamp",
+  brief: "animate-land-brief",
 };
 
-export function landingMotion(kind: RevealedKind): PieceMotion {
-  return { className: LAND_CLASS[kind], style: durationVar(config.reveal.motion.landMs[kind]) };
+/**
+ * Story 4.2: the one reduced-motion entrance, a plain 120ms fade -- for a
+ * piece landing under reduced motion and for a piece that mounts already
+ * revealed (Quick reveal's instant landing, a restore) under it.
+ */
+export const REVEALED_MOTION: PieceMotion = {
+  className: "animate-reduced-fade",
+  style: durationVar(config.reveal.motion.reducedLandMs),
+};
+
+/**
+ * Story 4.2: `reduced` is the value captured at the press (`RevealMotion.reduced`),
+ * decided here in JS -- not via the `motion-reduce:` variant -- so the class
+ * and `--motion-ms` (and the driver's timer) always agree.
+ */
+export function landingMotion(kind: RevealedKind, reduced: boolean): PieceMotion {
+  return reduced ? REVEALED_MOTION : { className: LAND_CLASS[kind], style: durationVar(config.reveal.motion.landMs[kind]) };
+}
+
+/** A piece that mounts already revealed: the fade under reduced motion, nothing otherwise (today's instant full-motion Quick reveal). */
+export function revealedMotion(reduced: boolean): PieceMotion {
+  return reduced ? REVEALED_MOTION : NO_MOTION;
+}
+
+/**
+ * Story 4.2: a piece keeps the entrance it mounted with, so a later
+ * re-render (its landing committing, the OS setting flipping) never swaps
+ * the animation and replays it. Callers key revealed pieces on their value,
+ * so a new value remounts and picks its entrance afresh.
+ */
+function useMountMotion(motion: PieceMotion): PieceMotion {
+  return useState(motion)[0];
 }
 
 /** The foil's shimmer, only while it's actively shuffling: one pulse per shuffle. */
@@ -128,24 +166,84 @@ export function EmptySlot({ kind, tiltDeg, className = "" }: { kind: InputKind; 
   );
 }
 
+/**
+ * DESIGN.md -> Lock toggle: a 52px disc on the piece's outer left edge,
+ * centered vertically. Unlocked an outline plum-muted padlock; locked an ink
+ * disc with a cream padlock plus a "LOCKED" caption beside it (below the
+ * disc, right-aligned to it, so it stays in the same left gutter). The
+ * accessible name is fixed ("Lock Topic") -- only `aria-pressed` and the
+ * caption carry state. RevealComposition decides when it shows (Held, before
+ * Start creating, never for a Retry/Variation); each piece places it via
+ * `LockSlot`.
+ */
+export function LockToggle({ kind, locked, onToggle }: { kind: InputKind; locked: boolean; onToggle: () => void }) {
+  const tone = locked
+    ? "border-ink bg-ink text-cream"
+    : "border-plum-muted bg-lilac text-plum-muted hover:bg-plum-muted/[0.08] active:bg-plum-muted/[0.12]";
+  return (
+    <span className="relative block">
+      <button
+        type="button"
+        aria-pressed={locked}
+        aria-label={copy.stage.lock.toggleLabel(copy.stage.piece[kind])}
+        onClick={onToggle}
+        data-lock={kind}
+        className={`flex size-target-min items-center justify-center rounded-disc border transition-colors ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${tone}`}
+      >
+        <LockIcon />
+      </button>
+      {locked ? (
+        <span
+          aria-hidden="true"
+          className="absolute top-full right-0 mt-1 text-piece-label-phone whitespace-nowrap text-plum uppercase desktop:text-piece-label"
+        >
+          {copy.stage.lock.lockedCaption}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** How far a Lock disc reaches into its piece: never past the piece's own padding, so it overlaps only the border (DESIGN.md -> keep-outs). */
+const LOCK_OVERLAP_PX = 8;
+
+/**
+ * Anchors a Lock toggle on a piece's outer left edge, vertically centered.
+ * Rendered inside the piece's level (counter-rotated) content box, so
+ * `insetPx` is the piece's own left padding -- the distance back out to its edge.
+ */
+function LockSlot({ insetPx, children }: { insetPx: number; children: ReactNode }) {
+  if (children === null || children === undefined) return null;
+  return (
+    <span className="absolute top-1/2 z-10 -translate-y-1/2" style={{ right: `calc(100% + ${insetPx - LOCK_OVERLAP_PX}px)` }}>
+      {children}
+    </span>
+  );
+}
+
 /** Skill or Medium (DESIGN.md: cream card, perforated left edge, tilted ±1.5°). */
 export function TicketTab({
   kind,
   value,
   tiltDeg,
   motion = NO_MOTION,
+  lock = null,
 }: {
   kind: "skill" | "medium";
   value: string;
   tiltDeg: number;
   motion?: PieceMotion;
+  lock?: ReactNode;
 }) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind={kind}
       className={`min-w-0 rounded-scrap border-l border-dotted border-ink-soft bg-cream px-4 py-2 shadow-lift-soft ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      <div className="relative" style={{ transform: counter(tiltDeg) }}>
+        <LockSlot insetPx={16}>{lock}</LockSlot>
         <LabelValue
           kind={kind}
           value={value}
@@ -158,9 +256,21 @@ export function TicketTab({
 }
 
 /** Style (DESIGN.md: iridescent foil, tilted 4°). */
-export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+export function FoilSlip({
+  value,
+  tiltDeg,
+  motion = NO_MOTION,
+  lock = null,
+}: {
+  value: string;
+  tiltDeg: number;
+  motion?: PieceMotion;
+  lock?: ReactNode;
+}) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind="style"
       className={`px-3 py-2 ${motion.className}`}
       style={{
         ...motion.style,
@@ -168,7 +278,8 @@ export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string
         background: "linear-gradient(120deg, var(--color-foil-a), var(--color-foil-b), var(--color-foil-c), var(--color-foil-d))",
       }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      <div className="relative" style={{ transform: counter(tiltDeg) }}>
+        <LockSlot insetPx={12}>{lock}</LockSlot>
         <LabelValue
           kind="style"
           value={value}
@@ -186,13 +297,27 @@ export function FoilSlip({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * rule is CSS's native `border-style: double`, not `ink-mask.png` wear --
  * see the file header note.
  */
-export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string; tiltDeg: number; motion?: PieceMotion }) {
+export function InkStamp({
+  value,
+  tiltDeg,
+  motion = NO_MOTION,
+  lock = null,
+}: {
+  value: string;
+  tiltDeg: number;
+  motion?: PieceMotion;
+  lock?: ReactNode;
+}) {
+  motion = useMountMotion(motion);
   return (
     <div
+      data-kind="constraint"
       className={`border-y-4 border-double border-stamp px-3 py-1 ${motion.className}`}
       style={{ ...motion.style, transform: `rotate(${tiltDeg}deg)` }}
     >
-      <div style={{ transform: counter(tiltDeg) }}>
+      {/* The level label/value would cross the tilted rules at its far corners: pad it by the tilt's rise over its own width. */}
+      <div className="relative" style={{ transform: counter(tiltDeg), paddingBlock: tiltRise(tiltDeg) }}>
+        <LockSlot insetPx={12}>{lock}</LockSlot>
         <LabelValue
           kind="constraint"
           value={value}
@@ -210,7 +335,8 @@ export function InkStamp({ value, tiltDeg, motion = NO_MOTION }: { value: string
  * (the caller keys this on the value), so the smaller size can't flip it
  * back and forth. Not keyed during a shuffle, so the size stays put across flicks.
  */
-function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: PieceMotion }) {
+function TopicValue({ value, motion = NO_MOTION, lock = null }: { value: string; motion?: PieceMotion; lock?: ReactNode }) {
+  motion = useMountMotion(motion);
   const valueRef = useRef<HTMLParagraphElement>(null);
   const [long, setLong] = useState(false);
   useEffect(() => {
@@ -223,7 +349,9 @@ function TopicValue({ value, motion = NO_MOTION }: { value: string; motion?: Pie
     return () => observer.disconnect();
   }, [long]);
   return (
-    <div className={motion.className} style={motion.style}>
+    <div data-kind="topic" className={`relative ${motion.className}`} style={motion.style}>
+      {/* The scrap's own px-4 is the way back out to the piece's edge. */}
+      <LockSlot insetPx={16}>{lock}</LockSlot>
       <LabelValue
         kind="topic"
         value={value}
@@ -249,6 +377,8 @@ interface ScrapPiece {
   landing: boolean;
   shufflingText: string | null;
   value: string;
+  /** Story 4.3: this piece's Lock toggle, or `null` when none shows. */
+  lock?: ReactNode;
 }
 
 function hasMaterial(piece: ScrapPiece): boolean {
@@ -268,12 +398,32 @@ function hasMaterial(piece: ScrapPiece): boolean {
  * for it"). Style and Constraint still render on a Topic-less Challenge:
  * the scrap is then a plain paper band, since the stamp is always on paper.
  */
-export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; style: ScrapPiece; constraint: ScrapPiece }) {
+export function ScrapGroup({
+  topic,
+  style,
+  constraint,
+  reduced,
+}: {
+  topic: ScrapPiece;
+  style: ScrapPiece;
+  constraint: ScrapPiece;
+  /** Story 4.2: `RevealMotion.reduced`, forwarded by `RevealComposition`. */
+  reduced: boolean;
+}) {
   const scrapTiltDeg = -1.2;
+  const stampTiltDeg = -7;
   const foil = !style.present
     ? null
     : style.revealed || style.landing
-      ? <FoilSlip value={style.value} tiltDeg={4} motion={style.landing ? landingMotion("style") : NO_MOTION} />
+      ? (
+          <FoilSlip
+            key={style.value}
+            value={style.value}
+            tiltDeg={4}
+            motion={style.landing ? landingMotion("style", reduced) : revealedMotion(reduced)}
+            lock={style.lock}
+          />
+        )
       : style.shufflingText !== null
         ? (
             <ShufflingPiece kind="style">
@@ -288,10 +438,18 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
       style={{ transform: `rotate(${scrapTiltDeg}deg)` }}
     >
       <div className="flow-root" style={{ transform: counter(scrapTiltDeg) }}>
-        {foil !== null ? <div className="float-right -mt-6 -mr-7 ml-3 w-2/5 max-w-40">{foil}</div> : null}
+        {/* ml-14/mb-4: the Topic text keeps clear of the foil's Lock disc and caption (DESIGN.md -> keep-outs). */}
+        {foil !== null ? <div className="relative z-10 float-right -mt-6 -mr-7 mb-4 ml-14 w-2/5 max-w-40">{foil}</div> : null}
         {topic.present
           ? topic.revealed || topic.landing
-            ? <TopicValue key={topic.value} value={topic.value} motion={topic.landing ? landingMotion("topic") : NO_MOTION} />
+            ? (
+                <TopicValue
+                  key={topic.value}
+                  value={topic.value}
+                  motion={topic.landing ? landingMotion("topic", reduced) : revealedMotion(reduced)}
+                  lock={topic.lock}
+                />
+              )
             : topic.shufflingText !== null
               ? (
                   <ShufflingPiece kind="topic">
@@ -301,15 +459,22 @@ export function ScrapGroup({ topic, style, constraint }: { topic: ScrapPiece; st
               : <EmptySlot kind="topic" />
           : null}
         {constraint.present ? (
-          <div className="clear-both mt-2 flex min-h-14 items-center justify-end">
+          // The stamp's tilted corners rise past its layout box; the band reserves that rise so they stay off the Topic and on paper.
+          <div className="clear-both mt-2 flex min-h-14 items-center justify-end" style={{ paddingBlock: tiltRise(stampTiltDeg) }}>
             {constraint.revealed || constraint.landing ? (
-              <InkStamp value={constraint.value} tiltDeg={-7} motion={constraint.landing ? landingMotion("constraint") : NO_MOTION} />
+              <InkStamp
+                key={constraint.value}
+                value={constraint.value}
+                tiltDeg={stampTiltDeg}
+                motion={constraint.landing ? landingMotion("constraint", reduced) : revealedMotion(reduced)}
+                lock={constraint.lock}
+              />
             ) : constraint.shufflingText !== null ? (
               <ShufflingPiece kind="constraint">
-                <InkStamp value={constraint.shufflingText} tiltDeg={-7} />
+                <InkStamp value={constraint.shufflingText} tiltDeg={stampTiltDeg} />
               </ShufflingPiece>
             ) : (
-              <EmptySlot kind="constraint" tiltDeg={-7} />
+              <EmptySlot kind="constraint" tiltDeg={stampTiltDeg} />
             )}
           </div>
         ) : null}
@@ -330,11 +495,13 @@ export function BriefBlock({
   ref?: Ref<HTMLDivElement>;
   motion?: PieceMotion;
 }) {
+  motion = useMountMotion(motion);
   // tabIndex -1: focus target when the last piece lands and the Reveal next button unmounts.
   return (
     <div
       ref={ref}
       tabIndex={-1}
+      data-kind="brief"
       className={`max-w-[34ch] ${FOCUS_RING_BASE} ${focusRingClassName("lilac")} ${motion.className}`}
       style={motion.style}
     >

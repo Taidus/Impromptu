@@ -109,6 +109,19 @@ export const copy = {
     // Empty slot screen-reader text, joined as "{piece}, not revealed yet."
     // (EXPERIENCE.md -> Component Patterns -> Empty slot).
     notRevealedYet: "not revealed yet.",
+    // Story 4.3: the Lock toggle's fixed accessible name (DESIGN.md -> Lock
+    // toggle) -- it never relabels itself; only `aria-pressed` and the
+    // visible caption beside it carry locked/unlocked -- and that caption.
+    lock: {
+      toggleLabel: (pieceLabel: string) => `Lock ${pieceLabel}`,
+      lockedCaption: "LOCKED",
+    },
+    // Story 4.3: Reroll's own live-region lead-in (EXPERIENCE.md -> Rerolling).
+    rerolled: "Rerolled.",
+    // Story 4.3 interim: a Reroll that no Challenge fits announces this
+    // (EXPERIENCE.md -> Lock conflict's opening sentence). Story 4.4 adds the
+    // inline message naming the Lock plus its Unlock button.
+    rerollFailed: "No challenge fits these locks.",
     // Story 5.2/5.3: the Countdown's own caption and time's-up copy.
     countdown: {
       caption: (minutes: number) => `TIME LIMIT ${minutes} MIN`,
@@ -151,6 +164,8 @@ export const copy = {
     clearEverything: "Clear everything",
     // Story 6.4: the Practice History export control.
     export: "Export",
+    // Story 6.5: the Practice History Clear all data opener.
+    clearAllData: "Clear all data",
   },
   state: {
     repSaved: "Rep saved.",
@@ -165,6 +180,9 @@ export const copy = {
     // Story 6.4: announced after the export download fires.
     exported: "Exported.",
     exportFailed: "Export failed.",
+    // Story 6.5: announced after Clear all data is confirmed.
+    allDataCleared: "All data cleared.",
+    clearFailed: "Couldn't clear this browser's data.",
   },
   // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
   // banner). More than one can show at once -- see activeNoticeBanners.
@@ -184,6 +202,9 @@ export const copy = {
     historyTitle: "Practice history",
     // Story 6.3: the Practice Map's three group labels (table captions).
     mapGroups: { skill: "Skill", medium: "Medium", level: "Level" },
+    // Story 6.5: the Clear all data confirmation Dialog's title and body.
+    clearAllTitle: "Clear everything in this browser?",
+    clearAllBody: "Practice history, your setup and any challenge in progress will be removed from this browser.",
   },
   privacy: {
     title: "privacy.",

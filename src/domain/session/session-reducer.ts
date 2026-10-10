@@ -1,11 +1,12 @@
 import { config } from "@/config/app";
 import { timeUsedSec as timerTimeUsedSec } from "@/domain/timer/timer";
-import type { Challenge, ComposeError, Reflection, Rep, RevealedKind, Session, Setup } from "./schema";
+import type { Challenge, ComposeError, InputKind, Locks, Reflection, Rep, RevealedKind, Session, Setup } from "./schema";
 
 export type SessionEvent =
   | { type: "challenge_committed"; challenge: Challenge; recentKey: string | null }
   | ({ type: "compose_failed" } & ComposeError)
   | { type: "reveal_next" }
+  | { type: "toggle_lock"; kind: InputKind }
   | { type: "start"; nowMs: number }
   | { type: "pause"; nowMs: number }
   | { type: "resume"; nowMs: number }
@@ -31,6 +32,8 @@ export function sessionReducer(session: Session, event: SessionEvent, setup: Pic
         : session;
     case "reveal_next":
       return session.state === "held" ? revealNext(session) : session;
+    case "toggle_lock":
+      return canLockOrReroll(session) ? toggleLock(session, event.kind) : session;
     case "start":
       return canStart(session) ? startAttempt(session, event.nowMs) : session;
     case "pause": {
@@ -64,9 +67,40 @@ function canCommit(session: Session): boolean {
   return session.state === "none" || session.state === "held" || session.state === "saved";
 }
 
+/** Held, with a Challenge, and every present kind already landed -- the AD-7 gate shared by Start, toggle_lock, and reroll (Story 4.3: "only when held, every kind landed, before start"). */
+export function isFullyRevealedHeld(session: Session): boolean {
+  return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
+}
+
+/**
+ * Story 4.3: Locks and Reroll exist only for a fully revealed held Challenge
+ * whose origin is `new` or `reroll` -- a Retry (and a future Variation) must
+ * stay exactly as it is (EXPERIENCE.md -> Retry). Shared by `toggle_lock`
+ * here and the store's `reroll` command.
+ */
+export function canLockOrReroll(session: Session): boolean {
+  if (!isFullyRevealedHeld(session) || session.challenge === null) return false;
+  const origin = session.challenge.origin.kind;
+  return origin === "new" || origin === "reroll";
+}
+
 /** Held -> Attempt only once every present kind of the held Challenge has landed. */
 function canStart(session: Session): boolean {
-  return session.state === "held" && session.challenge !== null && presentKinds(session.challenge).every((kind) => session.revealed.includes(kind));
+  return isFullyRevealedHeld(session);
+}
+
+/**
+ * Locks `kind` to the held Challenge's own current value (or releases a Lock
+ * already on that value); a no-op for a kind the Challenge doesn't have.
+ * Clears `lastComposeError`: a failed Reroll's conflict no longer describes
+ * the new set of Locks. Gated by `canLockOrReroll` in the reducer above.
+ */
+function toggleLock(session: Session, kind: InputKind): Session {
+  const input = session.challenge?.inputs[kind];
+  if (input === undefined) return session;
+  const { [kind]: current, ...others } = session.locks;
+  const locks: Locks = current === input.id ? others : { ...others, [kind]: input.id };
+  return { ...session, locks, lastComposeError: null };
 }
 
 function startAttempt(session: Session, nowMs: number): Session {
@@ -88,14 +122,20 @@ function commitChallenge(
     event.recentKey === null || event.recentKey.length === 0
       ? session.recent
       : [...session.recent, event.recentKey].slice(-config.generator.recentWindow);
-  // Retry never plays a Reveal (AD-3): every present kind lands at once, regardless of Quick reveal.
-  const revealAll = quickReveal || event.challenge.origin.kind === "retry";
+  // Retry never plays a Reveal (AD-3); a Reroll lands everything at once too
+  // (EXPERIENCE.md -> Rerolling: the changed pieces' reshuffle is purely
+  // decorative, played by the Stage, and the result is Held right away).
+  const origin = event.challenge.origin.kind;
+  const revealAll = quickReveal || origin === "retry" || origin === "reroll";
 
   return {
     ...session,
     state: "held",
     challenge: event.challenge,
     revealed: revealAll ? presentKinds(event.challenge) : [],
+    // Locks belong to the Challenge they were set on: only a Reroll (which
+    // holds every locked value fixed) carries them over.
+    locks: origin === "reroll" ? session.locks : {},
     recent,
     lastComposeError: null,
   };

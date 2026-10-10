@@ -17,6 +17,8 @@ export interface PracticeViewProps {
   action: ReactNode;
   /** Story 6.4: the Export control (a client `ExportButton`); right-aligned above the history, with-Reps only. */
   exportControl: ReactNode;
+  /** Story 6.5: the Clear all data control (a client `ClearAllData`); beside exportControl, with-Reps only. */
+  clearControl: ReactNode;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface PracticeViewProps {
  * `status === "error"` renders like `ready`: history is already loaded by then,
  * and compose failures are the Stage's to handle.
  */
-export function PracticeView({ status, storageAvailable, reps, map, action, exportControl }: PracticeViewProps) {
+export function PracticeView({ status, storageAvailable, reps, map, action, exportControl, clearControl }: PracticeViewProps) {
   const repCount = reps.length;
   if (status === "loading") {
     return (
@@ -51,7 +53,10 @@ export function PracticeView({ status, storageAvailable, reps, map, action, expo
       {storageAvailable && repCount > 0 && (
         <>
           {map && <PracticeMap map={map} />}
-          <div className="flex justify-end">{exportControl}</div>
+          <div className="flex justify-end gap-3">
+            {exportControl}
+            {clearControl}
+          </div>
           <PracticeHistory reps={reps} />
         </>
       )}

@@ -5,13 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/components/copy";
 import { LineButton } from "@/components/LineButton";
 import { StageIconButton } from "@/components/StageIconButton";
-import type { RevealedKind } from "@/domain/session/schema";
+import type { Challenge, ComposeError, RevealedKind } from "@/domain/session/schema";
 import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
 import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 import { RevealComposition } from "./RevealComposition";
-import { liveAnnouncement, restoreAnnouncement } from "./reveal-logic";
-import { useRevealMotion } from "./useRevealMotion";
+import { liveAnnouncement, nextLiveText, restoreAnnouncement } from "./reveal-logic";
+import { useRerollShuffle, useRevealMotion } from "./useRevealMotion";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -25,8 +25,8 @@ import { useRevealMotion } from "./useRevealMotion";
  * slip, ink stamp, Brief, and the "Reveal next" sun button) renders via
  * `RevealComposition` once a Challenge is held; `useRevealMotion` (Story
  * 4.1) drives each piece's shuffle-then-land motion and is the one place
- * that dispatches `reveal_next`. With everything landed, the action row
- * has no primary action yet (Reroll is 4.3, Start creating 5.1).
+ * that dispatches `reveal_next`. With everything landed, Lock toggles and
+ * Reroll appear (Story 4.3); Start creating is Story 5.1.
  */
 export function StagePage() {
   const store = useAppStore();
@@ -65,6 +65,9 @@ export function StagePage() {
   const motion = useRevealMotion(heldChallenge, store.session.revealed, store.library, store.setup);
   const { canPress, press } = motion;
 
+  // Story 4.3: the changed pieces' decorative reshuffle after a Reroll.
+  const reshuffle = useRerollShuffle(heldChallenge, store.library, store.setup);
+
   // AD-7 / EXPERIENCE.md -> Interaction Primitives: this stays the Stage's
   // one keydown listener. Story 3.10 extends it with the Space/Enter
   // "Reveal next" shortcut for when no control has focus -- normally the
@@ -97,39 +100,54 @@ export function StagePage() {
   // effect body and ref reads during render). The first hydrated render
   // seeds it -- Story 3.11: a fresh mount (reload, resume, or a Setup round
   // trip) that already finds a Challenge held with some progress queues
-  // `restoreAnnouncement` as `restore`, and the effect below moves it into
-  // the region a commit later: a region that mounts already holding its text
-  // (a client-side return) is usually not spoken. Only `held` is restored --
+  // `restoreAnnouncement` as `pending`, and the effect below moves it into
+  // the region a tick later: a region that mounts already holding its text
+  // (a client-side return) is usually not spoken. The same `pending` hop
+  // re-speaks text identical to what the region already says (`nextLiveText`:
+  // two Rerolls, or two failed ones, in a row). Only `held` is restored --
   // a reload during an Attempt stays silent until Story 5.x owns that state.
   const quickReveal = store.setup?.quickReveal ?? false;
+  const composeError = store.session.lastComposeError;
   const [live, setLive] = useState<{
     seeded: boolean;
-    challengeId: string | null;
+    challenge: Challenge | null;
     revealed: readonly RevealedKind[];
+    composeError: ComposeError | null;
     text: string;
-    restore: string | null;
-  }>({ seeded: false, challengeId: null, revealed: [], text: "", restore: null });
-  const heldId = heldChallenge?.id ?? null;
+    pending: string | null;
+  }>({ seeded: false, challenge: null, revealed: [], composeError: null, text: "", pending: null });
   if (!live.seeded) {
     if (store.status !== "loading") {
       const restore = heldChallenge !== null ? restoreAnnouncement(heldChallenge, store.session.revealed, quickReveal) : null;
-      setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: "", restore });
+      setLive({ seeded: true, challenge: heldChallenge, revealed: store.session.revealed, composeError, text: "", pending: restore });
     }
-  } else if (heldId !== live.challengeId || store.session.revealed !== live.revealed) {
-    const text = liveAnnouncement(live.challengeId, live.revealed, heldChallenge, store.session.revealed, quickReveal);
-    setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: text ?? live.text, restore: null });
+  } else if (heldChallenge?.id !== live.challenge?.id || store.session.revealed !== live.revealed || composeError !== live.composeError) {
+    // Story 4.3 interim (until Story 4.4's inline Lock-conflict message and
+    // Unlock button): a failed Reroll keeps the held Challenge and focus on
+    // Reroll, and just says so here, politely.
+    // TODO(Story 4.4): replace with the inline message + "Unlock <piece>" button.
+    const failedReroll = heldChallenge !== null && composeError !== null && composeError !== live.composeError;
+    const text = failedReroll
+      ? copy.stage.rerollFailed
+      : liveAnnouncement(live.challenge, live.revealed, heldChallenge, store.session.revealed, quickReveal);
+    const next = nextLiveText(live.text, text);
+    setLive({ seeded: true, challenge: heldChallenge, revealed: store.session.revealed, composeError, ...next });
   }
   useEffect(() => {
-    if (live.restore === null) return;
-    const id = setTimeout(() => setLive((prev) => ({ ...prev, text: prev.restore ?? prev.text, restore: null })));
+    if (live.pending === null) return;
+    const id = setTimeout(() => setLive((prev) => ({ ...prev, text: prev.pending ?? prev.text, pending: null })));
     return () => clearTimeout(id);
-  }, [live.restore]);
+  }, [live.pending]);
 
   const sound = store.setup?.sound ?? false;
   const meta = stageMeta(store.session.challenge);
+  // Story 4.3: a failed Reroll also sets `lastComposeError`, but the held
+  // Challenge stays exactly as it was (Story 4.4 owns its own Lock-conflict
+  // message) -- this generic banner is only for the pre-held "nothing
+  // composed yet" case, so it must not also appear over a still-held Stage.
   const errorText = isStageError(store.status, store.libraryStatus)
     ? copy.stage.loadError
-    : store.session.lastComposeError !== null
+    : store.session.state !== "held" && store.session.lastComposeError !== null
       ? copy.stage.composeError
       : null;
 
@@ -197,7 +215,15 @@ export function StagePage() {
           ) : null}
 
           {store.session.state === "held" && store.session.challenge !== null ? (
-            <RevealComposition challenge={store.session.challenge} revealed={store.session.revealed} motion={motion} />
+            <RevealComposition
+              challenge={store.session.challenge}
+              revealed={store.session.revealed}
+              motion={motion}
+              locks={store.session.locks}
+              reshuffle={reshuffle}
+              onToggleLock={(kind) => getAppStore().dispatchSession({ type: "toggle_lock", kind })}
+              onReroll={() => getAppStore().dispatch({ type: "reroll" })}
+            />
           ) : null}
 
           <p aria-live="polite" className="sr-only">
