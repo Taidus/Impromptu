@@ -18,6 +18,9 @@ function getSnapshot(): boolean {
   return reducedMotionQuery().matches;
 }
 
+/** The live `prefers-reduced-motion` value, for client event handlers/timers that read it at the moment they act. */
+export const prefersReducedMotion = getSnapshot;
+
 function getServerSnapshot(): boolean {
   return false;
 }
