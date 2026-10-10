@@ -51,10 +51,12 @@ export function SetupHero() {
               {setupCopy.headline}
             </h1>
             <p className="text-lede text-cream-dim">{setupCopy.explanation}</p>
-            {/* Reserves the dial row's real height so hydration doesn't shift the page. */}
+            {/* Reserves the loaded controls' full height (dial row + gap-6 + the
+                Mediums block below) so store hydration doesn't shift the page:
+                a 272px jump here moved the ticker band out from under a hover. */}
             <div className="relative">
               <div
-                className="min-h-52 desktop:min-h-56 xl:pr-[20%]"
+                className="min-h-184 desktop:min-h-124 xl:pr-[20%]"
                 aria-busy={state.status === "loading"}
               >
                 <SetupControls state={state} />
@@ -64,10 +66,13 @@ export function SetupHero() {
                   pushes Get a challenge below the 1280x800 fold), and the
                   column adds no row height. No wordmark behind the art, no
                   hero art below xl. 20% wide, not the spec's 54%: see the spec's
-                  Implementation Notes and docs/launch-checklist.md. */}
+                  Implementation Notes and docs/launch-checklist.md. Inset a
+                  spacing-6 gutter from the controls' 20% padding: flush edges
+                  let Firefox's subpixel flex layout land Get a challenge
+                  inside the art box. */}
               <aside
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/5 xl:block"
+                className="pointer-events-none absolute inset-y-0 right-0 hidden w-[calc(20%---spacing(6))] xl:block"
               >
                 <Image
                   src="/decor/artwork/hero-bloom-orange.webp"
@@ -128,7 +133,7 @@ function SetupControls({ state }: { state: StoreState }) {
           AD-10: `libraryStatus` can still be 'loading' on a returning visit (setup resolves from storage
           synchronously; the library loads async), so this block waits on `state.library` separately. */}
       <div
-        className="min-h-64 desktop:min-h-48"
+        className="min-h-126 desktop:min-h-62"
         aria-busy={library === null && state.libraryStatus !== "error"}
       >
         {library !== null ? (
