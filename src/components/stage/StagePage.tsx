@@ -5,10 +5,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/components/copy";
 import { LineButton } from "@/components/LineButton";
 import { StageIconButton } from "@/components/StageIconButton";
+import { Decor } from "@/decor";
 import type { Challenge, ComposeError, RevealedKind } from "@/domain/session/schema";
 import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
-import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import {
+  canHandleEscape,
+  isPlainActivationKey,
+  isPlainEscape,
+  isStageError,
+  shouldFreezeVisit,
+  shouldRequestNewChallenge,
+  stageDecorMode,
+  stageMeta,
+} from "./logic";
 import { RevealComposition } from "./RevealComposition";
 import { liveAnnouncement, nextLiveText, restoreAnnouncement } from "./reveal-logic";
 import { useRerollShuffle, useRevealMotion } from "./useRevealMotion";
@@ -64,6 +74,28 @@ export function StagePage() {
   const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
   const motion = useRevealMotion(heldChallenge, store.session.revealed, store.library, store.setup);
   const { canPress, press } = motion;
+
+  // Story 8.5 / AD-12: the 3D shuffle layer freezes for the rest of this
+  // Stage visit the first time the reveal completes or the session leaves
+  // `held`, so Reroll (4.3) and Variation (5.8) piece shuffles can only
+  // ever be DOM animation. A `useRef` latch written during render trips the
+  // React Compiler's `react-hooks/refs` lint rule (refs are an escape hatch
+  // outside render), so this uses `useState` with the same "adjust state
+  // while rendering" pattern Decor.tsx's own `requested` latch and this
+  // component's `live` region already use -- bounded to one extra render,
+  // never an Effect. A reload or a fresh navigation is a new visit: the
+  // state starts over at `false`.
+  const revealComplete = store.session.revealed.includes("brief");
+  const [frozenThisVisit, setFrozenThisVisit] = useState(false);
+  if (!frozenThisVisit && store.status !== "loading" && shouldFreezeVisit(store.session.state, revealComplete)) {
+    setFrozenThisVisit(true);
+  }
+  const decorMode = stageDecorMode({
+    sessionState: store.session.state,
+    revealComplete,
+    shuffling: motion.state.status === "shuffling",
+    frozenThisVisit,
+  });
 
   // Story 4.3: the changed pieces' decorative reshuffle after a Reroll.
   const reshuffle = useRerollShuffle(heldChallenge, store.library, store.setup);
@@ -161,6 +193,13 @@ export function StagePage() {
         className="pointer-events-none fixed inset-x-0 bottom-0 -z-10 h-1/3 bg-linear-to-t from-lilac-deep"
       />
 
+      {/* Story 8.5: the 3D shuffle layer, frozen for the rest of this visit
+          once the reveal completes or the session leaves `held` (AD-12). It
+          paints over the fade and under the safe-area column (same -z-10,
+          DESIGN layering ground -> decoration and 3D -> content) and is
+          hidden below desktop (DESIGN: no Decor on phones). */}
+      <Decor scene="shuffle" mode={decorMode} className="fixed inset-0 -z-10 hidden desktop:block" />
+
       <h1 className="sr-only">{copy.stage.h1}</h1>
 
       {/* Corner controls (DESIGN.md -> Layout: "outside the safe area on
@@ -186,7 +225,7 @@ export function StagePage() {
 
       {/* Phone: bottom padding clears the fixed action row (RevealComposition). */}
       <div className="flex min-h-screen flex-col items-center justify-center px-gutter-phone pt-12 pb-[calc(var(--spacing-target-min)+--spacing(8)+env(safe-area-inset-bottom))] desktop:pb-12 desktop:stage-short:py-8">
-        <div className="flex w-safe-area-width max-w-full flex-col items-start gap-stage-gap desktop:stage-short:gap-stage-gap-compact">
+        <div data-testid="stage-column" data-stage-frozen={frozenThisVisit} className="flex w-safe-area-width max-w-full flex-col items-start gap-stage-gap desktop:stage-short:gap-stage-gap-compact">
           {/* Decorative; the h1 above names the page (DESIGN.md -> Stage mark). */}
           <p aria-hidden="true" className="flex items-center gap-2 text-stage-mark text-plum">
             {copy.stage.mark}

@@ -7,7 +7,12 @@ import type { DecorSceneReport } from "./DecorScene";
 import { useDecorGate } from "./useDecorGate";
 
 export type DecorSceneName = "hero" | "shuffle";
-export type DecorMode = "ambient" | "shuffle" | "frozen";
+/**
+ * `idle` (Story 8.5): the layer will animate soon, so request the chunk and
+ * build the scene, but keep the loop stopped and the still showing (state
+ * `loading`) until the first `shuffle`.
+ */
+export type DecorMode = "ambient" | "shuffle" | "idle" | "frozen";
 export type DecorState = "fallback" | "loading" | "running" | "frozen";
 
 export interface DecorProps {
@@ -30,7 +35,10 @@ const FALLBACK = {
     src: "/decor/chrome/chrome-burst.webp",
     width: 612,
     height: 640,
-    className: "absolute top-1/2 right-header-inset w-[12vw] -translate-y-1/2",
+    // Clamped to the side band so the still never reaches the column on
+    // narrow-tall desktops (861-947px wide, >1020px tall).
+    className:
+      "absolute top-1/2 right-header-inset w-[min(12vw,calc((100vw-var(--spacing-safe-area-width))/2-var(--spacing-header-inset)))] -translate-y-1/2",
   },
 } as const;
 
@@ -83,6 +91,11 @@ export function DecorView({ scene, state, className, children = null, boxRef }: 
  */
 export function shouldRequestScene(requested: boolean, gate: boolean | null, mode: DecorMode): boolean {
   return requested || (gate === true && mode !== "frozen");
+}
+
+/** The animation loop runs only in these modes; `idle` and `frozen` keep it stopped. */
+export function modeLoops(mode: DecorMode): boolean {
+  return mode === "ambient" || mode === "shuffle";
 }
 
 /**

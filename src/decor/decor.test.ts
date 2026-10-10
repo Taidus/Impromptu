@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DecorView, SceneBoundary, shouldRequestScene } from "./Decor";
+import { DecorView, modeLoops, SceneBoundary, shouldRequestScene } from "./Decor";
 
 describe("DecorView", () => {
   it("renders the hero fallback with no canvas", () => {
@@ -46,8 +46,29 @@ describe("shouldRequestScene", () => {
     expect(shouldRequestScene(false, true, "ambient")).toBe(true);
   });
 
+  it("requests the chunk for idle once the gate passes (warm before the first shuffle)", () => {
+    expect(shouldRequestScene(false, true, "idle")).toBe(true);
+  });
+
   it("latches true once already requested, regardless of gate/mode", () => {
     expect(shouldRequestScene(true, false, "frozen")).toBe(true);
+  });
+});
+
+describe("modeLoops", () => {
+  it("runs the loop only for ambient and shuffle; idle and frozen keep it stopped", () => {
+    expect(modeLoops("ambient")).toBe(true);
+    expect(modeLoops("shuffle")).toBe(true);
+    expect(modeLoops("idle")).toBe(false);
+    expect(modeLoops("frozen")).toBe(false);
+  });
+});
+
+describe("DecorView while loading (idle before the first shuffle)", () => {
+  it("keeps the still showing", () => {
+    const html = renderToStaticMarkup(createElement(DecorView, { scene: "shuffle", state: "loading", className: "" }));
+    expect(html).toContain("opacity-100");
+    expect(html).not.toContain("opacity-0");
   });
 });
 

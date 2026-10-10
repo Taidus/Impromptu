@@ -3,75 +3,14 @@ import { copy } from "../src/components/copy";
 import { config } from "../src/config/app";
 import { Setup } from "../src/domain/session/schema";
 import { baseSetup } from "../src/domain/session/setup-fixture";
+import { countRaf, rafCalls, stubCapableDevice, stubNoWebGL, threeChunks, webgl2Available } from "./helpers/decor";
 
 test.use({ viewport: { width: 1280, height: 800 } });
-
-async function stubNoWebGL(page: Page) {
-  await page.addInitScript(() => {
-    const orig = HTMLCanvasElement.prototype.getContext as (
-      this: HTMLCanvasElement,
-      type: string,
-      ...rest: unknown[]
-    ) => unknown;
-    // @ts-expect-error -- overriding the overloaded native signature for the stub.
-    HTMLCanvasElement.prototype.getContext = function (type: string, ...rest: unknown[]) {
-      return type === "webgl2" || type === "webgl" ? null : orig.call(this, type, ...rest);
-    };
-  });
-}
-
-async function stubCapableDevice(page: Page) {
-  await page.addInitScript(() => {
-    Object.defineProperty(Navigator.prototype, "hardwareConcurrency", { value: 8, configurable: true });
-    Object.defineProperty(Navigator.prototype, "deviceMemory", { value: 8, configurable: true });
-  });
-}
-
-async function countRaf(page: Page) {
-  await page.addInitScript(() => {
-    (window as unknown as { __rafCalls: number }).__rafCalls = 0;
-    const orig = window.requestAnimationFrame.bind(window);
-    window.requestAnimationFrame = (cb: FrameRequestCallback) => {
-      (window as unknown as { __rafCalls: number }).__rafCalls++;
-      return orig(cb);
-    };
-  });
-}
-
-/** Collects same-origin .js responses whose body contains "THREE.WebGLRenderer" (survives minification). */
-function threeChunks(page: Page, baseURL: string) {
-  const urls = new Set<string>();
-  const pending: Promise<void>[] = [];
-  page.on("response", (response) => {
-    const url = response.url();
-    if (!url.startsWith(baseURL) || !url.endsWith(".js")) return;
-    pending.push(
-      response.text().then(
-        (body) => {
-          if (body.includes("THREE.WebGLRenderer")) urls.add(url);
-        },
-        () => {
-          // Aborted or non-text response; not a three chunk either way.
-        },
-      ),
-    );
-  });
-  return async () => {
-    await Promise.all(pending);
-    return [...urls];
-  };
-}
 
 /** The gate decides only once MotionSync has written html[data-motion]; give it a second after that. */
 async function waitForGateVerdict(page: Page) {
   await expect(page.locator("html")).toHaveAttribute("data-motion", /on|off/);
   await page.waitForTimeout(1_000);
-}
-
-const rafCalls = (page: Page) => page.evaluate(() => (window as unknown as { __rafCalls: number }).__rafCalls);
-
-async function webgl2Available(page: Page) {
-  return page.evaluate(() => !!document.createElement("canvas").getContext("webgl2"));
 }
 
 test("/ server-renders the hero fallback with no canvas", async ({ request }) => {
