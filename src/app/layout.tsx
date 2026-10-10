@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MotionSync } from "@/components/motion";
 import { ReturnFocus } from "@/components/stage/ReturnFocus";
 import { bodoniModa, instrumentSans, unbounded } from "./fonts";
 import "./globals.css";
@@ -18,6 +19,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ReturnFocus />
+        <MotionSync />
         {children}
       </body>
     </html>

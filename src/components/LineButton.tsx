@@ -6,6 +6,13 @@ export interface LineButtonProps extends ComponentProps<"button"> {
   ground?: Ground;
 }
 
+/** LineButton's border/text/hover classes for a ground; shared with MotionToggle. */
+export function lineButtonTone(ground: Ground, disabled: boolean | undefined): string {
+  return disabled
+    ? "border-cream-dim text-ink-soft"
+    : `border-current hover:bg-current/[0.08] active:bg-current/[0.12] ${groundTextClassName(ground)}`;
+}
+
 // DESIGN.md -> Components -> Actions: quiet actions (Reroll, Discard,
 // Pause/Resume, Change it again). A 1px outline pill in the ground's text
 // color; hover fills at 8% of that color.
@@ -16,9 +23,7 @@ export function LineButton({
   disabled,
   ...props
 }: LineButtonProps) {
-  const tone = disabled
-    ? "pointer-events-none border-cream-dim text-ink-soft"
-    : `border-current hover:bg-current/[0.08] active:bg-current/[0.12] ${groundTextClassName(ground)}`;
+  const tone = lineButtonTone(ground, disabled);
 
   return (
     <button
