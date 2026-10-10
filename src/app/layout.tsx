@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ReturnFocus } from "@/components/stage/ReturnFocus";
 import { bodoniModa, instrumentSans, unbounded } from "./fonts";
 import "./globals.css";
 
@@ -15,7 +16,10 @@ export default function RootLayout({
       lang="en"
       className={`h-full antialiased ${bodoniModa.variable} ${unbounded.variable} ${instrumentSans.variable}`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ReturnFocus />
+        {children}
+      </body>
     </html>
   );
 }

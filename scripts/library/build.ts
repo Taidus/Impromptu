@@ -24,8 +24,8 @@ export function buildPayload(lib: LoadedLibrary, report: GateReport) {
     topics: mark(lib.topics),
     styles: mark(lib.styles),
     constraints: mark(lib.constraints),
-    anchors: lib.anchors,
   };
+  // Anchors are a build-time gate check (AD-16); the runtime never reads them, so they don't ship.
   // Content hash of the payload, so libraryVersion only changes when the shipped content does.
   const libraryVersion = crypto.createHash("sha256").update(JSON.stringify(base)).digest("hex").slice(0, 16);
   return { libraryVersion, ...base };
@@ -65,7 +65,7 @@ export function runBuild(root: string): number {
   fs.writeFileSync(outFile, JSON.stringify(payload, null, 2) + "\n");
   console.log(
     `Library build: OK — libraryVersion ${payload.libraryVersion}, ${payload.templates.length} templates, ` +
-      `${payload.anchors.length} anchors, ${lib.manifests.length} accepted batch(es), written to src/generated/library.json`,
+      `${lib.anchors.length} anchors checked, ${lib.manifests.length} accepted batch(es), written to src/generated/library.json`,
   );
   console.log(`Library build: "next dev" does not watch content/library — re-run "npm run library:build" after content edits.`);
   return 0;

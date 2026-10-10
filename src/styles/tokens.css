@@ -346,6 +346,14 @@
   letter-spacing: var(--typography-stage-meta-tracking);
 }
 
+@utility text-stage-meta-phone {
+  font-family: var(--typography-stage-meta-phone-family);
+  font-size: var(--typography-stage-meta-phone-size);
+  font-weight: var(--typography-stage-meta-phone-weight);
+  line-height: var(--typography-stage-meta-phone-leading);
+  letter-spacing: var(--typography-stage-meta-phone-tracking);
+}
+
 @utility text-button {
   font-family: var(--typography-button-family);
   font-size: var(--typography-button-size);
@@ -360,6 +368,17 @@
   font-weight: var(--typography-button-sun-weight);
   line-height: var(--typography-button-sun-leading);
   letter-spacing: var(--typography-button-sun-tracking);
+}
+
+/* Story 3.9: the Stage mark ("impromptu", DESIGN.md -> Components -> Stage
+   mark). The var already existed (Story 3.1 transcribed the whole ramp);
+   this is its first consumer. */
+@utility text-stage-mark {
+  font-family: var(--typography-stage-mark-family);
+  font-size: var(--typography-stage-mark-size);
+  font-weight: var(--typography-stage-mark-weight);
+  line-height: var(--typography-stage-mark-leading);
+  letter-spacing: var(--typography-stage-mark-tracking);
 }
 
 /* Story 8.1: the journey's own headline/title roles — var already existed,
@@ -447,6 +466,7 @@
   line-height: var(--typography-display-phone-leading);
   letter-spacing: var(--typography-display-phone-tracking);
 }
+
 
 @utility text-lede {
   font-family: var(--typography-lede-family);
