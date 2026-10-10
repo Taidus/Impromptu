@@ -2,7 +2,7 @@
 title: 'Story 6.4: Export Practice History as JSON'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '29cceb0'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -42,11 +42,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/domain/practice/export.ts` + `export.test.ts`.
-- [ ] `src/components/copy.ts` -- `button.export`, `state.exported`.
-- [ ] `src/components/practice/ExportButton.tsx` (+ pure view) and a markup test.
-- [ ] `src/components/practice/PracticeView.tsx`, `PracticeClient.tsx` -- `exportControl`.
-- [ ] `e2e/practice.spec.ts` -- download case.
+- [x] `src/domain/practice/export.ts` + `export.test.ts`.
+- [x] `src/components/copy.ts` -- `button.export`, `state.exported`.
+- [x] `src/components/practice/ExportButton.tsx` (+ pure view) and a markup test.
+- [x] `src/components/practice/PracticeView.tsx`, `PracticeClient.tsx` -- `exportControl`.
+- [x] `e2e/practice.spec.ts` -- download case.
+- [x] Review patches: always-mounted `role="status"` body-type line (`exported` / `exportFailed`), `aria-describedby`, `flushSync` re-announce, body-attached anchor with deferred revoke, stricter tests (literal `exportVersion: 1`, `text-ink-soft`, two Reps in history order, `exportedAt` freshness and derived filename, post-visibility request listener).
 
 **Acceptance Criteria:**
 - Given Reps, when Export is activated, then a file `impromptu-practice-YYYY-MM-DD.json` downloads containing a valid `Export` object, "Exported." is announced, and no network request is made.
@@ -55,9 +56,33 @@ context:
 
 ## Implementation Notes
 
+`buildExport`/`exportFilename` live in `src/domain/practice/export.ts`, pure and parsed through the existing `Export` schema (duplicate ids throw via its own `refine`). `ExportButton.tsx` splits into `ExportButtonView` (markup only, `useId` for the status) and the wired `"use client"` `ExportButton`, which takes `new Date().toISOString()` itself since the domain layer may not touch the clock. `PracticeView` got a required `exportControl: ReactNode` prop rendered in a `flex justify-end` row above `PracticeHistory`, gated by the same `storageAvailable && repCount > 0` condition as the history itself; `PracticeClient` wires `<ExportButton reps={history} />`. Existing `practice.test.ts` was extended with an `EXPORT_MARKER` stand-in to assert the control's placement and its with-Reps-only visibility. The e2e case seeds one Rep, clicks Export, asserts the downloaded file's name and its `Export.parse`-able contents, "Exported." becoming visible, and that every observed request during the click stayed same-origin (or `data:`/`blob:`).
+
+After review: the status is an always-mounted `<p role="status" className="text-body text-ink-soft">` holding `null`, `copy.state.exported`, or `copy.state.exportFailed` (set when `buildExport` throws, then rethrown); the button points at it via `aria-describedby` once it has text, and each click clears it under `flushSync` first so a repeat export re-announces. The download anchor is appended to `document.body`, clicked and removed, and the object URL is revoked on a 10s `setTimeout` (synchronous revoke can cancel the download). The e2e request listener attaches after the button is visible and allows only `blob:`, `${origin}/_next/`, and same-origin `?_rsc=` `<Link>` prefetches, which Next.js fires around the click with nondeterministic timing (seen on Chromium and WebKit even after `networkidle`).
+
 ## Spec Change Log
 
+- 2026-10-10: e2e no-network filter also allows same-origin `?_rsc=` route prefetches (Next.js `<Link>`), which the strict `blob:`/`_next/` filter flaked on; they are same-origin RSC payloads, not external requests.
+- 2026-10-10: status region is a plain `<p role="status">` in body type instead of `InlineStatus`, because the Inline message pattern (vermilion dot) is reserved for conflicts and errors in DESIGN.md; the email-signup success line is the precedent.
+
 ## Review Triage Log
+
+- [patch] `role="status"` must be present before firing: assert it in the `render(false)` markup test. (verification-gap)
+- [patch] Assert `exportVersion: 1` literally, not via the imported constant. (verification-gap)
+- [patch] e2e: `exportedAt` within 60s of now and `suggestedFilename()` equals `impromptu-practice-${exportedAt.slice(0,10)}.json`. (verification-gap)
+- [patch] e2e: seed two Reps and assert both ids export in history order. (verification-gap)
+- [patch] Markup test: status carries `text-ink-soft`, not `text-cream-dim`. (verification-gap)
+- [accept] Pretty-print, blob MIME, revoke and `ground="paper"` unasserted: cosmetic, checked visually. (verification-gap)
+- [patch] `buildExport` throwing inside the click handler leaves a dead button: catch, show `copy.state.exportFailed` ("Export failed.") in the status, and rethrow (visible, not silent). (edge-case)
+- [patch] Append the anchor to the document before `click()`, remove it after, and revoke the object URL on a 10s timeout instead of synchronously. (edge-case)
+- [patch] Link the status from the button with `aria-describedby={fired ? statusId : undefined}` (the `useId` is otherwise dead). (edge-case)
+- [patch] Second export must re-announce: `flushSync(() => setFired(false)); setFired(true);` in `onExport` so the live region mutates each time. (edge-case + blind-hunter)
+- [patch] e2e no-network check: attach `page.on("request")` after the button is visible, and assert nothing but `blob:` and `${origin}/_next/` URLs. (blind-hunter)
+- [patch] `exportFilename` doc and test: it slices the ISO string's date portion (callers pass a `Z` datetime); rename the "local-time boundary" test accordingly. (blind-hunter)
+- [patch] Drop the literal `class="flex justify-end"` assertion in practice.test.ts; the ordering assertion covers placement. (blind-hunter)
+- [patch] "Exported." is a success message, not an Inline message (DESIGN.md: vermilion dot is for conflicts and errors). Replace `InlineStatus` with a plain always-mounted `<p role="status" className="text-body text-ink-soft">` whose text is the message or empty; same for the new failure text. Spec deviation recorded in Spec Change Log. (blind-hunter)
+- [reject] Filename uses the UTC day: as specified, and the domain stays Date-free. (edge-case)
+- [accept] Large-history cost, first-click layout shift (shared InlineStatus pattern), in-memory export when storage fails later (desired). (edge-case)
 
 ## Verification
 
@@ -65,3 +90,11 @@ context:
 - `npm run lint && npm run typecheck && npm test` -- expected: clean
 - `npm run build && npm run check:static` -- expected: `/practice` static
 - `E2E_PORT=3102 npm run test:e2e` -- expected: all specs pass
+
+**Results:**
+- `npm run lint` -- clean, no output.
+- `npm run typecheck` -- clean, no output.
+- `npm test` -- 43 test files, 681 tests passed.
+- `npm run build` -- compiled successfully; `/practice` listed as `○ (Static)`.
+- `npm run check:static` -- `check:static OK -- prerendered: /, /practice, /privacy, /stage`.
+- `E2E_PORT=3102 npm run test:e2e` -- 234 passed (chromium, webkit, firefox), including the Export download spec on all three browsers (that spec also passed `--repeat-each=8` on all three after the review patches).

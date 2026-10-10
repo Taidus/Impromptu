@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { config } from "../src/config/app";
 import { copy } from "../src/components/copy";
-import { Rep, Session } from "../src/domain/session/schema";
+import { Export, Rep, Session } from "../src/domain/session/schema";
 import { attemptSession, baseChallenge } from "../src/domain/session/session-fixture";
 
 // Story 6.1 AC: a fresh browser (no Reps yet) sees the empty state, the
@@ -211,6 +212,48 @@ test("/practice Practice Map cells wrap two per row at 320px", async ({ page }) 
   expect(offsetTops[0]).toBe(offsetTops[1]);
   expect(offsetTops[2]).toBeGreaterThan(offsetTops[0]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
+// Story 6.4 AC: Export downloads a valid Export file (every Rep, in history
+// order), announces "Exported.", and makes no network request.
+test("/practice Export downloads a valid Export file and announces Exported.", async ({ page }) => {
+  const makeRep = (id: string, finishedAt: string) =>
+    Rep.parse({ id, challenge: baseChallenge, finishedAt, timeUsedSec: null, reflection: null });
+  const reps = [
+    makeRep("323e4567-e89b-42d3-a456-426614174000", "2026-10-08T12:00:00.000Z"),
+    makeRep("423e4567-e89b-42d3-a456-426614174000", "2026-10-09T12:00:00.000Z"),
+  ];
+  await seed(page, { "impromptu:history": { v: config.storage.schemaVersions.history, rev: 1, data: reps } });
+  await page.goto("/practice");
+
+  const exportButton = page.locator("main").getByRole("button", { name: copy.button.export });
+  await expect(exportButton).toBeVisible({ timeout: 15_000 });
+
+  // Attached only now, so page-load traffic is out of scope: around the click
+  // only the blob URL, same-origin Next.js assets and same-origin `<Link>`
+  // RSC prefetches (`?_rsc=`, nondeterministic timing) may appear.
+  const requests: string[] = [];
+  page.on("request", (req) => requests.push(req.url()));
+
+  const [download] = await Promise.all([page.waitForEvent("download"), exportButton.click()]);
+
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const data = Export.parse(JSON.parse(readFileSync(path as string, "utf8")));
+  expect(data.reps.map((r) => r.id)).toEqual(reps.map((r) => r.id));
+  expect(Math.abs(Date.now() - Date.parse(data.exportedAt))).toBeLessThan(60_000);
+  expect(download.suggestedFilename()).toBe(`impromptu-practice-${data.exportedAt.slice(0, 10)}.json`);
+
+  await expect(page.locator("main").getByRole("status").filter({ hasText: copy.state.exported })).toBeVisible();
+
+  const origin = new URL(page.url()).origin;
+  for (const url of requests) {
+    const allowed =
+      url.startsWith("blob:") ||
+      url.startsWith(`${origin}/_next/`) ||
+      (url.startsWith(`${origin}/`) && new URL(url).searchParams.has("_rsc"));
+    expect(allowed, url).toBe(true);
+  }
 });
 
 test("/practice never scrolls horizontally at 320px", async ({ page }) => {

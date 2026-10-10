@@ -5,6 +5,7 @@ import { GetAChallengeButton } from "@/components/GetAChallengeButton";
 import { SiteFooter } from "@/components/journey/SiteFooter";
 import { practiceMap } from "@/domain/practice/practice-map";
 import { useAppStore } from "@/store";
+import { ExportButton } from "./ExportButton";
 import { PracticeHeader } from "./PracticeHeader";
 import { PracticeView } from "./PracticeView";
 
@@ -35,6 +36,7 @@ export function PracticeClient() {
             reps={history}
             map={map}
             action={<GetAChallengeButton ground="paper" />}
+            exportControl={<ExportButton reps={history} />}
           />
         </div>
       </main>

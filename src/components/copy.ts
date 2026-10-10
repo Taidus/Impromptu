@@ -120,6 +120,8 @@ export const copy = {
     backToYourChallenge: "Back to your challenge",
     keepMyData: "Keep my data",
     clearEverything: "Clear everything",
+    // Story 6.4: the Practice History export control.
+    export: "Export",
   },
   state: {
     timesUp: "Time's up. Finish when you're ready.",
@@ -130,6 +132,9 @@ export const copy = {
     challengeInProgress: "You have a challenge in progress.",
     nothingHereYet: "Nothing here yet.",
     practiceMapDisclaimer: "Counts show what you've practiced, not how good it was.",
+    // Story 6.4: announced after the export download fires.
+    exported: "Exported.",
+    exportFailed: "Export failed.",
   },
   // Story 3.11: Setup's Notice banner (DESIGN.md -> Components -> Notice
   // banner). More than one can show at once -- see activeNoticeBanners.
