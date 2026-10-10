@@ -21,12 +21,14 @@ test("the journey sections, sample Brief, closing link and footer render on /", 
     page.locator("section.bg-sun").getByRole("link", { name: copy.button.getAChallenge }),
   ).toHaveAttribute("href", "/stage");
 
-  await expect(page.getByRole("link", { name: copy.journey.footer.practice, exact: true })).toHaveAttribute(
+  // Scoped to the footer nav: the setup hero's header (Story 3.7) has its own "Practice" link too.
+  const footerNav = page.getByRole("navigation", { name: "Footer" });
+  await expect(footerNav.getByRole("link", { name: copy.journey.footer.practice, exact: true })).toHaveAttribute(
     "href",
     "/practice",
   );
   // Exact: the signup form's own "Privacy note" link also contains "Privacy".
-  await expect(page.getByRole("link", { name: copy.journey.footer.privacy, exact: true })).toHaveAttribute(
+  await expect(footerNav.getByRole("link", { name: copy.journey.footer.privacy, exact: true })).toHaveAttribute(
     "href",
     "/privacy",
   );
@@ -43,7 +45,7 @@ test("the page never scrolls horizontally at 320px", async ({ page }) => {
 test("posters are hidden on phones and visible on desktop", async ({ page }) => {
   await page.goto("/");
   // Scope to the figcaption, the only place the poster title renders.
-  const poster = page.locator("figcaption", { hasText: copy.journey.posters.reveal });
+  const poster = page.locator("figcaption", { hasText: copy.journey.posters.reveal.title });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(poster).toBeHidden();

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:57
-last_updated: 10-09-2026 20:51
+last_updated: 10-09-2026 20:48
 project: Impromptu
 project_key: NOKEY
 tracking_system: file-system
@@ -65,10 +65,10 @@ development_status:
   3-4-session-reducer-for-commits-and-reveal-progress: done
   3-5-versioned-browser-storage-with-a-memory-fallback: done
   3-6-the-app-store-and-the-library-loader: done
-  3-7-difficulty-dial-and-perform-timing: backlog
-  3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: backlog
-  3-9-the-challenge-stage-page-shell: review
-  3-10-challenge-composition-and-stepping-through-the-reveal: review
+  3-7-difficulty-dial-and-perform-timing: done
+  3-8-mediums-skill-focus-quick-reveal-and-get-a-challenge: review
+  3-9-the-challenge-stage-page-shell: done
+  3-10-challenge-composition-and-stepping-through-the-reveal: done
   3-11-a-stable-challenge-across-navigation-and-reload: backlog
   epic-3-retrospective: optional
 
@@ -110,7 +110,7 @@ development_status:
 
   epic-8: in-progress
   8-1-setup-journey-sections-02-04-and-the-night-footer: review
-  8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets: backlog
+  8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets: done
   8-3-motion-toggle-and-ambient-motion-control: backlog
   8-4-decor-component-gate-and-the-3d-hero: backlog
   8-5-the-3d-shuffle-layer-on-the-stage-and-the-freeze-rule: backlog

@@ -17,6 +17,29 @@ export const copy = {
     expression: "Make a feeling land.",
     revision: "Change it on purpose.",
   },
+  // Story 3.7: Setup page section 01 (header, headline, Difficulty Dial,
+  // Perform timing). Mediums/Skill/Quick reveal/Get a challenge (Story 3.8)
+  // add their own strings here later.
+  setup: {
+    headline: "Make something unexpected.",
+    explanation: "Get a creative challenge. Make your version. Build your skills.",
+    dialLabel: "Level",
+    performTimingLegend: "Perform timing",
+    loadError: "Setup couldn't load. Reload the page to try again.",
+    mediumsLabel: "Mediums",
+    thisTimeLabel: "This time",
+    skillLabel: "Skill",
+    skillInfoLabel: "Skill info",
+    quickRevealLabel: "Quick reveal",
+    quickRevealOn: "ON",
+    quickRevealOff: "OFF",
+    randomOption: "Random",
+  },
+  performTiming: {
+    timed: "Timed",
+    untimed: "Untimed",
+    either: "Either",
+  },
   stage: {
     // Visually hidden h1 (EXPERIENCE.md -> Accessibility Floor: Stage's h1 is
     // "Challenge"); the Stage mark itself is decorative (aria-hidden), not a
@@ -156,10 +179,21 @@ export const copy = {
       constraint: "CONSTRAINT",
       brief: "BRIEF",
     },
+    // Story 8.2: title is the figcaption word; alt is the poster artwork's
+    // own alt text (the title alone doesn't describe the image).
     posters: {
-      reveal: "reveal.",
-      make: "make.",
-      reflect: "reflect.",
+      reveal: {
+        title: "reveal.",
+        alt: "A blue eye inside a gold-edged triangle, set against a pink moon, UFOs and a shooting star, above teal mountains.",
+      },
+      make: {
+        title: "make.",
+        alt: "Two glowing blue hands reaching toward each other, fingertips almost touching, on a blue-to-magenta gradient.",
+      },
+      reflect: {
+        title: "reflect.",
+        alt: "A dark red dahlia, an apple, mushrooms and a starry glass orb, with a full moon and rainbow behind.",
+      },
     },
     footer: {
       practice: "Practice",

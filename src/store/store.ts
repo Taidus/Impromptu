@@ -5,7 +5,7 @@ import { compose, recentKeyFor, type ComposeLibrary, type ComposeRequest } from 
 import type { Envelope, StorageKey } from "@/domain/ports";
 import { Rep, Session, Setup } from "@/domain/session/schema";
 import { sessionReducer, type SessionEvent } from "@/domain/session/session-reducer";
-import { setupReducer, type SetupEvent } from "@/domain/session/setup-reducer";
+import { setupReducer, type SetupEvent, type SetupReducerResult } from "@/domain/session/setup-reducer";
 import { buildDefaultSetup, emptySession } from "./defaults";
 import type { Store, StoreCommand, StoreDeps, StoreState } from "./types";
 
@@ -20,6 +20,7 @@ export const initialState: StoreState = {
   status: "loading",
   libraryStatus: "loading",
   setup: null,
+  library: null,
   session: emptySession,
   history: [],
   saveFailed: false,
@@ -166,7 +167,7 @@ export function createStore(deps: StoreDeps): Store {
 
   function onLibraryReady(loaded: ComposeLibrary): void {
     if (state.setup === null) ensureSetup(loaded);
-    setState({ ...state, libraryStatus: "ready" });
+    setState({ ...state, libraryStatus: "ready", library: loaded });
     drainPending();
   }
 
@@ -225,14 +226,15 @@ export function createStore(deps: StoreDeps): Store {
     applySessionEvent(event);
   }
 
-  function dispatchSetup(event: SetupEvent): void {
-    if (state.setup === null) return; // nothing to apply to yet
+  function dispatchSetup(event: SetupEvent): SetupReducerResult["notice"] {
+    if (state.setup === null) return undefined; // nothing to apply to yet
     const base = state.setup;
     const result = setupReducer(base, event);
-    if (result.setup === base) return; // no-op; `result.notice` has no consumer yet (no UI this story)
+    if (result.setup === base) return result.notice; // no-op; the notice (e.g. `last_medium`) is for the UI to show
     const persisted = persist("setup", Setup, setupRev, result.setup, (fresh) => setupReducer(fresh ?? base, event).setup);
     setupRev = persisted.rev;
     setState({ ...state, setup: persisted.data, saveFailed: !persisted.saved });
+    return result.notice;
   }
 
   function dispatchSession(event: SessionEvent): void {

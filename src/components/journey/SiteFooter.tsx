@@ -10,7 +10,7 @@ const linkClass = `text-meta uppercase ${FOCUS_RING_BASE} ${focusRingClassName("
 export function SiteFooter() {
   return (
     <footer className="bg-night px-gutter-phone py-16 text-cream desktop:px-14 desktop:py-20">
-      <div className="mx-auto flex max-w-content-max flex-col gap-12">
+      <div className="relative z-10 mx-auto flex max-w-content-max flex-col gap-12">
         <div className="flex flex-col gap-10 desktop:flex-row desktop:items-start desktop:justify-between">
           <EmailSignup variant="night" className="max-w-sm" />
           <div className="flex flex-col items-start gap-4 desktop:items-end">
