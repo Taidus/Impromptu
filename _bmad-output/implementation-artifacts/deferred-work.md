@@ -64,3 +64,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-10-challenge-composition-and-stepping-through-the-reveal.md`
   summary: Announce the whole held Challenge once through the Stage's aria-live region on reload/restore (EXPERIENCE.md -> State Patterns, "Reload or Resume in any state"), in Story 3.11.
   evidence: Story 3.10's `StagePage` seeds its live region silently with whatever hydration restored, so a reload (partial or fully revealed) says nothing; only fresh commits and later landings announce.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-0-epic-5-domain-and-creating-components.md`
+  summary: In the phase 2 Stage wiring, announce CountdownAnnouncer minute marks on crossing (previous tick's `remainingSec` above the mark, this tick's at or below it) instead of `announceFor`'s exact-equality check, and announce "Resumed." (`copy.stage.countdown.resumedAnnounced`) when the Stage dispatches `resume`.
+  evidence: `announceFor` is a stateless per-instant selector, so a late tick that skips from 61 to 59 misses the 1:00 mark, and resume is never announced; the React Compiler lint rules forbid tracking the previous tick inside the component, and the Stage already owns the tick loop and the resume dispatch.

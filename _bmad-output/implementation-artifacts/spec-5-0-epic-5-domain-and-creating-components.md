@@ -2,7 +2,7 @@
 title: 'Epic 5 phase 1: session events, timer domain, and the creating components (Stories 5.1–5.8, pure parts)'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'b3558d8'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -67,9 +67,41 @@ context:
 
 ## Implementation Notes
 
+- `finish` is not a `SessionEvent`: the store calls the pure `finishRep(session, nowMs, repId, finishedAt)` (it returns the Rep too); the store builds `finishedAt` from the same Clock reading so `src/domain` never touches `Date`.
+- Command gating: only `new_challenge` waits for the library (`isReadyToCompose()`); `finish_rep`/`save_rep`/`retry` need only `status === "ready"`. `hydrate()` drains anything already runnable, and the library-error path drops only a queued `new_challenge`.
+- `runFinishRep` persists the session first (reapply re-runs `finishRep` on the fresh session), then appends the Rep to history only if the persisted session is Finished with `lastRepId === repId`; the history reapply falls back to `[]`. A repeated `finish_rep` is a no-op once Finished (idempotent). `runSaveRep` sets `saveFailed` and stays Finished when the Rep is missing from history, and trims each field (blank → `null`).
+- `retry` is refused outside Saved (AD-7). `resume` clamps the paused span at 0; `update_reflection_draft` slices both fields to `config.reflection.maxChars`; `formatCountdown` renders non-finite input as `00:00`.
+- `Countdown` takes `timeLimitSec`: the caption `TIME LIMIT n MIN` (`Math.round(timeLimitSec / 60)`) or `PAUSED` sits above the digits in `text-stage-meta` (phone variant below desktop). `copy.state.timesUp` was removed as an unused duplicate of `copy.stage.countdown.timesUp*`.
+- `VariationPicker`: prompt "Keep your strongest choice. Change one other thing." always rendered and labelling the radiogroup; `error?: "nothing_chosen" | "no_alternative"` shows its message in a separate `<p role="alert">`; with no options the no-alternative alert shows. Change it stays enabled with nothing picked and is disabled only for a value the picker doesn't offer (or with no options at all).
+- `ReflectionPanel`: labels "What worked?" / "What would you change?" (`copy.reflection.*Label`) in `text-label`; each counter is an always-mounted `aria-live="polite"` element the textarea `aria-describedby`s, showing "n left" from 240 characters, clamped at 0.
+- Deferred: CountdownAnnouncer crossing-based minute marks and the resume announcement go to the phase 2 Stage wiring (deferred-work.md).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+- [patch] `resume` can write a negative `pausedTotalMs` when the clock steps back, which makes the stored Session unparseable and wipes the Attempt: clamp with `Math.max(0, nowMs - pausedAt)`; reducer test that the result parses. (blind-hunter)
+- [patch] `finish_rep`, `save_rep`, `retry` are gated behind `isReadyToCompose()` though none needs the library: gate only `new_challenge` on the library; the others need only hydration. Test: `finish_rep` works while `libraryStatus === "error"`. (blind-hunter)
+- [patch] Countdown caption derives from `remainingSec` and counts down: add `timeLimitSec` prop, caption `TIME LIMIT n MIN` from `Math.round(timeLimitSec / 60)`, caption above the digits in `text-stage-meta`. (blind-hunter)
+- [patch] Variation copy: prompt "Keep your strongest choice. Change one other thing.", message "Pick one thing to change." only when Change it is pressed with nothing chosen, "Nothing else fits here. Pick a different one." for no alternative; keep the prompt rendered, message in its own `<p role="alert">`, `error?: "nothing_chosen" | "no_alternative"`, button not disabled, radiogroup `aria-labelledby` the prompt. (blind-hunter)
+- [patch] `runFinishRep` persists history before session, so a session rev conflict can orphan a Rep: persist the session first, append the Rep only when the persisted session is Finished with `lastRepId === repId`; history `reapply(null)` falls back to `[]`, not the stale in-memory list. (blind-hunter)
+- [patch] `retry` must be accepted only from Saved (AD-7): guard `state.session.state !== "saved"` and add the test. (blind-hunter)
+- [patch] ReflectionPanel labels "What worked?" / "What would you change?" (new `copy.reflection.workedLabel` / `changeLabel`) in `text-label`; counter gets an id, `aria-live="polite"`, and the textarea `aria-describedby` it. (blind-hunter)
+- [patch] Store tests: force the history rev-conflict path (second repository handle writes history between hydrate and `finish_rep`), a timed run with `clock.advance` asserting `timeUsedSec` and `finishedAt`, and the retry-from-non-Saved guard. (blind-hunter)
+- [defer] CountdownAnnouncer minute-mark equality can miss a mark on a late tick, and resume is not announced: the Stage wiring (phase 2) owns the previous tick and will announce on crossing. Recorded in deferred-work.md. (blind-hunter)
+- [patch] Copy duplication: derive the countdown time's-up body from `copy.state.timesUp` or delete the unused entry. (blind-hunter)
+- [patch] `finishRep` test strictly under the limit with paused time excluded: `pausedTotalMs: 5_000`, `finishRep(s, 70_500, ...)` → `timeUsedSec === 65`. (verification-gap)
+- [patch] Store asserts `finishedAt` equals the fake clock's ISO time. (verification-gap)
+- [patch] `new_challenge` guard during Attempt/Finished observed via a spy on `random.next` (no compose calls). (verification-gap)
+- [patch] VariationPicker tests assert `role="alert"` present only with a message and the radiogroup labelling. (verification-gap)
+- [patch] ReflectionPanel counter boundary tests at 240 (shows "40 left") and 239 (hidden); `save_rep` with whitespace-only reflection → `null`. (verification-gap)
+- [patch] RepDoneStamp test pins `rotate(6deg)` on the frame and `rotate(-6deg)` on the lettering. (verification-gap)
+- [patch] `runSaveRep` when `lastRepId` is missing from history (history write failed earlier): set `saveFailed: true` and return instead of silently bumping the rev and moving to Saved. (edge-case)
+- [patch] Over-cap reflection drafts: the reducer's `update_reflection_draft` slices both fields to `config.reflection.maxChars`; the panel clamps `left` at 0. (edge-case)
+- [patch] VariationPicker with no options shows the no-alternative message as the alert; the confirm button is disabled only when `value` is not one of the offered kinds. (edge-case)
+- [patch] `formatCountdown` guards non-finite input (renders 0:00); `save_rep` trims each field before the blank check and stores trimmed text. (edge-case)
+- [accept] Verified-correct boundaries: pause while paused, resume without pause, finish during pause, elapsed exactly at the limit, rehydrated pausedAt, double finish, unknown retry id, counter at 0, formatCountdown above 59:59. (edge-case)
+- [accept] `appendRepIfAbsent` only reachable on a rev conflict; `remainingSec` floor vs ceil mid-second; `saveFailed` OR-ing; `onChange` field wiring untestable without a DOM (e2e in phase 2). (verification-gap)
 
 ## Verification
 
@@ -77,3 +109,8 @@ context:
 - `npm run lint && npm run typecheck && npm test` -- expected: clean
 - `npm run build && npm run check:static` -- expected: all pages static
 - `E2E_PORT=3103 npm run test:e2e` -- expected: all existing specs pass unchanged
+
+**Results:**
+- `npm run lint && npm run typecheck && npm test` -- clean; 40 test files, 774 tests passed
+- `npm run build && npm run check:static` -- `check:static OK — prerendered: /, /practice, /privacy, /stage`
+- `E2E_PORT=3103 npm run test:e2e` -- 198 passed (34.4s)
