@@ -1,10 +1,10 @@
 import { copy } from "@/components/copy";
+import { Level } from "@/domain/library/schema";
 import { ChromePiece } from "./ChromePiece";
 import { PosterCard } from "./PosterCard";
 import { SectionHeader } from "./SectionHeader";
 
 const { journey, level } = copy;
-const LEVEL_ORDER = ["explore", "experiment", "develop", "perform"] as const;
 
 // Poster stagger per DESIGN: reveal 0, make 90px, reflect 40px. Written as
 // plain Tailwind spacing steps (0, 10 = 40px) plus one exact rem value
@@ -29,7 +29,7 @@ export function FourLevels() {
         />
         <div className="flex flex-col gap-12 desktop:flex-row desktop:items-start desktop:gap-16">
           <ol className="flex flex-1 flex-col gap-5">
-            {LEVEL_ORDER.map((key, index) => (
+            {Level.options.map((key, index) => (
               <li key={key} className="flex flex-col gap-1">
                 <p className="text-meta uppercase">
                   {String(index + 1).padStart(2, "0")} — {key}

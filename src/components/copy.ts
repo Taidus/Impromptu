@@ -17,6 +17,21 @@ export const copy = {
     expression: "Make a feeling land.",
     revision: "Change it on purpose.",
   },
+  // Story 3.7: Setup page section 01 (header, headline, Difficulty Dial,
+  // Perform timing). Mediums/Skill/Quick reveal/Get a challenge (Story 3.8)
+  // add their own strings here later.
+  setup: {
+    headline: "Make something unexpected.",
+    explanation: "Get a creative challenge. Make your version. Build your skills.",
+    dialLabel: "Level",
+    performTimingLegend: "Perform timing",
+    loadError: "Setup couldn't load. Reload the page to try again.",
+  },
+  performTiming: {
+    timed: "Timed",
+    untimed: "Untimed",
+    either: "Either",
+  },
   stage: {
     // Visually hidden h1 (EXPERIENCE.md -> Accessibility Floor: Stage's h1 is
     // "Challenge"); the Stage mark itself is decorative (aria-hidden), not a

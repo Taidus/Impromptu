@@ -7,23 +7,17 @@ import { Seam } from "@/components/journey/Seam";
 import { SiteFooter } from "@/components/journey/SiteFooter";
 import { Ticker } from "@/components/journey/Ticker";
 import { WhatsInAChallenge } from "@/components/journey/WhatsInAChallenge";
+import { SetupHero } from "@/components/setup/SetupHero";
 
-// Thin composition: the setup hero (01, builder session's own work) is a
-// placeholder here, then the journey sections (02-04) and the footer.
-// `relative` on the outer wrapper so OrbitThread and Grain — both absolute,
-// `inset-0` — span from the hero to the footer in one pass.
+// Thin composition: the setup hero (01, Story 3.7) then the journey
+// sections (02-04) and the footer. `relative` on the outer wrapper so
+// OrbitThread and Grain — both absolute, `inset-0` — span from the hero to
+// the footer in one pass.
 export default function Home() {
   return (
     <div className="relative">
       <main>
-        {/* `pb-28` (not just `p-8`): clearance below the h1 for the sun
-            Ticker's seam overlap just below. Real padding/content for this
-            hero lands with 8.4; this is still only the 8.1 placeholder. */}
-        <section id="setup" className="bg-night p-8 pb-28 text-cream">
-          <div className="relative z-10">
-            <h1 className="text-2xl font-semibold">Impromptu</h1>
-          </div>
-        </section>
+        <SetupHero />
         <div className="relative">
           <Seam from="night" to="lilac" />
           <Ticker variant="sun" />

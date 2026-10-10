@@ -21,12 +21,14 @@ test("the journey sections, sample Brief, closing link and footer render on /", 
     page.locator("section.bg-sun").getByRole("link", { name: copy.button.getAChallenge }),
   ).toHaveAttribute("href", "/stage");
 
-  await expect(page.getByRole("link", { name: copy.journey.footer.practice, exact: true })).toHaveAttribute(
+  // Scoped to the footer nav: the setup hero's header (Story 3.7) has its own "Practice" link too.
+  const footerNav = page.getByRole("navigation", { name: "Footer" });
+  await expect(footerNav.getByRole("link", { name: copy.journey.footer.practice, exact: true })).toHaveAttribute(
     "href",
     "/practice",
   );
   // Exact: the signup form's own "Privacy note" link also contains "Privacy".
-  await expect(page.getByRole("link", { name: copy.journey.footer.privacy, exact: true })).toHaveAttribute(
+  await expect(footerNav.getByRole("link", { name: copy.journey.footer.privacy, exact: true })).toHaveAttribute(
     "href",
     "/privacy",
   );
