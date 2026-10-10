@@ -61,3 +61,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-2-journey-furniture-tickers-orbit-thread-chrome-and-assets.md`
   summary: Route the orbit thread through margins and gutters (crossing sides inside the text-free seams) and draw it on scroll under the 8.3 motion gate, instead of the current near-vertical left-edge line.
   evidence: DESIGN → Orbit thread wants it to wind around the page; the current path satisfies 'never crosses text' by hugging x≈1% of the viewport.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-10-challenge-composition-and-stepping-through-the-reveal.md`
+  summary: Announce the whole held Challenge once through the Stage's aria-live region on reload/restore (EXPERIENCE.md -> State Patterns, "Reload or Resume in any state"), in Story 3.11.
+  evidence: Story 3.10's `StagePage` seeds its live region silently with whatever hydration restored, so a reload (partial or fully revealed) says nothing; only fresh commits and later landings announce.

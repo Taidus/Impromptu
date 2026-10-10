@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { baseChallenge } from "@/domain/session/session-fixture";
 import type { Status } from "@/store";
-import { canHandleEscape, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
+import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 
 const STATUSES: Status[] = ["loading", "ready", "error"];
 
@@ -92,5 +92,36 @@ describe("isPlainEscape", () => {
 
   it("is false for other keys", () => {
     expect(isPlainEscape({ ...plain, key: "Enter" })).toBe(false);
+  });
+});
+
+describe("isPlainActivationKey", () => {
+  const plain = {
+    key: "Enter",
+    repeat: false,
+    defaultPrevented: false,
+    isComposing: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+  };
+
+  it("is true for a bare first-press Enter", () => {
+    expect(isPlainActivationKey(plain)).toBe(true);
+  });
+
+  it("is true for a bare first-press Space", () => {
+    expect(isPlainActivationKey({ ...plain, key: " " })).toBe(true);
+  });
+
+  for (const flag of ["repeat", "defaultPrevented", "isComposing", "altKey", "ctrlKey", "metaKey", "shiftKey"] as const) {
+    it(`is false with ${flag}`, () => {
+      expect(isPlainActivationKey({ ...plain, [flag]: true })).toBe(false);
+    });
+  }
+
+  it("is false for other keys", () => {
+    expect(isPlainActivationKey({ ...plain, key: "Escape" })).toBe(false);
   });
 });

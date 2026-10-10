@@ -64,8 +64,8 @@ function revealNext(session: Session): Session {
   return next === undefined ? session : { ...session, revealed: [...session.revealed, next] };
 }
 
-/** Kinds the Challenge actually has, in `config.reveal.order`, with `brief` always last. */
-function presentKinds(challenge: Challenge): RevealedKind[] {
+/** Kinds the Challenge actually has, in `config.reveal.order`, with `brief` always last. Exported for the Stage UI (Story 3.10), which needs it without a Session. */
+export function presentKinds(challenge: Challenge): RevealedKind[] {
   return config.reveal.order.filter((kind) => isPresent(challenge, kind));
 }
 

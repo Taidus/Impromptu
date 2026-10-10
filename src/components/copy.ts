@@ -71,6 +71,27 @@ export const copy = {
     // new_challenge failed (session.lastComposeError). Lock-specific copy and
     // the unlock action arrive with the Lock stories; this covers every case.
     composeError: "No challenge fits this setup yet. Change your setup and try again.",
+    // Story 3.10: the five reveal pieces' visible label and screen-reader
+    // name (DESIGN.md -> Components -> "On the Stage"; EXPERIENCE.md ->
+    // Accessibility Floor). Sentence case here -- the visible chip/scrap
+    // label is uppercased with CSS (`uppercase`), the same way stageMeta's
+    // "Explore" is uppercased visually without changing the DOM text.
+    piece: {
+      skill: "Skill",
+      medium: "Medium",
+      topic: "Topic",
+      style: "Style",
+      constraint: "Constraint",
+    },
+    // The reveal pieces' aria-label (EXPERIENCE.md -> Accessibility Floor:
+    // "The pieces are a list labeled 'Challenge inputs'.").
+    inputsListLabel: "Challenge inputs",
+    // Quick reveal's one-shot announcement opener (EXPERIENCE.md ->
+    // Accessibility Floor).
+    challengeReady: "Challenge ready.",
+    // Empty slot screen-reader text, joined as "{piece}, not revealed yet."
+    // (EXPERIENCE.md -> Component Patterns -> Empty slot).
+    notRevealedYet: "not revealed yet.",
   },
   button: {
     getAChallenge: "Get a challenge",
