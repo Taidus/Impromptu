@@ -169,23 +169,27 @@ test("continuing a Reveal still works after the connection drops (NFR-4)", async
 });
 
 test("generating a new Challenge still works after the connection drops (NFR-4)", async ({ page, context }) => {
+  // Fresh context, Setup only: /stage is never visited, so the only way its
+  // RSC payload is in the client cache is Setup's own prefetch of it. Without
+  // it the offline `router.push("/stage")` falls back to a hard navigation
+  // and lands on the browser's offline error page.
+  await page.goto("/");
   // The library is its own lazily loaded chunk (prefetched on idle, Story
   // 3.6), so it must arrive while still online. The Mediums row and Get a
   // challenge only render once it has (SetupHero's MediumsAndChallenge).
-  await page.goto("/");
   await expect(page.locator("#setup").getByRole("button", { name: "Drawing", exact: true })).toBeVisible({
     timeout: 15_000,
   });
   const getAChallenge = page.locator("#setup").getByRole("button", { name: copy.button.getAChallenge });
   await expect(getAChallenge).toBeVisible();
   expect(await heldChallenge(page)).toBeNull();
+  // Let that prefetch (one or more /stage RSC requests) settle before going offline.
+  await page.waitForLoadState("networkidle");
 
   await context.setOffline(true);
 
-  // `compose()` reads the library chunk already loaded into this client --
-  // no fetch is involved. Checked via storage rather than the resulting
-  // navigation: the generic SPA route transition that follows is Next.js
-  // router infrastructure, not what NFR-4 is about.
   await getAChallenge.click();
-  await expect.poll(() => heldChallenge(page)).not.toBeNull();
+  await expect(page).toHaveURL("/stage");
+  await expect(page.getByRole("button", { name: copy.button.revealNext })).toBeVisible();
+  expect(await heldChallenge(page)).not.toBeNull();
 });
