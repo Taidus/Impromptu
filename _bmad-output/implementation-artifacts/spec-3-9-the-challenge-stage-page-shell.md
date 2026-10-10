@@ -2,7 +2,7 @@
 title: 'Story 3.9: The Challenge Stage page shell'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '0f12d0fd97a898d64b2915a925f519bf033f3e3f'
