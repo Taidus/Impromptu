@@ -10,7 +10,8 @@ import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
 import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 import { RevealComposition } from "./RevealComposition";
-import { liveAnnouncement, nextKind, restoreAnnouncement } from "./reveal-logic";
+import { liveAnnouncement, restoreAnnouncement } from "./reveal-logic";
+import { useRevealMotion } from "./useRevealMotion";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -22,9 +23,10 @@ import { liveAnnouncement, nextKind, restoreAnnouncement } from "./reveal-logic"
  *
  * The reveal composition itself (Story 3.10: ticket tabs, paper scrap, foil
  * slip, ink stamp, Brief, and the "Reveal next" sun button) renders via
- * `RevealComposition` once a Challenge is held. Pieces land instantly --
- * Epic 4 adds the shuffle/shimmer motion. With everything landed, the
- * action row has no primary action yet (Reroll is 4.3, Start creating 5.1).
+ * `RevealComposition` once a Challenge is held; `useRevealMotion` (Story
+ * 4.1) drives each piece's shuffle-then-land motion and is the one place
+ * that dispatches `reveal_next`. With everything landed, the action row
+ * has no primary action yet (Reroll is 4.3, Start creating 5.1).
  */
 export function StagePage() {
   const store = useAppStore();
@@ -54,6 +56,15 @@ export function StagePage() {
     router.replace("/");
   }, [router]);
 
+  // Story 4.1: the shuffle/landing motion state machine, shared by the
+  // keydown fallback below and RevealComposition's sun button -- a press
+  // from either place goes through the same sequencing (AD-18 dispatches
+  // `reveal_next` only once, from inside the hook, when a piece's landing
+  // phase elapses; see useRevealMotion.ts).
+  const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
+  const motion = useRevealMotion(heldChallenge, store.session.revealed, store.library, store.setup);
+  const { canPress, press } = motion;
+
   // AD-7 / EXPERIENCE.md -> Interaction Primitives: this stays the Stage's
   // one keydown listener. Story 3.10 extends it with the Space/Enter
   // "Reveal next" shortcut for when no control has focus -- normally the
@@ -69,15 +80,14 @@ export function StagePage() {
       if (!isPlainActivationKey(event)) return;
       const focused = document.activeElement;
       if (focused !== null && focused !== document.body && focused !== document.documentElement) return;
-      const challenge = store.session.challenge;
-      if (store.session.state !== "held" || challenge === null) return;
-      if (nextKind(challenge, store.session.revealed) === null) return;
+      if (store.session.state !== "held" || store.session.challenge === null) return;
+      if (!canPress) return;
       event.preventDefault();
-      getAppStore().dispatchSession({ type: "reveal_next" });
+      press();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [store.session, goToSetup]);
+  }, [store.session, goToSetup, canPress, press]);
 
   // EXPERIENCE.md -> Accessibility Floor: the Stage's one aria-live region.
   // It lives here, mounted before any Challenge is held, so its text changes
@@ -91,7 +101,6 @@ export function StagePage() {
   // the region a commit later: a region that mounts already holding its text
   // (a client-side return) is usually not spoken. Only `held` is restored --
   // a reload during an Attempt stays silent until Story 5.x owns that state.
-  const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
   const quickReveal = store.setup?.quickReveal ?? false;
   const [live, setLive] = useState<{
     seeded: boolean;
@@ -188,11 +197,7 @@ export function StagePage() {
           ) : null}
 
           {store.session.state === "held" && store.session.challenge !== null ? (
-            <RevealComposition
-              challenge={store.session.challenge}
-              revealed={store.session.revealed}
-              onRevealNext={() => getAppStore().dispatchSession({ type: "reveal_next" })}
-            />
+            <RevealComposition challenge={store.session.challenge} revealed={store.session.revealed} motion={motion} />
           ) : null}
 
           <p aria-live="polite" className="sr-only">

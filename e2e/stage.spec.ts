@@ -81,6 +81,22 @@ test("a held Challenge survives reload unchanged", async ({ page }) => {
 // production-library e2e test relies on (see its Implementation Notes).
 const revealNext = (page: Page) => page.getByRole("button", { name: copy.button.revealNext });
 
+/**
+ * Story 4.1: waits out a just-pressed piece's full shuffle-then-land cycle
+ * -- either the action row settles back to `idle` (more pieces left) or it
+ * unmounts entirely (the Brief just landed, no action row anymore). Its
+ * candidate flicks live in an `aria-hidden` layer and may coincidentally
+ * echo the real value (e.g. Skill focus "random" flicks through every real
+ * Skill name, including the one that will land), so a plain text assertion
+ * right after a press can otherwise race a shuffle still in flight.
+ */
+async function waitForPieceToLand(page: Page) {
+  await page.waitForFunction(() => {
+    const row = document.querySelector('[data-testid="stage-action-row"]');
+    return row === null || row.getAttribute("data-motion-status") === "idle";
+  });
+}
+
 test("the Stage shows empty slots and focuses Reveal next on entry", async ({ page }) => {
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
@@ -96,18 +112,23 @@ test("keyboard stepping lands each labelled piece in order, with the Brief last"
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Medium: Drawing", { exact: true })).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-topic-stage-phone")).toBeVisible();
 
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-stamp-stage-phone")).toBeVisible();
 
   await page.keyboard.press(" ");
+  await waitForPieceToLand(page);
   await expect(page.locator("p.text-brief-stage-phone")).toBeVisible();
   // Nothing landed is unrevealed anymore, and Reroll/Start creating aren't
   // built yet -- the action row has no primary action.
@@ -144,10 +165,12 @@ test("Space/Enter with focus on the body lands the next piece", async ({ page })
 
   await blur();
   await page.keyboard.press("Enter");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
 
   await blur();
   await page.keyboard.press(" ");
+  await waitForPieceToLand(page);
   await expect(page.getByText("Medium: Drawing", { exact: true })).toBeVisible();
 });
 
@@ -155,7 +178,10 @@ test("focus moves to the Brief when the last piece lands", async ({ page }) => {
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
-  while ((await revealNext(page).count()) > 0) await page.keyboard.press("Enter");
+  while ((await revealNext(page).count()) > 0) {
+    await page.keyboard.press("Enter");
+    await waitForPieceToLand(page);
+  }
   await expect(page.locator("p.text-brief-stage-phone").locator("..")).toBeFocused();
 });
 
@@ -169,6 +195,7 @@ test("holding Enter on Reveal next lands only one piece", async ({ page }) => {
   await page.keyboard.down("Enter");
   await page.keyboard.down("Enter");
   await page.keyboard.up("Enter");
+  await waitForPieceToLand(page);
 
   await expect(page.getByText("Skill: Observation", { exact: true })).toBeVisible();
   await expect(page.getByText(emptySlotLabel("medium"))).toBeAttached();
@@ -206,7 +233,10 @@ test("desktop type minimums at 1280x800: Brief at least 32px, Inputs at least 24
   await page.goto("/stage");
   await expect(meta(page)).toContainText("·", { timeout: 15_000 });
 
-  while ((await revealNext(page).count()) > 0) await revealNext(page).click();
+  while ((await revealNext(page).count()) > 0) {
+    await revealNext(page).click();
+    await waitForPieceToLand(page);
+  }
   await expect(page.locator("p.text-brief-stage-phone")).toBeVisible();
 
   const fontSizePx = async (locator: ReturnType<Page["locator"]>) =>
@@ -258,10 +288,14 @@ test("phone layout at 390x844: the Constraint stamp lands below Topic, and the a
   await expect(page.getByTestId("stage-action-row")).toHaveCSS("position", "fixed");
 
   await revealNext(page).click(); // skill
+  await waitForPieceToLand(page);
   await revealNext(page).click(); // medium
+  await waitForPieceToLand(page);
   await revealNext(page).click(); // topic
+  await waitForPieceToLand(page);
   const topicBox = await page.locator("p.text-topic-stage-phone").boundingBox();
   await revealNext(page).click(); // constraint
+  await waitForPieceToLand(page);
   const stampBox = await page.locator("p.text-stamp-stage-phone").boundingBox();
 
   expect(topicBox).not.toBeNull();
@@ -293,3 +327,84 @@ test("a repeating Escape is ignored, and holding Esc navigates once", async ({ p
   await expect(page).toHaveURL("/");
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
 });
+
+// Production defect: the Constraint stamp's -7° double rule ran through the
+// counter-rotated "CONSTRAINT" label and its rotated corner clipped the Topic
+// text above it. Seeds the reported held Challenge, every piece revealed.
+const stampChallenge = {
+  ...fullChallenge,
+  inputs: {
+    skill: { id: "skl.observation", revealText: "Observation" },
+    medium: { id: "med.drawing", revealText: "Drawing" },
+    topic: { id: "top.near-object", revealText: "A nearby object" },
+    constraint: { id: "con.three-details", revealText: "Three new details" },
+  },
+};
+
+for (const viewport of [
+  { width: 1528, height: 784 },
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test(`the Constraint stamp's rules frame its label and value and clear the Topic at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ challenge, session }) => {
+        const revealed = ["skill", "medium", "topic", "constraint", "brief"];
+        localStorage.setItem(
+          "impromptu:session",
+          JSON.stringify({ v: 1, rev: 1, data: { ...session, state: "held", challenge, revealed } }),
+        );
+      },
+      { challenge: stampChallenge, session: noneSession },
+    );
+    await page.setViewportSize(viewport);
+    await page.goto("/stage");
+    await expect(page.locator("p.text-stamp-stage-phone")).toContainText("Three new details");
+    await page.evaluate(() => document.fonts.ready);
+
+    const result = await page.locator("p.text-stamp-stage-phone").evaluate((value) => {
+      const label = value.previousElementSibling!;
+      const stamp = value.parentElement!.parentElement!;
+      const topic = document.querySelector("p.text-topic-stage-phone")!;
+      // Map a screen point into the stamp's own (un-tilted) frame, about its center.
+      const m = new DOMMatrix(getComputedStyle(stamp).transform);
+      const angle = Math.atan2(m.b, m.a);
+      const s = stamp.getBoundingClientRect();
+      const cx = s.left + s.width / 2;
+      const cy = s.top + s.height / 2;
+      const cs = getComputedStyle(stamp);
+      const halfW = stamp.offsetWidth / 2 - parseFloat(cs.borderLeftWidth);
+      const top = -stamp.offsetHeight / 2 + parseFloat(cs.borderTopWidth);
+      const bottom = stamp.offsetHeight / 2 - parseFloat(cs.borderBottomWidth);
+      const outside = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        const corners = [
+          [r.left, r.top],
+          [r.right, r.top],
+          [r.left, r.bottom],
+          [r.right, r.bottom],
+        ];
+        return corners
+          .map(([x, y]) => {
+            const dx = x - cx;
+            const dy = y - cy;
+            const lx = dx * Math.cos(-angle) - dy * Math.sin(-angle);
+            const ly = dx * Math.sin(-angle) + dy * Math.cos(-angle);
+            return Math.max(top - ly, ly - bottom, Math.abs(lx) - halfW, 0);
+          })
+          .reduce((a, b) => Math.max(a, b), 0);
+      };
+      const t = topic.getBoundingClientRect();
+      return {
+        labelOutsidePx: outside(label),
+        valueOutsidePx: outside(value),
+        stampTopicOverlapPx:
+          s.left < t.right && s.right > t.left ? Math.max(0, Math.min(s.bottom, t.bottom) - Math.max(s.top, t.top)) : 0,
+      };
+    });
+
+    expect(result).toEqual({ labelOutsidePx: 0, valueOutsidePx: 0, stampTopicOverlapPx: 0 });
+  });
+}

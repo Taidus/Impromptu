@@ -4,6 +4,18 @@ export const config = {
   reveal: {
     quickMaxMs: 1000,
     order: ["skill", "medium", "topic", "style", "constraint", "brief"],
+    // Story 4.1 / UX-DR22 motion budget: shuffle ~900ms, then land over a
+    // material-specific duration; a flick every 350ms keeps candidate swaps
+    // at or under 3/s (EXPERIENCE.md -> Photosensitivity). Reduced motion
+    // (Story 4.2) always skips the shuffle and commits after `reducedLandMs`
+    // (EXPERIENCE.md's 120ms fade budget). These also drive the CSS
+    // `animation-duration`s (pieces.tsx sets them as inline CSS variables).
+    motion: {
+      shuffleMs: 900,
+      flickIntervalMs: 350,
+      landMs: { skill: 550, medium: 550, topic: 550, style: 420, constraint: 320, brief: 250 },
+      reducedLandMs: 120,
+    },
   },
   setup: {
     defaults: {
