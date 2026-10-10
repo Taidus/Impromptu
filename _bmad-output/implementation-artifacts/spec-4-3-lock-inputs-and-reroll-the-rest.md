@@ -2,7 +2,7 @@
 title: 'Lock Inputs and Reroll the rest'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 story_key: '4-3-lock-inputs-and-reroll-the-rest'
