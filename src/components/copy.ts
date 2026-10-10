@@ -125,7 +125,9 @@ export const copy = {
   notice: {
     challengeWaiting: "Your challenge is waiting.",
     storageUnavailable: "This browser isn't saving data, so your history won't be kept. Challenges still work.",
-    migrationFailed: "Some older reps couldn't be read. They're still stored.",
+    // Neutral on purpose: migrationFailed covers setup, session, and history, not just reps.
+    // Orchestrator placeholder -- final copy is the founder's.
+    migrationFailed: "Some older saved data couldn't be read. It's still stored.",
   },
   // Story 6.1: the Practice page shell (empty and storage-unavailable states).
   practice: {

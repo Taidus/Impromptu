@@ -11,7 +11,6 @@ describe("activeNoticeBanners", () => {
       "challengeWaiting",
     ]);
     expect(activeNoticeBanners({ sessionState: "attempt", storageAvailable: true, migrationFailed: false })).toEqual([]);
-    expect(activeNoticeBanners({ sessionState: "none", storageAvailable: true, migrationFailed: false })).toEqual([]);
   });
 
   it("shows storageUnavailable when the startup probe failed", () => {
@@ -22,6 +21,17 @@ describe("activeNoticeBanners", () => {
 
   it("shows migrationFailed when the Repository reports it", () => {
     expect(activeNoticeBanners({ sessionState: "none", storageAvailable: true, migrationFailed: true })).toEqual([
+      "migrationFailed",
+    ]);
+  });
+
+  it("pairs a held Challenge with each storage flag on its own", () => {
+    expect(activeNoticeBanners({ sessionState: "held", storageAvailable: false, migrationFailed: false })).toEqual([
+      "challengeWaiting",
+      "storageUnavailable",
+    ]);
+    expect(activeNoticeBanners({ sessionState: "held", storageAvailable: true, migrationFailed: true })).toEqual([
+      "challengeWaiting",
       "migrationFailed",
     ]);
   });

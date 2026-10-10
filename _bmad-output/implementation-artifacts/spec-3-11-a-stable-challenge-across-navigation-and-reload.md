@@ -2,7 +2,7 @@
 title: 'A stable Challenge across navigation and reload'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '8d9401cd92b02b862027c4e9b775961830098a9b'
@@ -95,11 +95,25 @@ context:
 - `e2e/stable-challenge.spec.ts` (new): seeds `impromptu:session`/`impromptu:setup` via `page.addInitScript` (same convention as `e2e/stage.spec.ts`) for the mid-Reveal and fully-revealed restore-announcement cases; drives a real Setup↔Stage round trip for the "held Challenge unchanged" case (returning via the Notice banner's "Back to your challenge", since that is the only in-spec path back to `/stage` that does not recompose); simulates storage-unavailable by overriding the `window.localStorage` getter to throw in an init script (so `tryGlobalLocalStorage()` returns `null` and the Repository's probe never runs); simulates a migration failure by seeding an envelope at `v: 0` (below the only registered schema version, `1`, with no migration step registered — `migrate()` throws deterministically) for the `history` key, which doesn't disturb Setup's own first-visit defaulting.
 - Offline (NFR-4) ended up as two separate tests, not one combined round trip: an initial attempt chained `/stage` → `/` → `/stage` entirely offline after one online visit, reasoning that Next's client Router Cache would keep both segments servable without the network. A real run (all three browsers) proved that wrong — a `router.push`/`router.replace` to a route not literally the one `page.goto` hard-loaded still issues a fresh RSC fetch, which fails offline (one browser surfaced a `chrome-error://chromewebdata/` page). Split into: (1) hard-load `/stage` online, go offline, click **Reveal next** — pure client reducer state, no navigation, unambiguously passes; (2) hard-load `/` online, go offline, click **Get a challenge**, and assert the compose succeeded by reading `impromptu:session` from `localStorage` directly rather than asserting the post-click URL — `useGetAChallenge` calls `store.dispatch({type:"new_challenge"})` synchronously before `router.push`, so the Repository write is already done by the time `.click()` resolves, regardless of whether the SPA route transition that follows also completes offline. The resulting route transition's own offline behavior is Next.js router infrastructure, not what NFR-4 (the library is bundled client-side) is about.
 - `npm run lint`, `npm run typecheck`, `npm test` (607/607, 36 files), `npm run build`, `npm run check:static`, `npm run check:privacy`, and `npm run test:e2e` (192/192 across chromium/webkit/firefox, `E2E_PORT=3104`) all pass.
+- Review patch pass: `StagePage` now seeds the live region empty and queues the restore text, moving it in one commit later (a `setTimeout` in an effect), so a client-side return is spoken; `restoreAnnouncement(challenge, revealed, quickReveal)` and `liveAnnouncement` share `landedAnnouncement` (reveal order via `presentKinds`), return `null` when nothing present has landed, and use the "Challenge ready." lead-in only with Quick reveal on (supersedes founder decision 2's full-restore wording; orchestrator decision); reload during an Attempt stays silent until Story 5.x. `NoticeBanners` is an always-mounted polite `role="status"` region (`not-empty:mb-10` replaces the column's `gap-10`); "Back to your challenge" is a `next/link` styled with `inkButtonClassName("paper")` (cream panel, grape focus ring); each banner is `tabIndex={-1}` + `data-notice-banner`, and `ReturnFocus` focuses the first one, else the h1 (EXPERIENCE.md -> Focus targets) -- `e2e/stage.spec.ts`'s two Back/Esc focus tests now expect the banner. `copy.notice.migrationFailed` is now neutral, "Some older saved data couldn't be read. It's still stored." (the flag covers setup/session/history; orchestrator placeholder, final copy is the founder's). Tests: deduped/extended `notice-banners.test.ts`, new `restoreAnnouncement` cases; e2e asserts the setup change, the focused banner, Get a challenge replacing the held id with the banner shown, the in-memory Stage revealing with storage unavailable, the library loaded before going offline, and the restore text unchanged after an unrelated interaction. lint, typecheck, `npm test` (626/626), build, check:static, and `test:e2e` (222/222, `E2E_PORT=3104`) pass.
 
 ## Design Notes
 
 - **Why the restore announcement lives in the existing seed branch, not a new effect:** `StagePage`'s `live` state already distinguishes "not yet seeded" (first non-loading render) from every later render via `live.seeded`; the seed is precisely the moment a restore (reload, resume, or round trip) is first observed, so no second effect or ref is needed.
 - **Why banners stack instead of picking one:** a held Challenge and a storage problem are orthogonal facts about the browser and the session; showing less than the true state (e.g. hiding the storage note because a Challenge happens to be held) would contradict FR-29's "Challenges still work" promise being visibly true alongside the FR-10 "nothing changes unless you ask" promise.
+
+## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | edge, blind | Restore announcement set in the same render that mounts the live region; "Challenge ready." on a non-Quick restore; duplicated helper logic; `""` vs `null` | medium | Text present at insertion; restore returns `quickRevealAnnouncement` | patch |
+| 2 | blind | Setup notice banners not announced | low | No `role="status"`/`aria-live` on the container | patch |
+| 3 | edge, blind | "Back to your challenge" uses `ground="night"` on a cream panel | low | Night border and focus ring on a light panel | patch |
+| 4 | edge | Migration banner names reps when setup/session failed | low | `migrationFailed` is OR'ed across keys; neutral copy chosen by orchestrator | patch |
+| 5 | edge | Focus returns to h1, skipping a shown banner | low | EXPERIENCE focus targets: banner first | patch |
+| 6 | verif-gap, blind, edge | e2e claims exceed assertions (setup change, in-memory Challenge, offline readiness, "once", replace under banner) | low | Tests pass with the behaviour removed | patch |
+| 7 | blind | Stale doc comment; per-banner `useRouter`; duplicate unit case | low | Code reading | patch |
+| 8 | edge, blind | Reload during an Attempt is silent | low | Attempt state belongs to Epic 5 (5.4) | defer (comment) |
 
 ## Verification
 
