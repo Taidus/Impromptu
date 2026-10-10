@@ -59,6 +59,25 @@ export function liveAnnouncement(
   return landed.map((kind) => announcementFor(kind, challenge)).join(" ");
 }
 
+/**
+ * Story 3.11 / EXPERIENCE.md -> State Patterns, "Reload or Resume in any
+ * state": the one-shot announcement for whatever a fresh `/stage` mount
+ * (reload, resume, or a Setup round trip) already finds held. `null` when
+ * there is nothing yet to say -- a held Challenge with nothing revealed
+ * reads the same whether it was just composed or just restored, so Story
+ * 3.10's existing silence already covers it. Otherwise: the whole Challenge
+ * (the existing Quick-reveal wording) once fully landed, or just the
+ * already-landed part, in reveal order, while mid-Reveal.
+ */
+export function restoreAnnouncement(challenge: Challenge, revealed: readonly RevealedKind[]): string | null {
+  if (revealed.length === 0) return null;
+  if (isFullyRevealed(challenge, revealed)) return quickRevealAnnouncement(challenge);
+  return presentKinds(challenge)
+    .filter((kind) => revealed.includes(kind))
+    .map((kind) => announcementFor(kind, challenge))
+    .join(" ");
+}
+
 /** DESIGN.md -> Typography fit rule: the desktop Topic drops to `topic-stage-long` once it runs past two lines. */
 export function isPastTwoLines(heightPx: number, lineHeightPx: number): boolean {
   return heightPx > lineHeightPx * 2 + 1; // +1: sub-pixel rounding

@@ -10,6 +10,7 @@ import {
   liveAnnouncement,
   nextKind,
   quickRevealAnnouncement,
+  restoreAnnouncement,
 } from "./reveal-logic";
 
 describe("presentKinds", () => {
@@ -118,6 +119,23 @@ describe("liveAnnouncement", () => {
     expect(text).toBe(quickRevealAnnouncement(fullChallenge));
     expect(text?.startsWith(copy.stage.challengeReady)).toBe(true);
     expect(liveAnnouncement("old", [], fullChallenge, all, false)).not.toContain(copy.stage.challengeReady);
+  });
+});
+
+describe("restoreAnnouncement", () => {
+  it("is null when nothing has been revealed yet", () => {
+    expect(restoreAnnouncement(baseChallenge, [])).toBeNull();
+  });
+
+  it("announces only the already-landed part, in reveal order, while mid-Reveal", () => {
+    expect(restoreAnnouncement(baseChallenge, ["medium", "skill"])).toBe(
+      `${announcementFor("skill", baseChallenge)} ${announcementFor("medium", baseChallenge)}`,
+    );
+  });
+
+  it("announces the whole Challenge, with the Quick-reveal wording, once fully revealed", () => {
+    const all = presentKinds(fullChallenge);
+    expect(restoreAnnouncement(fullChallenge, all)).toBe(quickRevealAnnouncement(fullChallenge));
   });
 });
 

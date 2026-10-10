@@ -10,7 +10,7 @@ import { getAppStore, useAppStore } from "@/store";
 import { ArrowLeftIcon, SpeakerIcon, SpeakerOffIcon, StarIcon } from "./icons";
 import { canHandleEscape, isPlainActivationKey, isPlainEscape, isStageError, shouldRequestNewChallenge, stageMeta } from "./logic";
 import { RevealComposition } from "./RevealComposition";
-import { liveAnnouncement, nextKind } from "./reveal-logic";
+import { liveAnnouncement, nextKind, restoreAnnouncement } from "./reveal-logic";
 
 /**
  * The Challenge Stage shell (Story 3.9): a lilac ground with no navigation,
@@ -85,8 +85,10 @@ export function StagePage() {
   // with React's "store information from previous renders" pattern (a
   // guarded setState during render; the lint config forbids setState in an
   // effect body and ref reads during render). The first hydrated render
-  // seeds it silently with whatever was restored -- the reload/restore
-  // announcement is Story 3.11's.
+  // seeds it with `restoreAnnouncement` -- Story 3.11: a fresh mount (reload,
+  // resume, or a Setup round trip) that already finds a Challenge held with
+  // some progress announces once; nothing held, or nothing revealed yet,
+  // stays silent exactly as Story 3.10 left it.
   const heldChallenge = store.session.state === "held" ? store.session.challenge : null;
   const [live, setLive] = useState<{ seeded: boolean; challengeId: string | null; revealed: readonly RevealedKind[]; text: string }>({
     seeded: false,
@@ -96,7 +98,10 @@ export function StagePage() {
   });
   const heldId = heldChallenge?.id ?? null;
   if (!live.seeded) {
-    if (store.status !== "loading") setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: "" });
+    if (store.status !== "loading") {
+      const text = heldChallenge !== null ? restoreAnnouncement(heldChallenge, store.session.revealed) ?? "" : "";
+      setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text });
+    }
   } else if (heldId !== live.challengeId || store.session.revealed !== live.revealed) {
     const text = liveAnnouncement(live.challengeId, live.revealed, heldChallenge, store.session.revealed, store.setup?.quickReveal ?? false);
     setLive({ seeded: true, challengeId: heldId, revealed: store.session.revealed, text: text ?? live.text });
