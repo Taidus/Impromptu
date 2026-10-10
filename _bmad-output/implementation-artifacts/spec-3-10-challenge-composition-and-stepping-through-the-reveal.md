@@ -2,7 +2,7 @@
 title: 'Challenge composition and stepping through the Reveal'
 type: 'feature'
 created: '2026-10-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '050df6ad4f0fd7c58ef125edae835c22103f8f79'
