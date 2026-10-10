@@ -136,10 +136,14 @@ export function RevealComposition({
 
   return (
     <>
-      {/* pl-14 / gap-x-14: the left gutter each piece's Lock toggle (and its
-          LOCKED caption) sits in, reserved from the start so nothing reflows
-          when Held arrives (DESIGN.md -> Piece anatomy and keep-outs). */}
-      <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap">
+      {/* Each Lock disc straddles its piece's left edge, mostly outside it,
+          with its LOCKED caption below it (DESIGN.md -> Lock toggle). Desktop:
+          the Skill and Topic discs sit in the margin beside the column, so the
+          pieces keep the full column width. Phone has no margin, so pl-14
+          keeps disc and caption on screen. gap-x-14: room for the Medium
+          disc and caption between the tabs. Reserved from the start, so
+          nothing reflows when Held arrives. */}
+      <ul aria-label={copy.stage.inputsListLabel} className="flex w-full flex-col gap-stage-gap-compact pl-14 desktop:gap-stage-gap desktop:pl-0 desktop:stage-short:gap-stage-gap-compact">
         <li className="flex flex-wrap gap-x-14 gap-y-stage-gap-compact">
           {tab("skill", 1.5)}
           {tab("medium", -1.5)}
